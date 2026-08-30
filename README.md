@@ -343,6 +343,26 @@ The base URL is not a setting — one production fastmon, every shop talks to it
 wrong value is a connection that fails in a way no merchant can diagnose. Set
 `FASTMON_API_BASE_URL` in the environment to develop against a local backend or a stub.
 
+## Releasing
+
+`.github/workflows/release.yml` runs on a version tag (`1.2.3`). It **refuses a tag that
+disagrees with `composer.json`** — Packagist derives the version from the tag, Shopware
+reads it from `composer.json`, and when they disagree `composer require` installs a package
+whose manifest reports a different version than it was published as. It then calls
+`ci.yml`, so the release gate cannot drift from the everyday one, builds and validates the
+zip, attaches it to the GitHub release, and notifies Packagist.
+
+Packagist is pull-based: submit the package once at
+[packagist.org](https://packagist.org/packages/submit) and enable the GitHub integration.
+The notify step is belt and braces for a missing hook and skips itself when
+`PACKAGIST_USERNAME` / `PACKAGIST_TOKEN` are absent.
+
+To cut a release: bump `version` in `composer.json`, merge, then
+
+```sh
+git tag 0.2.0 && git push origin 0.2.0
+```
+
 ## Development
 
 ```bash

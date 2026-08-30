@@ -7,3 +7,8 @@
 
 # Built by bin/build-administration.sh, not source
 /src/Resources/public/
+# `shopware-cli extension zip` writes storefront assets one level deeper.
+/src/**/Resources/public/
+
+# Build output of `shopware-cli extension zip`
+*.zip

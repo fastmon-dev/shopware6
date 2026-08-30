@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: read
+
+jobs:
+  # Packagist derives the version from the tag; Shopware reads it from composer.json,
+  # because that is where its plugin lifecycle looks. Two sources for one number, so they
+  # can drift - and then `composer require` installs a package whose manifest reports a
+  # different version than it was published as. Nobody notices until a support case turns
+  # on which version is running, so the tag is refused rather than reconciled.
+  guard:
+    name: Tag matches composer.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare versions
+        run: |
+          declared=$(php -r 'echo json_decode(file_get_contents("composer.json"), true)["version"] ?? "";')
+
+          if [ -z "$declared" ]; then
+            echo "::error::composer.json has no version field. Shopware needs it to install the plugin."
+            exit 1
+          fi
+
+          if [ "$declared" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match composer.json version ${declared}."
+            exit 1
+          fi
+
+  # The same gates a pull request runs, against the tagged commit. Reused rather than
+  # repeated so the release gate cannot drift from the everyday one.
+  verify:
+    name: Verify
+    needs: guard
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and attach the zip
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # shopware-cli builds the changelog from the commits between tags
+      - uses: shopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3.0.0
+
+      - name: Build zip
+        run: |
+          shopware-cli extension zip . --git-commit "${GITHUB_SHA}" --release
+          mv "FastmonCollector-${GITHUB_SHA}.zip" "FastmonCollector-${GITHUB_REF_NAME}.zip"
+
+      # Validate what will be distributed, not what is in the tree: the zip is assembled
+      # from a clean checkout and can differ from a working directory that passed.
+      - name: Validate zip
+        run: shopware-cli extension validate "FastmonCollector-${GITHUB_REF_NAME}.zip"
+
+      # `gh` is on the runner, so this needs no third-party action and no SHA to keep
+      # pinned.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "FastmonCollector-${GITHUB_REF_NAME}.zip" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
+
+      # Packagist is pull-based: with the GitHub integration enabled it notices the tag on
+      # its own and this changes nothing. It exists for the case where the hook is missing
+      # or was silently disabled, which otherwise shows up as "the release is out but
+      # composer cannot see it". Skipped without credentials rather than failing: a
+      # repository relying on the hook should not have red releases over a secret it does
+      # not need.
+      - name: Notify Packagist
+        env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+        run: |
+          if [ -z "$PACKAGIST_USERNAME" ] || [ -z "$PACKAGIST_TOKEN" ]; then
+            echo "::notice::PACKAGIST_USERNAME / PACKAGIST_TOKEN not set - relying on the Packagist GitHub integration."
+            exit 0
+          fi
+
+          curl --silent --show-error --fail-with-body -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"repository\":{\"url\":\"https://github.com/${GITHUB_REPOSITORY}\"}}" \
+            "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}"
