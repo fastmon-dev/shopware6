@@ -1,3 +1,6 @@
+@import "~scss/variables";
+
+// Layout only; the controls bring their own look.
 .fastmon-collector-server-timing {
     margin-bottom: 22px;
 
@@ -12,51 +15,23 @@
         font-weight: 600;
     }
 
-    &__reload {
-        background: none;
-        border: 1px solid #d1d9e0;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        padding: 4px 10px;
-
-        &:disabled {
-            cursor: default;
-            opacity: 0.5;
-        }
-    }
-
     &__hint,
-    &__note,
     &__idle {
-        color: #52667a;
+        color: $color-darkgray-200;
         font-size: 13px;
         line-height: 1.5;
         margin: 8px 0;
     }
 
-    &__note.is--error {
-        color: #de294c;
-    }
-
-    &__sources {
+    &__sources,
+    &__list {
         list-style: none;
         margin: 8px 0 12px;
         padding: 0;
     }
 
-    .is--ok {
-        color: #37d046;
-    }
-
-    &__list {
-        list-style: none;
-        margin: 12px 0 0;
-        padding: 0;
-    }
-
     &__item {
-        border-bottom: 1px solid #e0e6eb;
+        border-bottom: 1px solid $color-gray-200;
         display: flex;
         justify-content: space-between;
         padding: 6px 0;
@@ -68,10 +43,10 @@
     }
 
     &__tag {
-        background: #f9fafb;
-        border: 1px solid #d1d9e0;
+        background: $color-gray-50;
+        border: 1px solid $color-gray-300;
         border-radius: 3px;
-        color: #758ca3;
+        color: $color-gray-900;
         font-family: inherit;
         font-size: 11px;
         margin-left: 8px;
@@ -83,7 +58,11 @@
     }
 
     &__idle {
-        color: #758ca3;
+        color: $color-gray-900;
         font-size: 12px;
+    }
+
+    .is--ok {
+        color: $color-emerald-500;
     }
 }

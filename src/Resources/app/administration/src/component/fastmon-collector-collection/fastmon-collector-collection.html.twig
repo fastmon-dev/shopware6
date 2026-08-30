@@ -1,92 +1,83 @@
 {% block fastmon_collector_collection %}
 <div class="fastmon-collector-collection">
+    <mt-loader v-if="isLoading" size="32px" />
 
-    <p v-if="isLoading" class="fastmon-collector-collection__note">
-        {{ $tc('fastmon-collector.loading') }}
-    </p>
-
-    <p v-else-if="!provisioned" class="fastmon-collector-collection__note">
+    <mt-banner v-else-if="!provisioned" variant="info">
         {{ $tc('fastmon-collector.collection.needsApplication') }}
-    </p>
+    </mt-banner>
 
     <template v-else>
-        <p v-if="error" class="fastmon-collector-collection__note is--error">{{ error }}</p>
+        <mt-banner v-if="error" :variant="errorVariant">
+            {{ error }}
+        </mt-banner>
 
         <p class="fastmon-collector-collection__hint">
             {{ $tc('fastmon-collector.collection.intro') }}
-            <a href="https://docs.fastmon.eu/first-party"
-               target="_blank"
-               rel="noopener noreferrer">{{ $tc('fastmon-collector.collection.docs') }}</a>
+            <mt-link
+                as="a"
+                type="external"
+                href="https://docs.fastmon.eu/first-party"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                {{ $tc('fastmon-collector.collection.docs') }}
+            </mt-link>
         </p>
 
-        <label class="fastmon-collector-collection__option">
-            <input type="radio" :value="modes.DEFAULT" v-model="selectedMode" @change="onModeChange">
-            <span>
-                <strong>{{ $tc('fastmon-collector.collection.modeDefault') }}</strong>
-                <span class="fastmon-collector-collection__meta">
-                    {{ $tc('fastmon-collector.collection.modeDefaultHint') }}
-                </span>
-            </span>
-        </label>
+        <sw-radio-field
+            :value="selectedMode"
+            :options="modeOptions"
+            :disabled="isBusy || isChecking"
+            @update:value="onModeChange"
+        />
 
-        <label class="fastmon-collector-collection__option">
-            <input type="radio" :value="modes.CUSTOM" v-model="selectedMode" @change="onModeChange">
-            <span>
-                <strong>{{ $tc('fastmon-collector.collection.modeCustom') }}</strong>
-                <span class="fastmon-collector-collection__meta">
-                    {{ $tc('fastmon-collector.collection.modeCustomHint') }}
-                </span>
-            </span>
-        </label>
+        <mt-text-field
+            v-if="selectedMode === modes.CUSTOM"
+            :model-value="customDomain"
+            name="fastmon-custom-domain"
+            :label="$tc('fastmon-collector.collection.modeCustom')"
+            placeholder="https://metrics.example.com"
+            :disabled="isBusy || isChecking"
+            @update:model-value="onCustomDomainInput"
+        />
 
-        <input v-if="selectedMode === modes.CUSTOM"
-               v-model="customDomain"
-               type="text"
-               class="fastmon-collector-collection__input"
-               placeholder="https://metrics.example.com"
-               @input="onModeChange">
-
-        <label class="fastmon-collector-collection__option">
-            <input type="radio" :value="modes.RELATIVE" v-model="selectedMode" @change="onModeChange">
-            <span>
-                <strong>{{ $tc('fastmon-collector.collection.modeRelative') }}</strong>
-                <span class="fastmon-collector-collection__meta">
-                    {{ $tc('fastmon-collector.collection.modeRelativeHint') }}
-                </span>
-            </span>
-        </label>
-
-        <!-- Shown up front, because relative needs EVERY one of these configured and
-             finding that out after a failed check is the worse order. -->
-        <p v-if="selectedMode === modes.RELATIVE && storefrontOrigins.length"
-           class="fastmon-collector-collection__meta">
+        {# Shown up front, because relative needs EVERY one of these configured and
+           finding that out after a failed check is the worse order. #}
+        <p
+            v-if="selectedMode === modes.RELATIVE && storefrontOrigins.length"
+            class="fastmon-collector-collection__meta"
+        >
             {{ $tc('fastmon-collector.collection.origins') }}
             {{ storefrontOrigins.join(', ') }}
         </p>
 
         <div class="fastmon-collector-collection__actions">
-            <button v-if="needsProof"
-                    type="button"
-                    class="fastmon-collector-collection__button"
-                    :disabled="isBusy || isChecking || !canCheck"
-                    @click="check">
-                {{ isChecking
-                    ? $tc('fastmon-collector.collection.checking')
-                    : $tc('fastmon-collector.collection.check') }}
-            </button>
+            <mt-button
+                v-if="needsProof"
+                variant="secondary"
+                :disabled="isBusy || isChecking || !canCheck"
+                :is-loading="isChecking"
+                @click="check"
+            >
+                {{ $tc('fastmon-collector.collection.check') }}
+            </mt-button>
 
-            <button type="button"
-                    class="fastmon-collector-collection__button is--primary"
-                    :disabled="isBusy || !canApply"
-                    @click="apply">
+            <mt-button
+                variant="primary"
+                :disabled="isBusy || !canApply"
+                :is-loading="isBusy"
+                @click="apply"
+            >
                 {{ $tc('fastmon-collector.collection.apply') }}
-            </button>
+            </mt-button>
         </div>
 
         <ul v-if="checkedThisMode" class="fastmon-collector-collection__list">
-            <li v-for="domain in checkedDomains"
+            <li
+                v-for="domain in checkedDomains"
                 :key="domain.domain"
-                class="fastmon-collector-collection__result">
+                class="fastmon-collector-collection__result"
+            >
                 <span class="fastmon-collector-collection__resultHead">
                     <strong>{{ domain.domain }}</strong>
                     <span :class="domain.ready ? 'is--ok' : 'is--error'">
@@ -95,43 +86,52 @@
                             : $tc('fastmon-collector.collection.domainFailed') }}
                     </span>
                 </span>
-                <!-- What was found and what it means, rather than a status code on its
-                     own: 404 and 502 need different fixes, and neither says so. -->
+                {# What was found and what it means, rather than a status code on its
+                   own: 404 and 502 need different fixes, and neither says so. #}
                 <span v-if="!domain.ready" class="fastmon-collector-collection__meta">
                     {{ reasonText(domain) }}
                 </span>
             </li>
         </ul>
 
-        <p v-if="checkedThisMode && !checkedDomains.length" class="fastmon-collector-collection__note is--error">
+        <mt-banner v-if="checkedThisMode && !checkedDomains.length" variant="critical">
             {{ $tc('fastmon-collector.collection.nothingChecked') }}
-        </p>
+        </mt-banner>
 
-        <!-- Said once, at the end: which mode stays out of reach, and what to do next. -->
-        <p v-else-if="checkedThisMode && !status.ready" class="fastmon-collector-collection__note">
+        {# Said once, at the end: which mode stays out of reach, and what to do next. #}
+        <mt-banner v-else-if="checkedThisMode && !status.ready" variant="attention">
             {{ $tc('fastmon-collector.collection.blocked', 0, { mode: selectedModeLabel }) }}
-            <a href="https://docs.fastmon.eu/first-party"
-               target="_blank"
-               rel="noopener noreferrer">{{ $tc('fastmon-collector.collection.docs') }}</a>
-        </p>
+            <mt-link
+                as="a"
+                type="external"
+                href="https://docs.fastmon.eu/first-party"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                {{ $tc('fastmon-collector.collection.docs') }}
+            </mt-link>
+        </mt-banner>
 
-        <p v-else-if="checkedThisMode" class="fastmon-collector-collection__note is--ok">
+        <mt-banner v-else-if="checkedThisMode" variant="positive">
             {{ $tc('fastmon-collector.collection.allReady', 0, { mode: selectedModeLabel }) }}
-        </p>
+        </mt-banner>
 
         <template v-if="needsProof">
-            <!-- Without the secret fastmon cannot trust the visitor IP the proxy
-                 forwards, and every visitor ends up on the shop server's location. -->
+            {# Without the secret fastmon cannot trust the visitor IP the proxy forwards,
+               and every visitor ends up on the shop server's location. #}
             <p class="fastmon-collector-collection__hint">
                 {{ $tc('fastmon-collector.collection.secretHint') }}
             </p>
+
             <div v-if="proxySecret" class="fastmon-collector-collection__secret">{{ proxySecret }}</div>
-            <button type="button"
-                    class="fastmon-collector-collection__button"
-                    :disabled="isBusy"
-                    @click="generateProxySecret">
+
+            <mt-button
+                variant="secondary"
+                :disabled="isBusy"
+                @click="generateProxySecret"
+            >
                 {{ $tc('fastmon-collector.collection.secret') }}
-            </button>
+            </mt-button>
         </template>
     </template>
 </div>

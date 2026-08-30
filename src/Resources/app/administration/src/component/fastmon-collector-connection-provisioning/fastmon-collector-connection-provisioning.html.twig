@@ -1,0 +1,104 @@
+{% block fastmon_collector_connection_provisioning %}
+<div class="fastmon-collector-connection-provisioning">
+    {# The token is good; only the application is gone. Say so, and offer to pick
+       another one rather than sending the merchant through a disconnect that would drop
+       a working credential. #}
+    <mt-banner v-if="needsRelink" variant="critical">
+        {{ $tc('fastmon-collector.provision.relink') }}
+    </mt-banner>
+
+    <p class="fastmon-collector-connection__hint">
+        {{ $tc('fastmon-collector.provision.intro') }}
+    </p>
+
+    {# Settled on fastmon's own consent screen: shown, not offered. #}
+    <p v-if="organizationIsSettled" class="fastmon-collector-connection__account">
+        {{ $tc('fastmon-collector.provision.organization') }}:
+        <strong>{{ settledOrganizationName }}</strong>
+    </p>
+
+    <mt-select
+        v-else
+        :model-value="organizationId"
+        :options="organizationOptions"
+        :label="$tc('fastmon-collector.provision.organization')"
+        :placeholder="$tc('fastmon-collector.provision.chooseOrganization')"
+        :is-loading="isLoadingOrganizations"
+        :disabled="isBusy"
+        @update:model-value="onOrganizationChange"
+    />
+
+    <template v-if="organizationId">
+        <p v-if="!applications.length && !isLoadingApplications" class="fastmon-collector-connection__hint">
+            {{ $tc('fastmon-collector.provision.noneYet') }}
+        </p>
+
+        <template v-if="applications.length">
+            <p class="fastmon-collector-connection__label">
+                {{ $tc('fastmon-collector.provision.existing') }}
+            </p>
+
+            <ul class="fastmon-collector-connection__list">
+                <li
+                    v-for="app in applications"
+                    :key="app.id"
+                    class="fastmon-collector-connection__item"
+                >
+                    <span>
+                        <strong>{{ app.name }}</strong>
+                        <span class="fastmon-collector-connection__meta">
+                            {{ app.environment }} &middot;
+                            {{ $tc('fastmon-collector.provision.domainCount', app.siteCount, { count: app.siteCount }) }}
+                        </span>
+                    </span>
+
+                    <mt-button
+                        variant="secondary"
+                        size="x-small"
+                        :disabled="isBusy"
+                        @click="attachApplication(app.id)"
+                    >
+                        {{ $tc('fastmon-collector.provision.link') }}
+                    </mt-button>
+                </li>
+            </ul>
+        </template>
+
+        <p class="fastmon-collector-connection__label">{{ createTitle }}</p>
+
+        <mt-text-field
+            v-model="applicationName"
+            name="fastmon-app-name"
+            :label="$tc('fastmon-collector.provision.name')"
+            :disabled="isBusy"
+        />
+
+        <mt-select
+            v-model="environment"
+            :options="environmentOptions"
+            :label="$tc('fastmon-collector.provision.environment')"
+            :disabled="isBusy"
+        />
+
+        <mt-select
+            v-model="preset"
+            :options="presetOptions"
+            :label="$tc('fastmon-collector.provision.preset')"
+            :disabled="isBusy"
+        />
+
+        <p class="fastmon-collector-connection__hint">
+            {{ $tc('fastmon-collector.provision.autoSites') }}
+        </p>
+
+        <mt-button
+            variant="primary"
+            :disabled="isBusy"
+            :is-loading="isBusy"
+            @click="createApplication"
+        >
+            {{ $tc('fastmon-collector.provision.create') }}
+        </mt-button>
+    </template>
+</div>
+{% endblock %}

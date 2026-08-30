@@ -1,7 +1,7 @@
 import template from './fastmon-collector-collection.html.twig';
 import './fastmon-collector-collection.scss';
 
-const { Component } = Shopware;
+const { Component, Mixin } = Shopware;
 
 const MODES = { DEFAULT: 'default', CUSTOM: 'custom', RELATIVE: 'relative' };
 
@@ -23,12 +23,15 @@ Component.register('fastmon-collector-collection', {
 
     inject: ['fastmonCollectorService'],
 
+    mixins: [Mixin.getByName('fastmon-collector-error')],
+
+    inheritAttrs: false,
+
     data() {
         return {
             isLoading: true,
             isBusy: false,
             isChecking: false,
-            error: null,
             status: null,
 
             // What the merchant is considering, which is not what is stored until they
@@ -42,6 +45,26 @@ Component.register('fastmon-collector-collection', {
     computed: {
         modes() {
             return MODES;
+        },
+
+        modeOptions() {
+            return [
+                {
+                    value: MODES.DEFAULT,
+                    name: this.$tc('fastmon-collector.collection.modeDefault'),
+                    description: this.$tc('fastmon-collector.collection.modeDefaultHint'),
+                },
+                {
+                    value: MODES.CUSTOM,
+                    name: this.$tc('fastmon-collector.collection.modeCustom'),
+                    description: this.$tc('fastmon-collector.collection.modeCustomHint'),
+                },
+                {
+                    value: MODES.RELATIVE,
+                    name: this.$tc('fastmon-collector.collection.modeRelative'),
+                    description: this.$tc('fastmon-collector.collection.modeRelativeHint'),
+                },
+            ];
         },
 
         provisioned() {
@@ -62,13 +85,9 @@ Component.register('fastmon-collector-collection', {
 
         /** The label of the mode being considered, for the sentence explaining the block. */
         selectedModeLabel() {
-            const keys = {
-                [MODES.DEFAULT]: 'modeDefault',
-                [MODES.CUSTOM]: 'modeCustom',
-                [MODES.RELATIVE]: 'modeRelative',
-            };
+            const option = this.modeOptions.find((candidate) => candidate.value === this.selectedMode);
 
-            return this.$tc(`fastmon-collector.collection.${keys[this.selectedMode]}`);
+            return option ? option.name : this.selectedMode;
         },
 
         /** A result only counts for the mode it was taken against. */
@@ -82,14 +101,7 @@ Component.register('fastmon-collector-collection', {
             return this.selectedMode !== MODES.DEFAULT;
         },
 
-        /**
-         * fastmon's own collector needs nothing proven; the other two do.
-         *
-         * `needsProof` and `checkedThisMode` are computed properties, so they are read,
-         * not called. Calling one throws, and because the early return above covers the
-         * unchanged mode it only threw once the merchant picked a different one - which
-         * blanked the whole card.
-         */
+        /** fastmon's own collector needs nothing proven; the other two do. */
         canApply() {
             if (this.selectedMode === this.activeMode) {
                 return false;
@@ -103,7 +115,7 @@ Component.register('fastmon-collector-collection', {
                 return false;
             }
 
-            return this.selectedMode !== this.modes.CUSTOM || this.customDomain.trim() !== '';
+            return this.selectedMode !== MODES.CUSTOM || this.customDomain.trim() !== '';
         },
     },
 
@@ -145,8 +157,19 @@ Component.register('fastmon-collector-collection', {
                 });
         },
 
-        onModeChange() {
-            // A result taken against another mode says nothing about this one.
+        onModeChange(mode) {
+            this.selectedMode = mode;
+            this.invalidateCheck();
+        },
+
+        onCustomDomainInput(domain) {
+            this.customDomain = domain;
+            this.invalidateCheck();
+        },
+
+        invalidateCheck() {
+            // A result taken against another mode - or another domain - says nothing
+            // about this one.
             if (this.status !== null) {
                 this.status = { ...this.status, checked: false, checkedMode: '', domains: [] };
             }
@@ -154,7 +177,7 @@ Component.register('fastmon-collector-collection', {
 
         check() {
             this.isChecking = true;
-            this.error = null;
+            this.resetError();
 
             return this.load(this.selectedMode)
                 .finally(() => {
@@ -164,7 +187,7 @@ Component.register('fastmon-collector-collection', {
 
         apply() {
             this.isBusy = true;
-            this.error = null;
+            this.resetError();
 
             return this.fastmonCollectorService
                 .applyCollectionMode(this.selectedMode, this.customDomain)
@@ -181,7 +204,7 @@ Component.register('fastmon-collector-collection', {
 
         generateProxySecret() {
             this.isBusy = true;
-            this.error = null;
+            this.resetError();
 
             return this.fastmonCollectorService.generateProxySecret()
                 .then((response) => {
@@ -198,7 +221,7 @@ Component.register('fastmon-collector-collection', {
             // A refusal carries the per-origin results instead of a message, so it is
             // rendered as a check result rather than as a red sentence in English.
             if (error && error.notReady) {
-                this.error = null;
+                this.resetError();
                 this.status = {
                     ...this.status,
                     domains: error.domains || [],
@@ -210,9 +233,7 @@ Component.register('fastmon-collector-collection', {
                 return null;
             }
 
-            this.error = error && error.message ? error.message : String(error);
-
-            return null;
+            return this.applyFastmonError(error);
         },
     },
 });

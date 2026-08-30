@@ -16,6 +16,8 @@ Component.register('fastmon-collector-server-timing', {
 
     inject: ['fastmonCollectorService'],
 
+    inheritAttrs: false,
+
     data() {
         return {
             isLoading: true,
@@ -44,16 +46,6 @@ Component.register('fastmon-collector-server-timing', {
 
         layers() {
             return this.status === null ? [] : (this.status.layers || []);
-        },
-
-        extensions() {
-            return this.status === null ? [] : (this.status.extensions || []);
-        },
-
-        extensionSummary() {
-            return this.extensions.length === 0
-                ? this.$tc('fastmon-collector.serverTiming.noExtension')
-                : this.extensions.join(', ');
         },
 
         /** Documented layers this host knows but the sampling request did not touch. */
