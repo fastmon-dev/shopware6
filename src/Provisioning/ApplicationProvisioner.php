@@ -7,6 +7,7 @@ use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -27,6 +28,7 @@ use Psr\Log\LoggerInterface;
  *
  * What is left for this class is choosing which application, and remembering the answer.
  */
+#[WithMonologChannel('fastmon_collector')]
 final class ApplicationProvisioner
 {
     /**

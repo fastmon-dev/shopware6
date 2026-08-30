@@ -1,178 +1,41 @@
 services:
-    # =================================================================
-    # Configuration
-    # =================================================================
+    _defaults:
+        autowire: true
+        autoconfigure: true
 
-    Fastmon\Collector\Service\ConfigResolver:
-        arguments:
-            - '@Shopware\Core\System\SystemConfig\SystemConfigService'
-
-    # =================================================================
-    # fastmon API
-    # =================================================================
+    # Every class under src/ that is a service. Value objects, enums, exceptions and the
+    # plugin class itself are excluded: those are constructed by hand, not by the container.
+    #
+    # What a service needs is on its constructor, and the container reads the types. The
+    # few things a type cannot say are attributes next to the code they concern:
+    #   #[Autowire(service: 'fastmon_collector.http_client')]         the plugin's own HTTP client
+    #   #[AutowireIterator('fastmon_collector.layer_metrics_provider')] the measurement sources
+    #   #[AutoconfigureTag(...)] on LayerMetricsProviderInterface       what makes a class a source
+    #   #[AsAlias(LayerMetricsProviderInterface::class)]                which source callers get
+    #   #[WithMonologChannel('fastmon_collector')]                      the log channel
+    # Subscribers, the Twig extension, the resettable RequestInsights and the controller
+    # are tagged by autoconfigure from the interfaces they implement.
+    Fastmon\Collector\:
+        resource: '../../*'
+        exclude:
+            - '../../FastmonCollector.php'
+            - '../../FastmonCollectorException.php'
+            - '../../Resources/'
+            - '../../Dto/'
+            - '../../Api/{DeviceAuthorization,DevicePollResult,DevicePollStatus}.php'
+            - '../../Api/*Exception.php'
+            - '../../Collection/{CollectionMode,CollectionNotReadyException,DomainCheckResult}.php'
+            - '../../Connection/Connection.php'
 
     # Built from the factory rather than injected as `http_client`, so the plugin does
     # not depend on the framework's HTTP client being configured in the shop.
     # symfony/http-client is a hard requirement of shopware/core, so the class is
-    # always there.
+    # always there. Consumers name this service with #[Autowire(service: ...)]: by type
+    # alone, autowiring would hand them the framework's client instead.
     fastmon_collector.http_client:
         class: Symfony\Contracts\HttpClient\HttpClientInterface
         factory: ['Symfony\Component\HttpClient\HttpClient', 'create']
 
-    Fastmon\Collector\Api\FastmonClient:
-        arguments:
-            - '@fastmon_collector.http_client'
-
-    # =================================================================
-    # Connection and provisioning
-    # =================================================================
-
-    Fastmon\Collector\Connection\ConnectionStore:
-        arguments:
-            - '@Shopware\Core\System\SystemConfig\SystemConfigService'
-
-    # Not the object cache: a shop is free to back it with an array or APCu adapter,
-    # and the poll then lands on a worker that never saw the entry. See the class.
-    Fastmon\Collector\Connection\DeviceAuthorizationSession:
-        arguments:
-            - '@Shopware\Core\System\SystemConfig\SystemConfigService'
-
-    Fastmon\Collector\Connection\ConnectionService:
-        arguments:
-            - '@Fastmon\Collector\Api\FastmonClient'
-            - '@Fastmon\Collector\Connection\ConnectionStore'
-            - '@Fastmon\Collector\Connection\DeviceAuthorizationSession'
-            - '@Fastmon\Collector\Service\ConfigResolver'
-            - '@logger'
-        tags:
-            - { name: monolog.logger, channel: fastmon_collector }
-
-    Fastmon\Collector\Provisioning\ApplicationProvisioner:
-        arguments:
-            - '@Fastmon\Collector\Api\FastmonClient'
-            - '@Fastmon\Collector\Connection\ConnectionService'
-            - '@Fastmon\Collector\Connection\ConnectionStore'
-            - '@Fastmon\Collector\Service\ConfigResolver'
-            - '@logger'
-        tags:
-            - { name: monolog.logger, channel: fastmon_collector }
-
-    # Hands the storefront templates the derived script base. Everything else the
-    # snippets need is a stored setting they can read with config().
-    Fastmon\Collector\Twig\CollectorExtension:
-        arguments:
-            - '@Fastmon\Collector\Service\ConfigResolver'
-        tags:
-            - { name: twig.extension }
-
-    # =================================================================
-    # Collection mode
-    # =================================================================
-
-    # Probes the merchant's own proxy. The plugin never forwards beacons itself:
-    # a beacon per pageview through PHP-FPM would put fastmon's latency in front
-    # of the shop's worker pool.
-    Fastmon\Collector\Collection\EndpointChecker:
-        arguments:
-            - '@fastmon_collector.http_client'
-            - '@Fastmon\Collector\Connection\ConnectionStore'
-            - '@Doctrine\DBAL\Connection'
-
-    Fastmon\Collector\Collection\CollectionModeService:
-        arguments:
-            - '@Fastmon\Collector\Api\FastmonClient'
-            - '@Fastmon\Collector\Connection\ConnectionService'
-            - '@Fastmon\Collector\Connection\ConnectionStore'
-            - '@Fastmon\Collector\Service\ConfigResolver'
-            - '@Fastmon\Collector\Collection\EndpointChecker'
-            - '@Shopware\Core\System\SystemConfig\SystemConfigService'
-            - '@logger'
-        tags:
-            - { name: monolog.logger, channel: fastmon_collector }
-
-    # =================================================================
-    # Server-Timing
-    # =================================================================
-
-    # Measurement sources, in preference order. The registry takes the first that
-    # reports itself available; a second source is one more tagged service above or below
-    # this one, and nothing else changes. Tideways is the only one today - see the
-    # interface for why OpenTelemetry cannot be one.
-    Fastmon\Collector\ServerTiming\TidewaysLayerMetricsProvider:
-        tags:
-            - { name: fastmon_collector.layer_metrics_provider }
-
-    Fastmon\Collector\ServerTiming\PageTypeResolver: ~
-
-    # Carries what the controller saw to where the header is written. Not a request
-    # attribute: the HTTP cache forwards a duplicated Request, so an attribute set inside
-    # never reaches the outer kernel. See the class.
-    Fastmon\Collector\ServerTiming\RequestInsights:
-        tags:
-            - { name: kernel.reset, method: reset }
-
-    Fastmon\Collector\ServerTiming\LayerMetricsProviderRegistry:
-        arguments:
-            - !tagged_iterator fastmon_collector.layer_metrics_provider
-
-    Fastmon\Collector\ServerTiming\LayerMetricsProviderInterface:
-        alias: Fastmon\Collector\ServerTiming\LayerMetricsProviderRegistry
-
-    Fastmon\Collector\ServerTiming\ServerTimingHeaderBuilder: ~
-
-    Fastmon\Collector\ServerTiming\ServerTimingResponseWriter: ~
-
-    Fastmon\Collector\ServerTiming\CacheStatusResolver: ~
-
-    # Which machine answered. A service rather than `new` in the subscriber: the name is
-    # resolved once per process, and a test can hand the subscriber a fixed one.
-    Fastmon\Collector\ServerTiming\ServerIdentity: ~
-
-    Fastmon\Collector\ServerTiming\ServerTimingStatus:
-        arguments:
-            - '@Fastmon\Collector\ServerTiming\LayerMetricsProviderRegistry'
-
-    # Records what Shopware's HTTP cache did - both verdicts are unknowable afterwards:
-    # on a hit the inner kernel never runs, and on a miss the response looks the same
-    # whether it was stored or not.
-    Fastmon\Collector\Subscriber\HttpCacheStatusSubscriber:
-        tags:
-            - { name: kernel.event_subscriber }
-
-    # Captures what only the controller knows: render time, page type, login state.
-    Fastmon\Collector\Subscriber\StorefrontInsightSubscriber:
-        arguments:
-            - '@Fastmon\Collector\ServerTiming\PageTypeResolver'
-            - '@Fastmon\Collector\ServerTiming\RequestInsights'
-        tags:
-            - { name: kernel.event_subscriber }
-
-    Fastmon\Collector\Subscriber\ServerTimingSubscriber:
-        arguments:
-            - '@Fastmon\Collector\Service\ConfigResolver'
-            - '@Fastmon\Collector\ServerTiming\LayerMetricsProviderInterface'
-            - '@Fastmon\Collector\ServerTiming\ServerTimingHeaderBuilder'
-            - '@Fastmon\Collector\ServerTiming\ServerTimingResponseWriter'
-            - '@Fastmon\Collector\ServerTiming\CacheStatusResolver'
-            - '@Fastmon\Collector\ServerTiming\RequestInsights'
-            - '@Fastmon\Collector\ServerTiming\ServerIdentity'
-            - '@logger'
-        tags:
-            - { name: monolog.logger, channel: fastmon_collector }
-            - { name: kernel.event_subscriber }
-
-    # =================================================================
-    # Administration
-    # =================================================================
-
+    # Public so the router can fetch the controller by its class name.
     Fastmon\Collector\Controller\AdminApiController:
         public: true
-        arguments:
-            - '@Fastmon\Collector\Connection\ConnectionService'
-            - '@Fastmon\Collector\Provisioning\ApplicationProvisioner'
-            - '@Fastmon\Collector\Collection\CollectionModeService'
-            - '@Fastmon\Collector\ServerTiming\ServerTimingStatus'
-        calls:
-            - [setContainer, ['@service_container']]
-        tags:
-            - { name: controller.service_arguments }

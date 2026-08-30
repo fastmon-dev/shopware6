@@ -2,14 +2,17 @@
 
 namespace Fastmon\Collector\ServerTiming;
 
+use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
+
 /**
  * Source of per-layer wall time for the request being answered right now.
  *
  * Behind an interface for two reasons: the header building stays unit testable on a
  * machine without any profiler extension, and a second APM can feed the same header
  * without the rest of the plugin noticing. `LayerMetricsProviderRegistry` picks the first
- * implementation that reports itself available, so a new source is one class and one
- * service definition.
+ * implementation that reports itself available, so a new source is one class: the tag
+ * below is applied to every implementation the container autoconfigures, and autowiring
+ * registers it.
  *
  * OpenTelemetry is deliberately not that source. Its spans go to the processors that
  * existed when the TracerProvider was built - during composer autoloading, before any
@@ -19,6 +22,7 @@ namespace Fastmon\Collector\ServerTiming;
  * This interface is the plugin's one extension point. Every class in the plugin is
  * `final`: a second source implements this, it does not inherit from the first.
  */
+#[AutoconfigureTag('fastmon_collector.layer_metrics_provider')]
 interface LayerMetricsProviderInterface
 {
     /**

@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector\Api;
 
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
@@ -67,6 +68,7 @@ final class FastmonClient
     private const TIMEOUT_SECONDS = 10;
 
     public function __construct(
+        #[Autowire(service: 'fastmon_collector.http_client')]
         private readonly HttpClientInterface $httpClient,
     ) {
     }

@@ -9,6 +9,7 @@ use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -23,6 +24,7 @@ use Psr\Log\LoggerInterface;
  * only "there is a token", so which of the two produced it never has to be recorded and
  * never has to be migrated when the second one goes away.
  */
+#[WithMonologChannel('fastmon_collector')]
 final class ConnectionService
 {
     public function __construct(

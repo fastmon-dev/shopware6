@@ -7,6 +7,7 @@ use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
@@ -28,6 +29,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * plugin's template decides where the *script* comes from. If they disagreed, the tracker
  * would load from one host and post to another.
  */
+#[WithMonologChannel('fastmon_collector')]
 final class CollectionModeService
 {
     public function __construct(

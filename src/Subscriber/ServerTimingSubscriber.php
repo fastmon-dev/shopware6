@@ -10,6 +10,7 @@ use Fastmon\Collector\ServerTiming\ServerIdentity;
 use Fastmon\Collector\ServerTiming\ServerTimingHeaderBuilder;
 use Fastmon\Collector\ServerTiming\ServerTimingResponseWriter;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Event\BeforeSendResponseEvent;
 use Shopware\Core\PlatformRequest;
@@ -59,6 +60,7 @@ use Symfony\Component\HttpFoundation\Response;
  * Writing twice therefore appends a second set of layers rather than replacing the
  * first, and the summed columns - kv, http, search - would count both.
  */
+#[WithMonologChannel('fastmon_collector')]
 final class ServerTimingSubscriber implements EventSubscriberInterface
 {
     public function __construct(

@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
@@ -69,6 +70,7 @@ final class EndpointChecker
     private const TIMEOUT_SECONDS = 5;
 
     public function __construct(
+        #[Autowire(service: 'fastmon_collector.http_client')]
         private readonly HttpClientInterface $httpClient,
         private readonly ConnectionStore $store,
         private readonly DbalConnection $database,
