@@ -38,6 +38,10 @@ use Symfony\Component\Routing\Attribute\Route;
  * handler logs it and answers 500, which is where a programming error belongs.
  */
 #[Route(defaults: [PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID]])]
+/**
+ * One public method per route. The routes are the API; the logic behind them lives in the services.
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ */
 final class AdminApiController extends AbstractController
 {
     private const READ = [PlatformRequest::ATTRIBUTE_ACL => ['system_config:read']];

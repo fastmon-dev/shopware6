@@ -28,7 +28,7 @@ class CollectionModeServiceTest extends TestCase
     /** @var list<string> */
     private array $calls = [];
 
-    /** @var array<string, mixed> */
+    /** @var array<mixed> */
     private array $sentBody = [];
 
     /** @var list<string> every probe URL the checker requested */
@@ -186,12 +186,14 @@ class CollectionModeServiceTest extends TestCase
         // One client serves both fastmon's API and the probed origins, told apart by path:
         // `/v1/…` is fastmon, `/s/…` and `/c/…` are the proxy paths on a storefront.
         $httpClient = new MockHttpClient(
+            /** @param array<string, mixed> $options */
             function (string $method, string $url, array $options) use ($origins): MockResponse {
                 $path = (string) parse_url($url, \PHP_URL_PATH);
 
                 if (str_starts_with($path, '/v1/')) {
                     $this->calls[] = $method . ' ' . $path;
-                    $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+                    $body = $options['body'] ?? '{}';
+                    $decoded = json_decode(\is_string($body) ? $body : '{}', true);
                     $this->sentBody = \is_array($decoded) ? $decoded : [];
 
                     return new MockResponse(json_encode([

@@ -4,6 +4,7 @@ namespace Fastmon\Collector\Tests\Unit;
 
 use Fastmon\Collector\Collection\DomainCheckResult;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 /**
  * The probe reports reason codes and the administration turns them into sentences. That
@@ -23,9 +24,7 @@ class SnippetsCoverReasonCodesTest extends TestCase
         self::assertNotEmpty($codes, 'the reason codes should be discoverable by reflection');
 
         foreach (self::LOCALES as $locale) {
-            $reasons = $this->snippets($locale)['fastmon-collector']['collection']['reason'] ?? [];
-
-            self::assertIsArray($reasons);
+            $reasons = $this->section($locale, 'fastmon-collector', 'collection', 'reason');
 
             foreach ($codes as $code) {
                 self::assertArrayHasKey(
@@ -33,7 +32,8 @@ class SnippetsCoverReasonCodesTest extends TestCase
                     $reasons,
                     sprintf('%s has no text for the reason code "%s"', $locale, $code)
                 );
-                self::assertNotSame('', trim((string) $reasons[$code]));
+                self::assertIsString($reasons[$code]);
+                self::assertNotSame('', trim($reasons[$code]));
             }
         }
     }
@@ -45,17 +45,15 @@ class SnippetsCoverReasonCodesTest extends TestCase
         $codes = $this->reasonCodes();
 
         foreach (self::LOCALES as $locale) {
-            $reasons = $this->snippets($locale)['fastmon-collector']['collection']['reason'] ?? [];
-
-            self::assertIsArray($reasons);
+            $reasons = $this->section($locale, 'fastmon-collector', 'collection', 'reason');
             self::assertSame([], array_diff(array_keys($reasons), $codes), 'stale reason snippets in ' . $locale);
         }
     }
 
     public function testTheTwoLocalesDescribeTheSameCases(): void
     {
-        $de = array_keys($this->snippets('de-DE')['fastmon-collector']['collection']['reason']);
-        $en = array_keys($this->snippets('en-GB')['fastmon-collector']['collection']['reason']);
+        $de = array_keys($this->section('de-DE', 'fastmon-collector', 'collection', 'reason'));
+        $en = array_keys($this->section('en-GB', 'fastmon-collector', 'collection', 'reason'));
 
         sort($de);
         sort($en);
@@ -70,7 +68,7 @@ class SnippetsCoverReasonCodesTest extends TestCase
     {
         $codes = [];
 
-        foreach ((new \ReflectionClass(DomainCheckResult::class))->getConstants() as $name => $value) {
+        foreach ((new ReflectionClass(DomainCheckResult::class))->getConstants() as $name => $value) {
             if (str_starts_with($name, 'REASON_') && \is_string($value)) {
                 $codes[] = $value;
             }
@@ -80,7 +78,7 @@ class SnippetsCoverReasonCodesTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function snippets(string $locale): array
     {
@@ -93,5 +91,23 @@ class SnippetsCoverReasonCodesTest extends TestCase
         self::assertIsArray($decoded);
 
         return $decoded;
+    }
+
+    /**
+     * One nested section of a snippet file, asserted to exist on the way down.
+     *
+     * @return array<mixed>
+     */
+    private function section(string $locale, string ...$path): array
+    {
+        $node = $this->snippets($locale);
+
+        foreach ($path as $key) {
+            $child = $node[$key] ?? null;
+            self::assertIsArray($child, $locale . ' has no section ' . implode('.', $path));
+            $node = $child;
+        }
+
+        return $node;
     }
 }

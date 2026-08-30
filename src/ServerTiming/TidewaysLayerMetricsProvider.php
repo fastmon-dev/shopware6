@@ -52,7 +52,11 @@ final class TidewaysLayerMetricsProvider implements LayerMetricsProviderInterfac
             ? 'outdated'
             : 'absent';
     }
-
+    /**
+     * Every branch is a guard against a profiler shape the plugin does not control; each one degrades to "no metrics".
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     */
     public function metrics(): array
     {
         $callable = [self::PROFILER, self::METHOD];

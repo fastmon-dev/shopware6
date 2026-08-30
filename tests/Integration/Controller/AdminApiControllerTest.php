@@ -82,7 +82,7 @@ final class AdminApiControllerTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function json(TestBrowser $browser): array
     {

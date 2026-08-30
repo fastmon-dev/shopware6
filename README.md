@@ -347,12 +347,16 @@ wrong value is a connection that fails in a way no merchant can diagnose. Set
 
 ```bash
 composer install
-vendor/bin/phpunit --testsuite unit
-vendor/bin/phpstan analyse
-vendor/bin/php-cs-fixer fix
+composer ci                  # php-cs-fixer, phpstan (level max), phpmd, unit suite
+composer test-integration    # from inside a Shopware project - see Tests below
 shopware-cli extension validate --full --check-against highest .
 shopware-cli extension zip . --release
 ```
+
+The individual steps are `composer cs-check` / `cs-fix`, `phpstan`, `phpmd` and `test`.
+`phpmd.xml` says which stock rules are off and why; a method that legitimately exceeds
+a threshold carries the reason in its own docblock rather than the threshold being
+raised for everyone.
 
 ### Tests
 
@@ -388,7 +392,9 @@ a decorative image from an undescribed one, and giving it a description would be
 use for new code. That is deliberate: a Store plugin cannot raise the floor above what
 the Shopware releases it supports run on, and Shopware 6.6 supports PHP 8.2–8.4, 6.7
 supports 8.2–8.5. The code is written to stay forward-compatible up to PHP 8.5 — nothing
-here relies on a construct that only works on the older end of that range.
+here relies on a construct that only works on the older end of that range — and CI proves
+it: `composer ci` runs on PHP 8.2–8.4 against both Shopware branches and on 8.5 against
+6.7, and the integration suite runs against the latest release of each branch.
 
 The dev container ships a full Shopware 6.7 to test against; see
 [`.devcontainer/README.md`](.devcontainer/README.md).

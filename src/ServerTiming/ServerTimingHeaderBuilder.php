@@ -101,7 +101,11 @@ final class ServerTimingHeaderBuilder
      * @param array<string, float>                                     $metrics       layer name => milliseconds
      * @param string[]                                                 $blockedLayers lower-case; empty means report everything
      * @param list<array{0: string, 1: float|null, 2: string|null}>    $own           our own entries as [name, dur, desc]
-     */
+ *
+ * The entry budget is one policy with several limits; they read as one list here and would not as five methods.
+ * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+ * @SuppressWarnings("PHPMD.NPathComplexity")
+ */
     public function build(array $metrics, array $blockedLayers, array $own = []): string
     {
         $entries = [];

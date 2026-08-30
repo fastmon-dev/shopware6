@@ -1,0 +1,25 @@
+# shopware-cli: what goes into the store zip. No composer step - the plugin has no
+# runtime dependency Shopware does not already ship - and nothing from the toolchain.
+# compatibility_date pins which generation of validation rules applies; bump it deliberately.
+compatibility_date: "2026-08-30"
+
+build:
+    zip:
+        composer:
+            enabled: false
+        assets:
+            enabled: true
+        pack:
+            excludes:
+                paths:
+                    - tests
+                    - docs
+                    - .devcontainer
+                    - .github
+                    - .gitignore
+                    - .php-cs-fixer.dist.php
+                    - .shopware-extension.yml
+                    - phpmd.xml
+                    - phpstan.neon.dist
+                    - phpunit.xml.dist
+                    - renovate.json

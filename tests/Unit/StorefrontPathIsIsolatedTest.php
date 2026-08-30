@@ -14,6 +14,7 @@ use Fastmon\Collector\Subscriber\ServerTimingSubscriber;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use ReflectionClass;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
@@ -38,6 +39,9 @@ use Symfony\Component\DependencyInjection\Reference;
  *
  * So this asserts it structurally, against the real service definitions: nothing the
  * storefront path can reach may depend on the API client or on an HTTP client.
+ *
+ * Imports half the DI compiler on purpose: the walk has to see what the kernel sees.
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 class StorefrontPathIsIsolatedTest extends TestCase
 {
@@ -97,7 +101,7 @@ class StorefrontPathIsIsolatedTest extends TestCase
         // wrapped. Asserted on the source because the alternative - provoking each of
         // the ways config, profiler or writer could throw - tests the mocks instead.
         $source = (string) file_get_contents(
-            (string) (new \ReflectionClass(ServerTimingSubscriber::class))->getFileName()
+            (string) (new ReflectionClass(ServerTimingSubscriber::class))->getFileName()
         );
 
         self::assertStringContainsString('catch (\Throwable $e)', $source);
@@ -174,7 +178,9 @@ class StorefrontPathIsIsolatedTest extends TestCase
         $walk($definition->getArguments());
 
         foreach ($definition->getMethodCalls() as $call) {
-            $walk($call[1] ?? []);
+            if (\is_array($call)) {
+                $walk($call[1] ?? []);
+            }
         }
 
         return $found;

@@ -174,7 +174,10 @@ final class EndpointChecker
 
         return isset($parts['port']) ? $origin . ':' . $parts['port'] : $origin;
     }
-
+    /**
+     * Two probes with four outcomes each; the reason codes are the point and are enumerated in DomainCheckResult.
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     */
     private function checkOrigin(string $origin, string $trackerId, string $pixelId): DomainCheckResult
     {
         $scriptOk = false;

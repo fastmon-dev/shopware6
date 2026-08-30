@@ -28,6 +28,9 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
  * `DeviceFlowUnsupportedException` and the merchant pastes a token from the dashboard
  * instead. Everything past the point where a token exists is identical either way,
  * which is why the rest of the plugin never learns which of the two happened.
+ *
+ * The whole API surface in one client, deliberately: one place to read what the plugin asks fastmon.
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  */
 final class FastmonClient
 {
@@ -148,10 +151,10 @@ final class FastmonClient
 
             return DevicePollResult::complete(
                 $token,
-                (string) ($account['email'] ?? ''),
-                (string) ($account['name'] ?? ''),
-                (string) ($organization['id'] ?? ''),
-                (string) ($organization['name'] ?? ''),
+                $this->str($account, 'email'),
+                $this->str($account, 'name'),
+                $this->str($organization, 'id'),
+                $this->str($organization, 'name'),
             );
         }
 
@@ -206,8 +209,8 @@ final class FastmonClient
 
         foreach ($this->listData($response) as $org) {
             $out[] = [
-                'id' => (string) ($org['id'] ?? ''),
-                'name' => (string) ($org['name'] ?? ''),
+                'id' => $this->str($org, 'id'),
+                'name' => $this->str($org, 'name'),
             ];
         }
 
@@ -320,9 +323,9 @@ final class FastmonClient
 
         foreach ($this->listData($response) as $site) {
             $out[] = [
-                'id' => (string) ($site['id'] ?? ''),
-                'domain' => (string) ($site['domain'] ?? ''),
-                'name' => (string) ($site['name'] ?? ''),
+                'id' => $this->str($site, 'id'),
+                'domain' => $this->str($site, 'domain'),
+                'name' => $this->str($site, 'name'),
             ];
         }
 
@@ -435,21 +438,21 @@ final class FastmonClient
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<mixed> $data
      *
      * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
      */
     private function application(array $data): array
     {
         return [
-            'id' => (string) ($data['id'] ?? ''),
-            'name' => (string) ($data['name'] ?? ''),
+            'id' => $this->str($data, 'id'),
+            'name' => $this->str($data, 'name'),
             // fastmon's field names describe what they are on the wire; the plugin's
             // describe what they do in a template.
-            'trackerId' => (string) ($data['source_hash'] ?? ''),
-            'pixelId' => (string) ($data['collector_hash'] ?? ''),
-            'environment' => (string) ($data['environment'] ?? ''),
-            'siteCount' => (int) ($data['site_count'] ?? 0),
+            'trackerId' => $this->str($data, 'source_hash'),
+            'pixelId' => $this->str($data, 'collector_hash'),
+            'environment' => $this->str($data, 'environment'),
+            'siteCount' => $this->int($data, 'site_count', 0),
         ];
     }
 
@@ -458,7 +461,8 @@ final class FastmonClient
      */
     private function request(string $method, string $baseUrl, string $path, array $options): ResponseInterface
     {
-        $options['headers'] = ($options['headers'] ?? []) + ['Accept' => 'application/json'];
+        $headers = $options['headers'] ?? [];
+        $options['headers'] = (\is_array($headers) ? $headers : []) + ['Accept' => 'application/json'];
         $options['timeout'] = self::TIMEOUT_SECONDS;
 
         try {
@@ -478,7 +482,7 @@ final class FastmonClient
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed> keys and values are whatever fastmon sent; every reader narrows what it takes
      */
     private function decode(ResponseInterface $response): array
     {
@@ -494,7 +498,7 @@ final class FastmonClient
     /**
      * The `data` array of a paginated list response.
      *
-     * @return list<array<string, mixed>>
+     * @return list<array<mixed>>
      */
     private function listData(ResponseInterface $response): array
     {
@@ -524,7 +528,7 @@ final class FastmonClient
             return $error;
         }
 
-        return \is_array($error) ? (string) ($error['code'] ?? '') : '';
+        return \is_array($error) ? $this->str($error, 'code') : '';
     }
 
     /**
@@ -532,7 +536,11 @@ final class FastmonClient
      * drop to the reconnect path, a plain API error otherwise. The detail comes from
      * fastmon's error envelope when there is one, with the `request_id` appended because
      * that is what support needs to find the request.
-     */
+ *
+ * Maps fastmon's error envelope onto the exception hierarchy; the cases are the API contract, listed once.
+ * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+ * @SuppressWarnings("PHPMD.NPathComplexity")
+ */
     private function fail(ResponseInterface $response, string $context): never
     {
         $status = $response->getStatusCode();
@@ -548,9 +556,9 @@ final class FastmonClient
             // Not JSON: fall back to the bare status below.
         }
 
-        $code = (string) ($error['code'] ?? '');
-        $message = (string) ($error['message'] ?? '');
-        $requestId = (string) ($error['request_id'] ?? '');
+        $code = $this->str($error, 'code');
+        $message = $this->str($error, 'message');
+        $requestId = $this->str($error, 'request_id');
         $details = \is_array($error['details'] ?? null) ? $error['details'] : [];
 
         $detail = ($code !== '' || $message !== '')
@@ -578,7 +586,7 @@ final class FastmonClient
         // missing permission, which is what lets the module say which scope to add rather
         // than just "forbidden".
         if ($code === 'permission_denied') {
-            $permission = (string) ($details['permission'] ?? '');
+            $permission = $this->str($details, 'permission');
 
             throw new FastmonPermissionDeniedException(
                 $message !== '' ? $message : 'This fastmon token is missing a required permission.',
@@ -608,7 +616,7 @@ final class FastmonClient
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<mixed> $data
      */
     private function str(array $data, string $key): string
     {
@@ -618,7 +626,7 @@ final class FastmonClient
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<mixed> $data
      */
     private function int(array $data, string $key, int $default): int
     {

@@ -147,7 +147,11 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
      * clear of the collector's budget for names it does not recognise.
      *
      * @return list<array{0: string, 1: float|null, 2: string|null}>
-     */
+ *
+ * One guarded entry per setting - a table, not a tangle. Splitting it would spread the rules for one header over six methods.
+ * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+ * @SuppressWarnings("PHPMD.NPathComplexity")
+ */
     private function ownEntries(Request $request, Response $response, ServerTimingConfig $config): array
     {
         $own = [];

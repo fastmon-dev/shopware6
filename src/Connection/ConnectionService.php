@@ -46,7 +46,11 @@ final class ConnectionService
      *     trackerId: string, pixelId: string, apiBaseUrl: string, tokenValid: bool|null,
      *     applicationValid: bool|null, error: string
      * }
-     */
+ *
+ * A status report: every branch is one line of the answer the panel renders.
+ * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+ * @SuppressWarnings("PHPMD.NPathComplexity")
+ */
     public function describe(bool $verify = false): array
     {
         $connection = $this->store->load();
