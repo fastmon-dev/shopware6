@@ -15,7 +15,7 @@ use Twig\TwigFunction;
  * in Twig would be a second copy of that rule, free to drift from the first the day
  * someone adds a fourth mode.
  */
-class CollectorExtension extends AbstractExtension
+final class CollectorExtension extends AbstractExtension
 {
     public function __construct(
         private readonly ConfigResolver $configResolver,

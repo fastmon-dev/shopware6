@@ -15,7 +15,7 @@ namespace Fastmon\Collector\Api;
  * something it was never scoped for. On the pasted-token path it is far more ordinary:
  * the merchant minted a key without `app:write`, or holds only the viewer role.
  */
-class FastmonPermissionDeniedException extends FastmonApiException
+final class FastmonPermissionDeniedException extends FastmonApiException
 {
     public function __construct(
         string $message,

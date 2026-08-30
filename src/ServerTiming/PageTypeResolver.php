@@ -15,7 +15,7 @@ namespace Fastmon\Collector\ServerTiming;
  * category, product, cart, checkout, search, account - so a page classified on a cache
  * miss here and on a cache hit there cannot disagree.
  */
-class PageTypeResolver
+final class PageTypeResolver
 {
     /**
      * Exact route names. Kept in step with the `shopware6` body-class map in fastmon's

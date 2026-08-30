@@ -27,7 +27,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * plugin's template decides where the *script* comes from. If they disagreed, the tracker
  * would load from one host and post to another.
  */
-class CollectionModeService
+final class CollectionModeService
 {
     public function __construct(
         private readonly FastmonClient $client,

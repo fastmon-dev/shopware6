@@ -9,6 +9,6 @@ namespace Fastmon\Collector\Api;
  * but the reason is worth keeping apart. "Your connection expired" is a fact about time;
  * a bare 401 makes a merchant go looking for what they broke, or suspect the plugin.
  */
-class FastmonCredentialExpiredException extends FastmonUnauthorizedException
+final class FastmonCredentialExpiredException extends FastmonUnauthorizedException
 {
 }

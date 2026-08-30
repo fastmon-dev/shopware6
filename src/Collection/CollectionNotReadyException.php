@@ -11,7 +11,7 @@ namespace Fastmon\Collector\Collection;
  * is exactly the moment a merchant needs to be told which domain stopped answering
  * instead of a generic failure.
  */
-class CollectionNotReadyException extends \RuntimeException
+final class CollectionNotReadyException extends \RuntimeException
 {
     /**
      * @param list<DomainCheckResult> $results

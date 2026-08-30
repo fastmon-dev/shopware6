@@ -124,6 +124,10 @@ services:
 
     Fastmon\Collector\ServerTiming\CacheStatusResolver: ~
 
+    # Which machine answered. A service rather than `new` in the subscriber: the name is
+    # resolved once per process, and a test can hand the subscriber a fixed one.
+    Fastmon\Collector\ServerTiming\ServerIdentity: ~
+
     Fastmon\Collector\ServerTiming\ServerTimingStatus:
         arguments:
             - '@Fastmon\Collector\ServerTiming\LayerMetricsProviderRegistry'
@@ -151,6 +155,7 @@ services:
             - '@Fastmon\Collector\ServerTiming\ServerTimingResponseWriter'
             - '@Fastmon\Collector\ServerTiming\CacheStatusResolver'
             - '@Fastmon\Collector\ServerTiming\RequestInsights'
+            - '@Fastmon\Collector\ServerTiming\ServerIdentity'
             - '@logger'
         tags:
             - { name: monolog.logger, channel: fastmon_collector }

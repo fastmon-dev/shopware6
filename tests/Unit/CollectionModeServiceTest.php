@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Collection\CollectionModeService;
@@ -29,16 +30,16 @@ class CollectionModeServiceTest extends TestCase
     /** @var array<string, mixed> */
     private array $sentBody = [];
 
+    /** @var list<string> every probe URL the checker requested */
+    private array $probed = [];
+
     public function testAModeIsRefusedWhenAnOriginIsNotSetUp(): void
     {
         // The guarantee this class exists for. The collector endpoint is baked into the
         // bundle fastmon serves, so applying a mode before the proxy exists makes every
         // tracker in every browser post into a 404 - no error, no data, and nobody
         // notices until someone opens the dashboard days later.
-        $service = $this->service([
-            new DomainCheckResult('https://shop.example', true, true),
-            new DomainCheckResult('https://shop.at', false, false, DomainCheckResult::REASON_COLLECTOR_STATUS, '404'),
-        ]);
+        $service = $this->service(['https://shop.example' => true, 'https://shop.at' => false]);
 
         try {
             $service->apply(CollectionMode::RELATIVE);
@@ -55,6 +56,8 @@ class CollectionModeServiceTest extends TestCase
 
         self::assertSame([], $this->calls, 'fastmon must not be touched when the check failed');
         self::assertNull($this->storedValue('collectionMode'));
+        // Both origins, both paths: a single unconfigured storefront is what has to be found.
+        self::assertCount(4, $this->probed);
     }
 
     public function testAModeIsRefusedWhenNothingCouldBeChecked(): void
@@ -68,10 +71,7 @@ class CollectionModeServiceTest extends TestCase
 
     public function testRelativeIsAppliedOnlyAfterEveryOriginPassed(): void
     {
-        $service = $this->service([
-            new DomainCheckResult('https://shop.example', true, true),
-            new DomainCheckResult('https://shop.at', true, true),
-        ]);
+        $service = $this->service(['https://shop.example' => true, 'https://shop.at' => true]);
 
         $service->apply(CollectionMode::RELATIVE);
 
@@ -86,7 +86,7 @@ class CollectionModeServiceTest extends TestCase
 
     public function testCustomCarriesTheNormalisedEndpoint(): void
     {
-        $service = $this->service([new DomainCheckResult('https://metrics.example.com', true, true)]);
+        $service = $this->service(['https://metrics.example.com' => true]);
 
         $service->apply(CollectionMode::CUSTOM, 'metrics.example.com/');
 
@@ -97,7 +97,7 @@ class CollectionModeServiceTest extends TestCase
 
     public function testCustomWithoutADomainIsRefusedBeforeAnythingIsProbed(): void
     {
-        $service = $this->service([new DomainCheckResult('https://shop.example', true, true)]);
+        $service = $this->service(['https://shop.example' => true]);
 
         $this->expectExceptionMessage('Enter the domain');
         $service->apply(CollectionMode::CUSTOM, '   ');
@@ -107,12 +107,11 @@ class CollectionModeServiceTest extends TestCase
     {
         // Going back always works, so a merchant whose proxy just broke must not have to
         // pass a check to undo it.
-        $service = $this->service([
-            new DomainCheckResult('https://shop.example', false, false, DomainCheckResult::REASON_SCRIPT_STATUS, '404'),
-        ]);
+        $service = $this->service(['https://shop.example' => false]);
 
         $service->apply(CollectionMode::FASTMON);
 
+        self::assertSame([], $this->probed, 'nothing to prove, so nothing is probed');
         self::assertSame(['PATCH /v1/applications/app-1'], $this->calls);
         self::assertSame('default', $this->storedValue('collectionMode'));
     }
@@ -121,7 +120,7 @@ class CollectionModeServiceTest extends TestCase
     {
         // A probe reaches out to real origins, and a result taken against one mode says
         // nothing about another.
-        $service = $this->service([new DomainCheckResult('https://shop.example', true, true)]);
+        $service = $this->service(['https://shop.example' => true]);
 
         $idle = $service->describe();
         self::assertFalse($idle['checked']);
@@ -139,9 +138,15 @@ class CollectionModeServiceTest extends TestCase
     }
 
     /**
-     * @param list<DomainCheckResult> $results
+     * A shop linked to application `app-1`, whose origins answer the probe as given.
+     *
+     * The checker is the real one. A stand-in would let this test pass while the checker
+     * and the service disagree about what "ready" means, which is precisely the seam the
+     * apply guarantee runs across.
+     *
+     * @param array<string, bool> $origins origin => whether both probe paths answer there
      */
-    private function service(array $results): CollectionModeService
+    private function service(array $origins): CollectionModeService
     {
         $this->stored += [
             ConfigResolver::DOMAIN . 'apiToken' => 'fm_token',
@@ -156,35 +161,52 @@ class CollectionModeServiceTest extends TestCase
             $this->stored[$k] = $v;
         });
 
-        $client = new FastmonClient(new MockHttpClient(
-            function (string $method, string $url, array $options): MockResponse {
-                $this->calls[] = $method . ' ' . parse_url($url, \PHP_URL_PATH);
-                $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
-                $this->sentBody = \is_array($decoded) ? $decoded : [];
+        // One client serves both fastmon's API and the probed origins, told apart by path:
+        // `/v1/…` is fastmon, `/s/…` and `/c/…` are the proxy paths on a storefront.
+        $httpClient = new MockHttpClient(
+            function (string $method, string $url, array $options) use ($origins): MockResponse {
+                $path = (string) parse_url($url, \PHP_URL_PATH);
 
-                return new MockResponse(json_encode([
-                    'id' => 'app-1', 'name' => 'Shopware', 'source_hash' => 'srchash',
-                    'collector_hash' => 'colhash', 'environment' => 'prod', 'site_count' => 1,
-                ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
+                if (str_starts_with($path, '/v1/')) {
+                    $this->calls[] = $method . ' ' . $path;
+                    $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+                    $this->sentBody = \is_array($decoded) ? $decoded : [];
+
+                    return new MockResponse(json_encode([
+                        'id' => 'app-1', 'name' => 'Shopware', 'source_hash' => 'srchash',
+                        'collector_hash' => 'colhash', 'environment' => 'prod', 'site_count' => 1,
+                    ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
+                }
+
+                $this->probed[] = $url;
+
+                if (str_starts_with($path, '/s/')) {
+                    return new MockResponse('var e="/c/colhash";', ['http_code' => 200]);
+                }
+
+                // An origin that is not set up: the script is served, the beacon path is
+                // not - the case the apply guarantee exists for.
+                $origin = parse_url($url, \PHP_URL_SCHEME) . '://' . parse_url($url, \PHP_URL_HOST);
+
+                return ($origins[$origin] ?? false)
+                    ? new MockResponse("GIF89a\x01\x00\x01\x00", ['http_code' => 200, 'response_headers' => ['content-type' => 'image/gif']])
+                    : new MockResponse('not found', ['http_code' => 404, 'response_headers' => ['content-type' => 'text/html']]);
             }
-        ));
+        );
 
+        $client = new FastmonClient($httpClient);
         $store = new ConnectionStore($systemConfig);
         $config = new ConfigResolver($systemConfig);
 
-        $checker = $this->createMock(EndpointChecker::class);
-        $checker->method('check')->willReturn($results);
-        $checker->method('storefrontOrigins')->willReturn(['https://shop.example']);
-        $checker->method('normaliseOrigin')->willReturnCallback(
-            static fn (string $v): string => trim($v) === '' ? '' : 'https://' . rtrim(preg_replace('#^https?://#', '', trim($v)) ?? '', '/')
-        );
+        $database = $this->createMock(DbalConnection::class);
+        $database->method('fetchFirstColumn')->willReturn(array_keys($origins));
 
         return new CollectionModeService(
             $client,
             new ConnectionService($client, $store, new DeviceAuthorizationSession($systemConfig), $config, new NullLogger()),
             $store,
             $config,
-            $checker,
+            new EndpointChecker($httpClient, $store, $database),
             $systemConfig,
             new NullLogger(),
         );

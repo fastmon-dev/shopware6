@@ -22,7 +22,7 @@ use Psr\Log\LoggerInterface;
  * only "there is a token", so which of the two produced it never has to be recorded and
  * never has to be migrated when the second one goes away.
  */
-class ConnectionService
+final class ConnectionService
 {
     public function __construct(
         private readonly FastmonClient $client,

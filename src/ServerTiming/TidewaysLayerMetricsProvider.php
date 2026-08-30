@@ -17,7 +17,7 @@ namespace Fastmon\Collector\ServerTiming;
  * to be silenced for it. `is_callable()` costs nothing and is true only when the
  * extension is loaded *and* new enough to have the method.
  */
-class TidewaysLayerMetricsProvider implements LayerMetricsProviderInterface
+final class TidewaysLayerMetricsProvider implements LayerMetricsProviderInterface
 {
     private const PROFILER = 'Tideways\\Profiler';
     private const METHOD = 'getLayerMetrics';

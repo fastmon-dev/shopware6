@@ -7,13 +7,13 @@ namespace Fastmon\Collector\Api;
  *
  * @internal produced by FastmonClient
  */
-final class DevicePollResult
+final readonly class DevicePollResult
 {
     private function __construct(
-        public readonly DevicePollStatus $status,
-        public readonly string $token,
-        public readonly string $accountEmail,
-        public readonly string $accountName,
+        public DevicePollStatus $status,
+        public string $token,
+        public string $accountEmail,
+        public string $accountName,
         /**
          * The organization the merchant approved for, when fastmon named one.
          *
@@ -23,8 +23,8 @@ final class DevicePollResult
          * removes the case where the merchant approves for one organization on the
          * consent screen and then picks a different one in the shop.
          */
-        public readonly string $organizationId,
-        public readonly string $organizationName,
+        public string $organizationId,
+        public string $organizationName,
     ) {
     }
 

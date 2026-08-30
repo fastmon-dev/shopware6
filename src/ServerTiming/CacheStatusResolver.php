@@ -19,7 +19,7 @@ use Symfony\Component\HttpFoundation\Response;
  * of `miss` is what stops the rate from looking terrible on a shop whose cache is working
  * perfectly.
  */
-class CacheStatusResolver
+final class CacheStatusResolver
 {
     /** Set when Shopware's HTTP cache answered the request. */
     public const HIT_ATTRIBUTE = 'fastmon-collector-fpc-hit';

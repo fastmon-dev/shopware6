@@ -28,7 +28,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
  * instead. Everything past the point where a token exists is identical either way,
  * which is why the rest of the plugin never learns which of the two happened.
  */
-class FastmonClient
+final class FastmonClient
 {
     /** RFC 8628 §3.4. */
     private const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';

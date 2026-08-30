@@ -7,7 +7,7 @@ use Shopware\Core\Framework\Plugin;
 use Shopware\Core\Framework\Plugin\Context\UninstallContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
-class FastmonCollector extends Plugin
+final class FastmonCollector extends Plugin
 {
     /**
      * Drop the stored fastmon credential on uninstall, unless the merchant asked to keep

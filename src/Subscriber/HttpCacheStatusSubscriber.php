@@ -34,7 +34,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * request-scoped flag cannot leak into the next request the way a property on a
  * container service would in a long-running process.
  */
-class HttpCacheStatusSubscriber implements EventSubscriberInterface
+final class HttpCacheStatusSubscriber implements EventSubscriberInterface
 {
     public static function getSubscribedEvents(): array
     {

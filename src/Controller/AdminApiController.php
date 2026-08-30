@@ -36,7 +36,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * faults in the shop.
  */
 #[Route(defaults: [PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID]])]
-class AdminApiController extends AbstractController
+final class AdminApiController extends AbstractController
 {
     private const READ = [PlatformRequest::ATTRIBUTE_ACL => ['system_config:read']];
     private const WRITE = [PlatformRequest::ATTRIBUTE_ACL => ['system_config:update']];

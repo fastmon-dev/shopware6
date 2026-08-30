@@ -10,7 +10,7 @@ namespace Fastmon\Collector\ServerTiming;
  * active provider recorded for the very request that asks - an admin API call - so they
  * are a real sample of this machine rather than a guess.
  */
-class ServerTimingStatus
+final class ServerTimingStatus
 {
     /**
      * Every layer the Tideways extension documents, so the panel can also show what

@@ -10,6 +10,6 @@ namespace Fastmon\Collector\Api;
  * anything about, and because the answer to it is specific: connect with a token
  * created in the fastmon dashboard instead. The admin module says exactly that.
  */
-class DeviceFlowUnsupportedException extends FastmonApiException
+final class DeviceFlowUnsupportedException extends FastmonApiException
 {
 }

@@ -59,7 +59,7 @@ use Symfony\Component\HttpFoundation\Response;
  * Writing twice therefore appends a second set of layers rather than replacing the
  * first, and the summed columns - kv, http, search - would count both.
  */
-class ServerTimingSubscriber implements EventSubscriberInterface
+final class ServerTimingSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private readonly ConfigResolver $configResolver,
@@ -68,6 +68,7 @@ class ServerTimingSubscriber implements EventSubscriberInterface
         private readonly ServerTimingResponseWriter $responseWriter,
         private readonly CacheStatusResolver $cacheStatusResolver,
         private readonly RequestInsights $insights,
+        private readonly ServerIdentity $serverIdentity,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -167,7 +168,7 @@ class ServerTimingSubscriber implements EventSubscriberInterface
         }
 
         if ($config->reportServer && $isDocument) {
-            $server = (new ServerIdentity())->name();
+            $server = $this->serverIdentity->name();
 
             if ($server !== '') {
                 $own[] = ['fm-node', null, $server];

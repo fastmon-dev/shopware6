@@ -22,7 +22,7 @@ use Symfony\Component\HttpFoundation\Response;
  * and drop: the prefix is fastmon's own namespace, so no CDN and no other plugin emits
  * one. Stale entries go, everything else stays, and the operation is idempotent.
  */
-class ServerTimingResponseWriter
+final class ServerTimingResponseWriter
 {
     public const HEADER = 'Server-Timing';
 

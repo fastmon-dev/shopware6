@@ -14,7 +14,7 @@ namespace Fastmon\Collector\ServerTiming;
  * long-running worker the answer cannot change (an extension does not get loaded
  * mid-process), and in FPM the object does not outlive the request anyway.
  */
-class LayerMetricsProviderRegistry implements LayerMetricsProviderInterface
+final class LayerMetricsProviderRegistry implements LayerMetricsProviderInterface
 {
     private ?LayerMetricsProviderInterface $resolved = null;
 

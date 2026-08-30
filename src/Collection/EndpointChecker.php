@@ -40,7 +40,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * Probing with the real hash would work too, and would write a synthetic pageview into
  * the customer's data every time someone pressed the button.
  */
-class EndpointChecker
+final class EndpointChecker
 {
     /**
      * A syntactically valid collector hash that cannot resolve to an application, so the

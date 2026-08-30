@@ -15,6 +15,9 @@ namespace Fastmon\Collector\ServerTiming;
  * existed when the TracerProvider was built - during composer autoloading, before any
  * plugin - and there is no API to read them back, so the gap is architectural rather than
  * a class nobody has written yet. Tideways is the only source today.
+ *
+ * This interface is the plugin's one extension point. Every class in the plugin is
+ * `final`: a second source implements this, it does not inherit from the first.
  */
 interface LayerMetricsProviderInterface
 {

@@ -34,7 +34,7 @@ namespace Fastmon\Collector\ServerTiming;
  *
  * @see docs/server-timing-setup.md in the fastmon backend for the full contract.
  */
-class ServerTimingHeaderBuilder
+final class ServerTimingHeaderBuilder
 {
     /** Total PHP wall time. First-party alias, guaranteed to land in `backend_dur`. */
     public const TOTAL_METRIC = 'fm-backend';

@@ -26,7 +26,7 @@ use Psr\Log\LoggerInterface;
  *
  * What is left for this class is choosing which application, and remembering the answer.
  */
-class ApplicationProvisioner
+final class ApplicationProvisioner
 {
     /**
      * Naming a new application after the shop is the one piece of context fastmon cannot

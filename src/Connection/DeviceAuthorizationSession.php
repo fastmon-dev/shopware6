@@ -34,7 +34,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * One authorization at a time, which is what a shop connecting to one account needs.
  * Starting a second one replaces the first, so an abandoned attempt cannot linger.
  */
-class DeviceAuthorizationSession
+final class DeviceAuthorizationSession
 {
     private const KEY = ConfigResolver::DOMAIN . 'deviceAuthorization';
 

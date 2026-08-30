@@ -4,6 +4,7 @@ namespace Fastmon\Collector\Tests\Unit;
 
 use Fastmon\Collector\ServerTiming\CacheStatusResolver;
 use Fastmon\Collector\ServerTiming\RequestInsights;
+use Fastmon\Collector\ServerTiming\ServerIdentity;
 use Fastmon\Collector\ServerTiming\ServerTimingHeaderBuilder;
 use Fastmon\Collector\ServerTiming\ServerTimingResponseWriter;
 use Fastmon\Collector\Service\ConfigResolver;
@@ -246,6 +247,7 @@ class ServerTimingSubscriberTest extends TestCase
             new ServerTimingResponseWriter(),
             new CacheStatusResolver(),
             $this->insights,
+            new ServerIdentity(),
             new NullLogger(),
         );
     }
