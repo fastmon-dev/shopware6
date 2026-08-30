@@ -1,0 +1,9 @@
+/vendor/
+/composer.lock
+/.php-cs-fixer.cache
+/.phpunit.result.cache
+/.phpunit.cache/
+/.claude/settings.local.json
+
+# Built by bin/build-administration.sh, not source
+/src/Resources/public/

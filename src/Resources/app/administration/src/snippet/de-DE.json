@@ -1,0 +1,104 @@
+{
+    "fastmon-collector": {
+        "loading": "Wird geladen…",
+        "connectedAs": "Mit fastmon verbunden als",
+        "disconnect": "Verbindung trennen",
+        "disconnectHint": "Das Trennen entfernt das Token nur aus diesem Shop. Um es auf fastmon-Seite ungültig zu machen, entferne diese Integration im fastmon-Dashboard unter Verbundene Apps.",
+        "connect": {
+            "intro": "Verbinde diesen Shop mit einem fastmon-Konto, um Core Web Vitals und JavaScript-Fehler echter Besucher zu erfassen.",
+            "start": "Mit fastmon verbinden",
+            "deviceIntro": "Öffne fastmon und bestätige diesen Code. Der Shop macht von allein weiter, sobald du freigibst.",
+            "openFastmon": "fastmon öffnen und freigeben →",
+            "waiting": "Warte auf die Freigabe…",
+            "cancel": "Abbrechen",
+            "expired": "Der Code ist abgelaufen, bevor er freigegeben wurde. Bitte erneut starten.",
+            "rejected": "Das gespeicherte Token wurde von fastmon abgelehnt. Vermutlich wurde es unter Verbundene Apps widerrufen. Bitte trennen und neu verbinden.",
+            "unsupported": "Diese fastmon-Instanz bietet die geführte Verbindung noch nicht an. Erstelle stattdessen im fastmon-Dashboard ein API-Token und füge es hier ein.",
+            "tokenLabel": "fastmon-API-Token",
+            "saveToken": "Token speichern",
+            "tokenScopes": "Das Token braucht die Scopes \"app:read\" und \"app:write\" und muss an die Organisation gebunden sein, an die dieser Shop melden soll. Rolle Owner oder Member - ein Viewer kann keine Applications anlegen.",
+            "missingPermission": "Dem verbundenen Token fehlt die Berechtigung \"{permission}\". Ergänze sie im fastmon-Dashboard am Token, oder verbinde dich mit einem Account, der die Rolle Owner oder Member hat."
+        },
+        "provision": {
+            "intro": "Wähle, an welche fastmon-Application diese Storefront meldet.",
+            "organization": "Organisation",
+            "chooseOrganization": "Bitte wählen…",
+            "existing": "Bestehende Application verknüpfen",
+            "link": "Verknüpfen",
+            "domainCount": "noch keine Domains | 1 Domain | {count} Domains",
+            "createTitle": "Oder neu anlegen",
+            "name": "Name",
+            "environment": "Umgebung",
+            "preset": "Datenumfang",
+            "create": "Anlegen und verknüpfen",
+            "autoSites": "Eine Application deckt alle Verkaufskanäle ab. Jede Domain, unter der die Storefront läuft, meldet sich beim ersten Seitenaufruf selbst in fastmon an - es muss nichts von Hand eingetragen werden.",
+            "pendingApproval": "Diese fastmon-Organisation wartet noch auf die Freigabe. fastmon prüft neue Accounts, bevor sie Daten erfassen dürfen; Applications lassen sich anlegen, sobald sie freigegeben ist - was auch automatisch mit der ersten erfolgreichen Zahlung passiert. Die Verbindung selbst ist in Ordnung, komm danach einfach auf diese Seite zurück.",
+            "relink": "Die verknüpfte Application gibt es in fastmon nicht mehr, oder ihre IDs haben sich geändert. Die Verbindung selbst ist in Ordnung - wähle unten eine Application aus.",
+            "createOnlyTitle": "Application anlegen",
+            "noneYet": "Diese Organisation hat noch keine Applications."
+        },
+        "summary": {
+            "application": "Application",
+            "trackerId": "Tracker-ID",
+            "pixelId": "Pixel-ID",
+            "refresh": "Neu von fastmon lesen",
+            "sites": "Domains, die fastmon gesehen hat",
+            "noSites": "Noch keine. Jede Domain meldet sich beim ersten Seitenaufruf selbst an - das bleibt also leer, bis die Storefront Traffic bekommt.",
+            "debug": "Debug-Informationen"
+        },
+        "environment": {
+            "prod": "Produktion",
+            "dev": "Entwicklung (nicht abgerechnet)"
+        },
+        "preset": {
+            "minimal": "Minimal — nur Web Vitals und Fehleranzahl, keine Identifikatoren",
+            "standard": "Standard — alles, was keine personenbezogenen Daten enthalten kann",
+            "full": "Vollständig — Sessions, Fehlermeldungen und Query-Keys"
+        },
+        "serverTiming": {
+            "title": "Was dieser Host messen kann",
+            "reload": "Neu laden",
+            "sampleHint": "Das sind die Layer, die für den Request gemessen wurden, der dieses Panel geladen hat - also eine echte Stichprobe dieser Maschine.",
+            "sourceOk": "Layer-Zeiten kommen von {source}.",
+            "sourceMissing": "Layer-Zeiten brauchen die Tideways-Extension 5.23 oder neuer. Alles andere — Cache-Ergebnis, Gesamtzeit, Renderzeit, Seitentyp, Server — wird trotzdem gemeldet.",
+            "noExtension": "keine Profiling-Extension geladen",
+            "noLayers": "Kein Layer hat in diesem Request mehr als eine Millisekunde gebraucht.",
+            "custom": "nur Drill-down",
+            "idleLayers": "Bekannt, aber in diesem Request ungenutzt:",
+            "state": {
+                "active": "misst",
+                "outdated": "installiert, aber zu alt — braucht 5.23 oder neuer",
+                "absent": "nicht installiert"
+            }
+        },
+        "collection": {
+            "needsApplication": "Verknüpfe zuerst eine fastmon-Application — Tracker- und Pixel-ID kommen von dort.",
+            "intro": "Adblocker schlucken rund ein Drittel der Third-Party-Analytics. Wenn Tracker und Beacon von der eigenen Domain kommen, fällt das weg. Das Plugin leitet diese Pfade nicht selbst weiter — das wäre ein Request pro Seitenaufruf durch PHP — das muss dein Webserver tun.",
+            "docs": "Anleitung zur Einrichtung →",
+            "modeDefault": "fastmons Collector",
+            "modeDefaultHint": "Lädt von fastmon.site. Funktioniert überall, braucht keine Einrichtung, und ist das, was Adblocker erkennen.",
+            "modeCustom": "Eigene Domain",
+            "modeCustomHint": "Ein Host, den du an fastmon weiterleitest, etwa eine Mess-Subdomain. First-Party, solange er zum Origin des Shops passt.",
+            "modeRelative": "Gleicher Origin wie die Seite",
+            "modeRelativeHint": "Jede Storefront liefert die Pfade von ihrer eigenen Domain. Die richtige Wahl, wenn der Shop mehrere hat — ein Embed deckt alle ab.",
+            "origins": "Muss eingerichtet sein auf:",
+            "check": "Einrichtung prüfen",
+            "checking": "Wird geprüft…",
+            "apply": "Übernehmen",
+            "domainOk": "bereit",
+            "domainFailed": "nicht eingerichtet",
+            "nothingChecked": "Kein Origin konnte geprüft werden, dieser Modus lässt sich daher nicht übernehmen.",
+            "secretHint": "Dein Proxy muss dieses Secret im Header FM-Proxy-Key mitschicken, sonst kann fastmon der weitergereichten Besucher-IP nicht vertrauen und alle Besucher landen auf dem Standort des Shop-Servers. Es wird nur einmal angezeigt — zum Rotieren einfach neu erzeugen.",
+            "secret": "Proxy-Secret erzeugen",
+            "blocked": "Deshalb lässt sich \"{mode}\" nicht aktivieren — die Storefronts oben würden den Tracker laden und nichts senden. Richte die Weiterleitung ein und prüfe erneut.",
+            "allReady": "Alle Origins antworten. \"{mode}\" kann aktiviert werden.",
+            "reason": {
+                "script_status": "Das Tracker-Skript wird hier nicht ausgeliefert: /s/ antwortet mit HTTP {detail} statt mit dem fastmon-Bundle. Dieser Pfad wird noch nicht an fastmon weitergeleitet.",
+                "script_foreign": "Auf /s/ antwortet zwar etwas, aber nicht das fastmon-Bundle dieser Application — vermutlich fängt eine andere Regel den Pfad vorher ab.",
+                "script_unreachable": "Diese Domain war vom Shop-Server aus nicht erreichbar ({detail}).",
+                "collector_status": "Der Tracker würde laden, seine Daten gingen aber ins Leere: /c/ antwortet mit HTTP {detail}, statt fastmon zu erreichen.",
+                "collector_unreachable": "Der Beacon-Pfad /c/ war vom Shop-Server aus nicht erreichbar ({detail})."
+            }
+        }
+    }
+}

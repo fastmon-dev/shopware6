@@ -1,0 +1,104 @@
+{
+    "fastmon-collector": {
+        "loading": "Loading…",
+        "connectedAs": "Connected to fastmon as",
+        "disconnect": "Disconnect",
+        "disconnectHint": "Disconnecting only removes the token from this shop. To revoke it on fastmon's side, remove this integration under Connected apps in the fastmon dashboard.",
+        "connect": {
+            "intro": "Connect this shop to a fastmon account to collect Core Web Vitals and JavaScript errors from real visitors.",
+            "start": "Connect to fastmon",
+            "deviceIntro": "Open fastmon and confirm this code. The shop finishes on its own once you approve.",
+            "openFastmon": "Open fastmon and approve →",
+            "waiting": "Waiting for approval…",
+            "cancel": "Cancel",
+            "expired": "The code expired before it was approved. Start again.",
+            "rejected": "The stored token was rejected by fastmon. It was probably revoked under Connected apps. Disconnect and connect again.",
+            "unsupported": "This fastmon instance does not offer the guided connection yet. Create an API token in the fastmon dashboard and paste it here instead.",
+            "tokenLabel": "fastmon API token",
+            "saveToken": "Save token",
+            "tokenScopes": "The token needs the scopes \"app:read\" and \"app:write\", and must be bound to the organisation this shop should report to. Owner or member role - a viewer cannot create applications.",
+            "missingPermission": "The connected token is missing the \"{permission}\" permission. Add it to the token in the fastmon dashboard, or connect with an account that holds the owner or member role."
+        },
+        "provision": {
+            "intro": "Choose which fastmon application this storefront reports to.",
+            "organization": "Organisation",
+            "chooseOrganization": "Please choose…",
+            "existing": "Link an existing application",
+            "link": "Link",
+            "domainCount": "no domains yet | 1 domain | {count} domains",
+            "createTitle": "Or create a new one",
+            "name": "Name",
+            "environment": "Environment",
+            "preset": "Data scope",
+            "create": "Create and link",
+            "autoSites": "One application covers every sales channel. Each domain the storefront runs on registers itself in fastmon the first time a visitor loads a page there, so nothing has to be added by hand.",
+            "pendingApproval": "This fastmon organisation is still awaiting approval. fastmon reviews new accounts before they may collect data; applications can be created once it is approved, which also happens automatically on the first successful payment. The connection itself is fine - come back to this page afterwards.",
+            "relink": "The linked application no longer exists in fastmon, or its ids changed. The connection itself is fine - pick an application below.",
+            "createOnlyTitle": "Create an application",
+            "noneYet": "This organisation has no applications yet."
+        },
+        "summary": {
+            "application": "Application",
+            "trackerId": "Tracker ID",
+            "pixelId": "Pixel ID",
+            "refresh": "Re-read from fastmon",
+            "sites": "Domains fastmon has seen",
+            "noSites": "None yet. Each domain registers itself the first time a visitor loads a page there, so this stays empty until the storefront gets traffic.",
+            "debug": "Debug information"
+        },
+        "environment": {
+            "prod": "Production",
+            "dev": "Development (not billed)"
+        },
+        "preset": {
+            "minimal": "Minimal — Web Vitals and error counts only, no identifiers",
+            "standard": "Standard — everything that cannot contain personal data",
+            "full": "Full — sessions, error messages and query keys"
+        },
+        "serverTiming": {
+            "title": "What this host can measure",
+            "reload": "Reload",
+            "sampleHint": "These are the layers measured for the request that loaded this panel, so they are a real sample of this machine.",
+            "sourceOk": "Per-layer timings come from {source}.",
+            "sourceMissing": "Per-layer timings need the Tideways extension 5.23 or newer. Everything else — cache verdict, total time, render time, page type, server — is reported regardless.",
+            "noExtension": "no profiling extension loaded",
+            "noLayers": "No layer took more than a millisecond in this request.",
+            "custom": "drill-down only",
+            "idleLayers": "Known but idle in this request:",
+            "state": {
+                "active": "measuring",
+                "outdated": "installed, but too old — needs 5.23 or newer",
+                "absent": "not installed"
+            }
+        },
+        "collection": {
+            "needsApplication": "Link a fastmon application first — the tracker and pixel ids come from it.",
+            "intro": "Ad blockers drop roughly a third of third-party analytics. Serving the tracker and the beacon from your own domain avoids that. The plugin does not forward those paths itself — that would put a request per pageview through PHP — so your web server has to.",
+            "docs": "How to set it up →",
+            "modeDefault": "fastmon's collector",
+            "modeDefaultHint": "Loads from fastmon.site. Works everywhere, needs no setup, and is what ad blockers recognise.",
+            "modeCustom": "Your own domain",
+            "modeCustomHint": "One host you forward to fastmon, e.g. a measurement subdomain. First-party as long as it matches the shop's own origin.",
+            "modeRelative": "Same origin as the page",
+            "modeRelativeHint": "Each storefront serves the paths from its own domain. The right choice when the shop has several — one embed covers all of them.",
+            "origins": "Has to be configured on:",
+            "check": "Check setup",
+            "checking": "Checking…",
+            "apply": "Apply",
+            "domainOk": "ready",
+            "domainFailed": "not set up",
+            "nothingChecked": "No origin could be checked, so this mode cannot be applied.",
+            "secretHint": "Your proxy has to send this secret in the FM-Proxy-Key header, otherwise fastmon cannot trust the visitor IP it forwards and every visitor ends up sharing the shop server's location. It is shown once — generate it again to rotate.",
+            "secret": "Generate proxy secret",
+            "blocked": "Because of this, \"{mode}\" cannot be switched on — the storefronts above would load the tracker and send nothing. Set the forwarding up and check again.",
+            "allReady": "Every origin answers. \"{mode}\" can be switched on.",
+            "reason": {
+                "script_status": "The tracker script is not being served here: /s/ answers with HTTP {detail} instead of the fastmon bundle. Nothing forwards that path to fastmon yet.",
+                "script_foreign": "Something answers /s/, but it is not this application's fastmon bundle — most likely another rule catches the path first.",
+                "script_unreachable": "This domain could not be reached from the shop server ({detail}).",
+                "collector_status": "The tracker would load, but its data would go nowhere: /c/ answers with HTTP {detail} instead of reaching fastmon.",
+                "collector_unreachable": "The beacon path /c/ could not be reached from the shop server ({detail})."
+            }
+        }
+    }
+}

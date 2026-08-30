@@ -1,0 +1,64 @@
+{
+    "name": "fastmon/shopware-collector",
+    "description": "Real user monitoring for your Shopware storefront: Core Web Vitals, JavaScript errors and per-layer Server-Timing from real visitors. EU-hosted and cookieless.",
+    "version": "0.1.0",
+    "type": "shopware-platform-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "fastmon labs UG",
+            "homepage": "https://fastmon.eu"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "shopware/core": "~6.6.0 || ~6.7.0",
+        "shopware/storefront": "~6.6.0 || ~6.7.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.58",
+        "phpstan/phpstan": "^2.2",
+        "phpunit/phpunit": "^10.5",
+        "symfony/http-client": "^6.4 || ^7.0"
+    },
+    "suggest": {
+        "ext-tideways": "Tideways 5.23+ adds the per-layer breakdown (database, cache, search, outbound HTTP) to the Server-Timing header. Everything else the plugin reports needs no extension."
+    },
+    "autoload": {
+        "psr-4": {
+            "Fastmon\\Collector\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Fastmon\\Collector\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "shopware-plugin-class": "Fastmon\\Collector\\FastmonCollector",
+        "label": {
+            "en-GB": "fastmon.eu - Real User Monitoring",
+            "de-DE": "fastmon.eu - Real User Monitoring"
+        },
+        "description": {
+            "en-GB": "Real user monitoring for your Shopware storefront: Core Web Vitals, JavaScript errors and per-layer Server-Timing from real visitors. EU-hosted and cookieless.",
+            "de-DE": "Real User Monitoring für deine Shopware-Storefront: Core Web Vitals, JavaScript-Fehler und Server-Timing pro Layer von echten Besuchern. EU-gehostet, ohne Cookies."
+        },
+        "manufacturerLink": {
+            "en-GB": "https://fastmon.eu",
+            "de-DE": "https://fastmon.eu"
+        },
+        "supportLink": {
+            "en-GB": "https://fastmon.eu/support",
+            "de-DE": "https://fastmon.eu/support"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": false,
+            "symfony/runtime": false,
+            "symfony/flex": false
+        }
+    }
+}

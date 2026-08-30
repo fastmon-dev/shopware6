@@ -1,0 +1,24 @@
+# MOUNT MODE overlay — the default workspace mode (enabled in devcontainer.json).
+#
+# Replaces the named-volume workspace with a BIND MOUNT of your host checkout in
+# BOTH containers: the dev container sees it as the workspace, the shop sees it
+# as custom/plugins/FastmonCollector. One edit, visible in both, no sync step.
+# The OrbStack virtiofs rename-atomicity race that clone mode was built to avoid
+# is defused by core.checkStat=minimal (set system-wide in the Dockerfile).
+# Drop this file from dockerComposeFile to fall back to clone mode.
+#
+# Enable by listing this file AFTER the base in devcontainer.json:
+#   "dockerComposeFile": ["docker-compose.yml", "docker-compose.mount.yml"]
+#
+# vendor/ stays on its named volume in the dev container and stays SHADOWED
+# (empty) in the shop container — see the base file for why.
+services:
+  plugin:
+    volumes:
+      # `..` = the plugin repo root (this file lives in .devcontainer/). Same
+      # target as the base's named-volume workspace → this entry overrides it
+      # (Compose de-dupes service volumes by target path).
+      - ..:/workspaces/shopware_plugin
+  shopware:
+    volumes:
+      - ..:/var/www/html/custom/plugins/${FASTMON_PLUGIN_NAME:-FastmonCollector}

@@ -1,0 +1,25 @@
+{% sw_extends '@Storefront/storefront/base.html.twig' %}
+
+{#
+    No-JS pixel, right after <body> opens. Captures pageviews from clients that never run
+    the tracker at all: messenger link previews, AI crawlers, NoScript browsers.
+
+    Gated on `pixelId` rather than on `trackerId`, because an application can in principle
+    have one without the other, and a pixel URL with an empty id is a 404 on every page
+    view.
+#}
+{% block base_body_skip_to_content %}
+    {% set fmPixelId = config('FastmonCollector.config.pixelId') %}
+    {% set fmBase = fastmon_script_base() %}
+    {% if config('FastmonCollector.config.active')
+        and config('FastmonCollector.config.enablePixel')
+        and fmPixelId %}
+        {# Decorative by definition: a 1x1 beacon carrying no content. alt="" plus
+           aria-hidden keeps it out of the accessibility tree entirely. #}
+        <noscript><img src="{{ fmBase }}/c/{{ fmPixelId }}.gif"
+                       alt="" aria-hidden="true" width="1" height="1"
+                       referrerpolicy="no-referrer-when-downgrade"/></noscript>
+    {% endif %}
+
+    {{ parent() }}
+{% endblock %}

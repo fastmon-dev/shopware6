@@ -1,0 +1,47 @@
+{% sw_extends '@Storefront/storefront/layout/meta.html.twig' %}
+
+{#
+    fastmon real user monitoring.
+
+    Both snippets are gated on `trackerId`, which is only ever written once an
+    application has actually been linked. An unconfigured shop therefore renders
+    nothing at all rather than a script tag pointing at an empty id.
+
+    `active` is per sales channel, so a single storefront can be left out without
+    touching the connection.
+#}
+
+{#
+    Early-error bootstrap. It has to be the very first thing in <head> to catch errors
+    from inline scripts and third-party tags that run before the tracker loads, so it is
+    prepended before parent() inside the first in-head block rather than placed in the
+    tracking block below.
+#}
+{% block layout_head_meta_tags_charset %}
+    {% if config('FastmonCollector.config.active')
+        and config('FastmonCollector.config.enableErrorBootstrap')
+        and config('FastmonCollector.config.trackerId') %}
+        <script>window.__fastmon=window.__fastmon||{q:[]};(function(q){function h(k){return function(e){q.push([k,e,Date.now()])}}addEventListener("error",h("e"),true);addEventListener("unhandledrejection",h("r"))})(window.__fastmon.q);</script>
+    {% endif %}
+    {{ parent() }}
+{% endblock %}
+
+{#
+    The tracker itself, deferred so it never blocks rendering. Rendered after parent()
+    in the dedicated head tracking block.
+#}
+{% block layout_head_javascript_tracking %}
+    {{ parent() }}
+
+    {#
+        The base comes from the collection mode and is empty in `relative`, where the path
+        then resolves against whichever domain the page is on. That is what makes one
+        snippet first-party on every sales-channel domain at once - and the mode is only
+        ever set once the plugin probed that those domains really answer.
+    #}
+    {% set fmTrackerId = config('FastmonCollector.config.trackerId') %}
+    {% set fmBase = fastmon_script_base() %}
+    {% if config('FastmonCollector.config.active') and fmTrackerId %}
+        <script defer src="{{ fmBase }}/s/{{ fmTrackerId }}.js"></script>
+    {% endif %}
+{% endblock %}

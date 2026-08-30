@@ -1,0 +1,3 @@
+fastmon_collector_admin_api:
+    resource: '../../Controller/'
+    type: attribute

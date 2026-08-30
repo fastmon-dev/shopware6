@@ -1,0 +1,41 @@
+{
+  "name": "fastmon-shopware-plugin",
+  // Compose-based dev container — the monorepo standard (matches backend/ and
+  // frontend/). Two services on one Compose network:
+  //   plugin    — this container: PHP 8.3 CLI, Composer, Node, shopware-cli,
+  //               Claude Code. Runs the plugin's own toolchain (phpunit,
+  //               phpstan, php-cs-fixer, `shopware-cli extension validate/zip`).
+  //   shopware  — dockware/shopware: a full Shopware 6.7 (Apache, MySQL,
+  //               Mailcatcher, SSH) with THIS repo bind-mounted as
+  //               custom/plugins/FastmonCollector, so the plugin can be
+  //               installed and clicked through at http://localhost.
+  // No docker socket mount, no privileged container. `fastmon-sw <console args>`
+  // runs bin/console inside the shop over dockware's built-in SSH.
+  //
+  // WORKSPACE MODE — the one knob you flip (self-documenting via the filename):
+  //   MOUNT mode (default): add docker-compose.mount.yml to bind your host
+  //     checkout — edits land on the host directly AND are seen live by the shop
+  //     container (same bind). The virtiofs rename race that used to flash the
+  //     editor git panel is defused by core.checkStat=minimal (Dockerfile).
+  //   CLONE mode (fallback): base file only. Workspace on a named volume that is
+  //     shared with the shop container, git init+fetch by the bootstrap.
+  //
+  //   "dockerComposeFile": ["docker-compose.yml", "docker-compose.mount.yml"] // MOUNT (default)
+  //   "dockerComposeFile": ["docker-compose.yml"]                            // CLONE (fallback)
+  "dockerComposeFile": ["docker-compose.yml", "docker-compose.mount.yml"],
+  "service": "plugin",
+  "workspaceFolder": "/workspaces/shopware_plugin",
+  // The shop is published on the host by Compose (`ports:` in
+  // docker-compose.yml, default 80 → http://localhost) so the browser reaches it
+  // without editor port forwarding. Nothing listens in THIS container.
+  "forwardPorts": [],
+  // Create-time setup (chown volume mountpoints, git init+fetch in clone mode,
+  // composer install, Claude permissions) lives in the image-baked
+  // /usr/local/bin/fastmon-shopware-plugin-bootstrap (see bootstrap.sh).
+  // Idempotent — if your editor doesn't run postCreate (or the container was
+  // reused), run it once in the container terminal.
+  "postCreateCommand": "fastmon-shopware-plugin-bootstrap",
+  // Stop the whole Compose project (incl. the shop) when the editor closes.
+  "shutdownAction": "stopCompose",
+  "remoteUser": "dev"
+}

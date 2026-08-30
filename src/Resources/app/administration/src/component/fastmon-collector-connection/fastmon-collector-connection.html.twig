@@ -1,0 +1,280 @@
+{% block fastmon_collector_connection %}
+{#
+    Plain markup rather than admin components on purpose. Shopware renamed the whole
+    component library from `sw-*` to the Meteor `mt-*` set between 6.6 and 6.7, and this
+    plugin supports both; a template written against either name breaks on the other.
+#}
+<div class="fastmon-collector-connection">
+
+    <p v-if="isLoading" class="fastmon-collector-connection__note">
+        {{ $tc('fastmon-collector.loading') }}
+    </p>
+
+    <template v-else>
+        <!-- A pending org review is a waiting state, not a fault, so it is not styled
+             as one - the merchant has nothing to fix and nothing to retry. -->
+        <p v-if="error && pendingApproval" class="fastmon-collector-connection__note is--pending">
+            {{ $tc('fastmon-collector.provision.pendingApproval') }}
+        </p>
+
+        <p v-else-if="error" class="fastmon-collector-connection__note is--error">
+            {{ error }}
+            <template v-if="missingPermission">
+                {{ $tc('fastmon-collector.connect.missingPermission', 0, { permission: missingPermission }) }}
+            </template>
+        </p>
+
+        <!-- ---------- not connected ---------- -->
+        <template v-if="!isConnected">
+            <p class="fastmon-collector-connection__hint">
+                {{ $tc('fastmon-collector.connect.intro') }}
+            </p>
+
+            <!-- Device authorization in flight: the merchant approves in their own
+                 browser while the shop polls. -->
+            <div v-if="device" class="fastmon-collector-connection__device">
+                <p class="fastmon-collector-connection__hint">
+                    {{ $tc('fastmon-collector.connect.deviceIntro') }}
+                </p>
+
+                <div class="fastmon-collector-connection__code">{{ device.userCode }}</div>
+
+                <p>
+                    <a :href="device.verificationUriComplete"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="fastmon-collector-connection__link">
+                        {{ $tc('fastmon-collector.connect.openFastmon') }}
+                    </a>
+                </p>
+
+                <p class="fastmon-collector-connection__note">
+                    {{ $tc('fastmon-collector.connect.waiting') }}
+                </p>
+
+                <button type="button" class="fastmon-collector-connection__button" @click="cancelDevice">
+                    {{ $tc('fastmon-collector.connect.cancel') }}
+                </button>
+            </div>
+
+            <button v-else-if="!deviceUnsupported"
+                    type="button"
+                    class="fastmon-collector-connection__button is--primary"
+                    :disabled="isBusy"
+                    @click="connect">
+                {{ $tc('fastmon-collector.connect.start') }}
+            </button>
+
+            <!-- Only shown once fastmon has said it cannot do the guided flow, so the
+                 good path is never competing with a field asking for a secret. -->
+            <div v-if="deviceUnsupported" class="fastmon-collector-connection__fallback">
+                <p class="fastmon-collector-connection__note">
+                    {{ $tc('fastmon-collector.connect.unsupported') }}
+                </p>
+
+                <label class="fastmon-collector-connection__label" for="fastmon-token">
+                    {{ $tc('fastmon-collector.connect.tokenLabel') }}
+                </label>
+                <p class="fastmon-collector-connection__hint">
+                    {{ $tc('fastmon-collector.connect.tokenScopes') }}
+                </p>
+                <input id="fastmon-token"
+                       v-model="token"
+                       type="password"
+                       autocomplete="off"
+                       class="fastmon-collector-connection__input"
+                       placeholder="fm_...">
+
+                <button type="button"
+                        class="fastmon-collector-connection__button is--primary"
+                        :disabled="isBusy || !token"
+                        @click="connectWithToken">
+                    {{ $tc('fastmon-collector.connect.saveToken') }}
+                </button>
+            </div>
+        </template>
+
+        <!-- ---------- connected ---------- -->
+        <template v-else>
+            <p class="fastmon-collector-connection__account">
+                {{ $tc('fastmon-collector.connectedAs') }}
+                <strong>{{ status.accountEmail || status.accountName }}</strong>
+                <template v-if="status.organizationName || status.organizationId">
+                    &middot; {{ $tc('fastmon-collector.provision.organization') }}
+                    <strong>{{ status.organizationName || status.organizationId }}</strong>
+                </template>
+            </p>
+
+            <p v-if="needsReconnect" class="fastmon-collector-connection__note is--error">
+                {{ $tc('fastmon-collector.connect.rejected') }}
+            </p>
+
+            <!-- ---------- connected, but no usable application ---------- -->
+            <template v-else-if="!isProvisioned || needsRelink">
+                <!-- The token is good; only the application is gone. Say so, and offer
+                     to pick another one rather than sending the merchant through a
+                     disconnect that would drop a working credential. -->
+                <p v-if="needsRelink" class="fastmon-collector-connection__note is--error">
+                    {{ $tc('fastmon-collector.provision.relink') }}
+                </p>
+                <p class="fastmon-collector-connection__hint">
+                    {{ $tc('fastmon-collector.provision.intro') }}
+                </p>
+
+                <!-- Settled on fastmon's own consent screen: shown, not offered. -->
+                <p v-if="organizationIsSettled" class="fastmon-collector-connection__account">
+                    {{ $tc('fastmon-collector.provision.organization') }}:
+                    <strong>{{ settledOrganizationName }}</strong>
+                </p>
+
+                <template v-else>
+                    <label class="fastmon-collector-connection__label" for="fastmon-org">
+                        {{ $tc('fastmon-collector.provision.organization') }}
+                    </label>
+                    <select id="fastmon-org"
+                            v-model="organizationId"
+                            class="fastmon-collector-connection__input"
+                            @change="onOrganizationChange">
+                        <option value="">{{ $tc('fastmon-collector.provision.chooseOrganization') }}</option>
+                        <option v-for="org in organizations" :key="org.id" :value="org.id">
+                            {{ org.name }}
+                        </option>
+                    </select>
+                </template>
+
+                <template v-if="organizationId">
+                    <!-- Linking an existing application comes first: a second shop
+                         feeding one dashboard is a normal setup, and creating a
+                         duplicate is the mistake this ordering prevents. -->
+                    <p v-if="!applications.length" class="fastmon-collector-connection__hint">
+                        {{ $tc('fastmon-collector.provision.noneYet') }}
+                    </p>
+
+                    <template v-if="applications.length">
+                        <p class="fastmon-collector-connection__label">
+                            {{ $tc('fastmon-collector.provision.existing') }}
+                        </p>
+
+                        <ul class="fastmon-collector-connection__list">
+                            <li v-for="app in applications" :key="app.id"
+                                class="fastmon-collector-connection__item">
+                                <span>
+                                    <strong>{{ app.name }}</strong>
+                                    <span class="fastmon-collector-connection__meta">
+                                        {{ app.environment }} &middot;
+                                        {{ $tc('fastmon-collector.provision.domainCount', app.siteCount, { count: app.siteCount }) }}
+                                    </span>
+                                </span>
+                                <button type="button"
+                                        class="fastmon-collector-connection__button"
+                                        :disabled="isBusy"
+                                        @click="attachApplication(app.id)">
+                                    {{ $tc('fastmon-collector.provision.link') }}
+                                </button>
+                            </li>
+                        </ul>
+                    </template>
+
+                    <!-- "Or create a new one" only reads as an alternative when there
+                         was something to choose from. With an empty organisation it is
+                         the only option, and the "or" points at nothing. -->
+                    <p class="fastmon-collector-connection__label">
+                        {{ applications.length
+                            ? $tc('fastmon-collector.provision.createTitle')
+                            : $tc('fastmon-collector.provision.createOnlyTitle') }}
+                    </p>
+
+                    <label class="fastmon-collector-connection__label" for="fastmon-app-name">
+                        {{ $tc('fastmon-collector.provision.name') }}
+                    </label>
+                    <input id="fastmon-app-name"
+                           v-model="applicationName"
+                           type="text"
+                           class="fastmon-collector-connection__input">
+
+                    <label class="fastmon-collector-connection__label" for="fastmon-env">
+                        {{ $tc('fastmon-collector.provision.environment') }}
+                    </label>
+                    <select id="fastmon-env" v-model="environment" class="fastmon-collector-connection__input">
+                        <option v-for="option in environmentOptions" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                        </option>
+                    </select>
+
+                    <label class="fastmon-collector-connection__label" for="fastmon-preset">
+                        {{ $tc('fastmon-collector.provision.preset') }}
+                    </label>
+                    <select id="fastmon-preset" v-model="preset" class="fastmon-collector-connection__input">
+                        <option v-for="option in presetOptions" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                        </option>
+                    </select>
+
+                    <p class="fastmon-collector-connection__hint">
+                        {{ $tc('fastmon-collector.provision.autoSites') }}
+                    </p>
+
+                    <button type="button"
+                            class="fastmon-collector-connection__button is--primary"
+                            :disabled="isBusy"
+                            @click="createApplication">
+                        {{ $tc('fastmon-collector.provision.create') }}
+                    </button>
+                </template>
+            </template>
+
+            <!-- ---------- connected and linked ---------- -->
+            <template v-else>
+                <!-- The domains fastmon has actually seen, which is the honest answer
+                     to "is it collecting?" in a way an id and a checkmark are not. With
+                     site_policy: auto they appear by themselves on the first pageview. -->
+                <p class="fastmon-collector-connection__label">
+                    {{ $tc('fastmon-collector.summary.sites') }}
+                </p>
+
+                <ul v-if="sites.length" class="fastmon-collector-connection__list">
+                    <li v-for="site in sites" :key="site.id" class="fastmon-collector-connection__item">
+                        <span><strong>{{ site.domain }}</strong></span>
+                    </li>
+                </ul>
+
+                <p v-else class="fastmon-collector-connection__hint">
+                    {{ $tc('fastmon-collector.summary.noSites') }}
+                </p>
+
+                <!-- Ids belong here and not on the surface: nobody acts on them, and
+                     support asks for them roughly once a year. -->
+                <details class="fastmon-collector-connection__debug">
+                    <summary>{{ $tc('fastmon-collector.summary.debug') }}</summary>
+                    <dl class="fastmon-collector-connection__summary">
+                        <dt>{{ $tc('fastmon-collector.summary.application') }}</dt>
+                        <dd><code>{{ status.applicationId }}</code></dd>
+                        <dt>{{ $tc('fastmon-collector.summary.trackerId') }}</dt>
+                        <dd><code>{{ status.trackerId }}</code></dd>
+                        <dt>{{ $tc('fastmon-collector.summary.pixelId') }}</dt>
+                        <dd><code>{{ status.pixelId || '-' }}</code></dd>
+                    </dl>
+                </details>
+
+                <button type="button"
+                        class="fastmon-collector-connection__button"
+                        :disabled="isBusy"
+                        @click="refreshApplication">
+                    {{ $tc('fastmon-collector.summary.refresh') }}
+                </button>
+            </template>
+
+            <button type="button"
+                    class="fastmon-collector-connection__button is--danger"
+                    :disabled="isBusy"
+                    @click="disconnect">
+                {{ $tc('fastmon-collector.disconnect') }}
+            </button>
+
+            <p class="fastmon-collector-connection__note">
+                {{ $tc('fastmon-collector.disconnectHint') }}
+            </p>
+        </template>
+    </template>
+</div>
+{% endblock %}
