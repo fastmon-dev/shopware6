@@ -16,6 +16,10 @@
         </mt-button>
     </div>
 
+    <p class="fastmon-collector-server-timing__lead">
+        {{ $tc('fastmon-collector.serverTiming.lead') }}
+    </p>
+
     <mt-loader v-if="isLoading" size="32px" />
 
     <mt-banner v-else-if="error" variant="critical">
@@ -23,16 +27,23 @@
     </mt-banner>
 
     <template v-else>
-        {# Both sources, always, with what each one is doing. One being absent is not a
-           fault; not knowing which one is measuring is. #}
+        {# Every known source with what it is doing. One being absent is not a fault; not
+           knowing which one is measuring is. #}
         <ul class="fastmon-collector-server-timing__sources">
             <li
                 v-for="src in sources"
                 :key="src.name"
                 class="fastmon-collector-server-timing__item"
             >
-                <span class="fastmon-collector-server-timing__name">{{ src.name }}</span>
-                <span :class="{ 'is--ok': src.active }">{{ sourceState(src) }}</span>
+                <span class="fastmon-collector-server-timing__name">
+                    {{ sourceName(src) }}
+                </span>
+                <span
+                    class="fastmon-collector-server-timing__state"
+                    :class="`is--${src.state}`"
+                >
+                    {{ sourceState(src) }}
+                </span>
             </li>
         </ul>
 

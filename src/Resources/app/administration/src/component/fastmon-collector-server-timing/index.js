@@ -3,6 +3,12 @@ import './fastmon-collector-server-timing.scss';
 
 const { Component } = Shopware;
 
+// A provider reports an internal id. Product names are not translated, so they belong
+// here rather than in the snippet files.
+const DISPLAY_NAMES = {
+    tideways: 'Tideways',
+};
+
 /**
  * Read-only panel: which measurement sources exist on this host and what each is doing.
  */
@@ -55,6 +61,10 @@ Component.register('fastmon-collector-server-timing', {
                 .finally(() => {
                     this.isLoading = false;
                 });
+        },
+
+        sourceName(source) {
+            return DISPLAY_NAMES[source.name] || source.name;
         },
 
         sourceState(source) {

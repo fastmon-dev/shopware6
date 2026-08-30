@@ -56,9 +56,10 @@
             "full": "Vollständig — Sessions, Fehlermeldungen und Query-Keys"
         },
         "serverTiming": {
-            "title": "Was dieser Host messen kann",
+            "title": "Layer-Zeiten",
+            "lead": "Wohin die Backend-Zeit ging: Datenbank, Template, Cache, HTTP. Das ist der einzige Teil des Headers, der eine Profiler-Extension auf dem Host braucht.",
             "reload": "Neu laden",
-            "sourceMissing": "Layer-Zeiten brauchen die Tideways-Extension 5.23 oder neuer. Alles andere - Cache-Ergebnis und -Alter, Gesamtzeit, Renderzeit, Seitentyp, Server - wird trotzdem gemeldet.",
+            "sourceMissing": "Layer-Zeiten brauchen die Tideways-Extension 5.23 oder neuer. Alles andere - Cache-Ergebnis und -Alter, Gesamtzeit, Renderzeit, Seitentyp, Server, Login-Status - wird trotzdem gemeldet.",
             "state": {
                 "active": "misst",
                 "outdated": "installiert, aber zu alt — braucht 5.23 oder neuer",
