@@ -347,12 +347,36 @@ wrong value is a connection that fails in a way no merchant can diagnose. Set
 
 ```bash
 composer install
-vendor/bin/phpunit
+vendor/bin/phpunit --testsuite unit
 vendor/bin/phpstan analyse
 vendor/bin/php-cs-fixer fix
 shopware-cli extension validate --full --check-against highest .
 shopware-cli extension zip . --release
 ```
+
+### Tests
+
+Two suites, and they need different things.
+
+The **unit** suite needs nothing but the plugin's own Composer dependencies: no shop, no
+database. It covers the header building, the connection and provisioning logic, the
+collection-mode guarantee and the structural check that nothing on the storefront path can
+reach fastmon.
+
+The **integration** suite boots a real Shopware kernel and covers the places where the
+plugin touches Shopware itself: the raw origin query against the actual schema, the ACL
+on the admin routes, what the storefront templates render per collection mode, and the
+`Server-Timing` header on a real page. It runs from inside a Shopware project with the
+plugin under `custom/plugins/`, using the project's PHPUnit:
+
+```bash
+vendor/bin/phpunit -c custom/plugins/fastmon-collector/phpunit.xml.dist --testsuite integration
+```
+
+`tests/TestBootstrap.php` uses Shopware's `TestBootstrapper`, which installs a separate
+`<database>_test` on the first run (a few minutes) and keeps the plugin installed and
+active in it. The same bootstrap serves `shopware/github-actions` in CI. Inside a project,
+`FASTMON_TEST_MODE=unit` runs the unit suite without booting the kernel.
 
 `shopware-cli extension validate --full` reports one warning on the no-JS pixel's empty
 `alt`. That is correct markup for a 1×1 beacon carrying no content — the rule cannot tell
