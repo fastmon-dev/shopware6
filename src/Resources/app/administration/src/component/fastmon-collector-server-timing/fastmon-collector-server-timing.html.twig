@@ -4,48 +4,58 @@
         <span class="fastmon-collector-server-timing__title">
             {{ $tc('fastmon-collector.serverTiming.title') }}
         </span>
-        <button type="button"
-                class="fastmon-collector-server-timing__reload"
-                :disabled="isLoading"
-                @click="load">
+
+        <mt-button
+            variant="secondary"
+            size="x-small"
+            :disabled="isLoading"
+            :is-loading="isLoading"
+            @click="load"
+        >
             {{ $tc('fastmon-collector.serverTiming.reload') }}
-        </button>
+        </mt-button>
     </div>
 
     <p class="fastmon-collector-server-timing__hint">
         {{ $tc('fastmon-collector.serverTiming.sampleHint') }}
     </p>
 
-    <p v-if="isLoading" class="fastmon-collector-server-timing__note">
-        {{ $tc('fastmon-collector.loading') }}
-    </p>
+    <mt-loader v-if="isLoading" size="32px" />
 
-    <p v-else-if="error" class="fastmon-collector-server-timing__note is--error">
+    <mt-banner v-else-if="error" variant="critical">
         {{ error }}
-    </p>
+    </mt-banner>
 
     <template v-else>
-        <!-- Both sources, always, with what each one is doing. One being absent is not
-             a fault; not knowing which one is measuring is. -->
+        {# Both sources, always, with what each one is doing. One being absent is not a
+           fault; not knowing which one is measuring is. #}
         <ul class="fastmon-collector-server-timing__sources">
-            <li v-for="src in sources" :key="src.name" class="fastmon-collector-server-timing__item">
+            <li
+                v-for="src in sources"
+                :key="src.name"
+                class="fastmon-collector-server-timing__item"
+            >
                 <span class="fastmon-collector-server-timing__name">{{ src.name }}</span>
-                <span :class="src.active ? 'is--ok' : ''">{{ sourceState(src) }}</span>
+                <span :class="{ 'is--ok': src.active }">{{ sourceState(src) }}</span>
             </li>
         </ul>
 
-        <p class="fastmon-collector-server-timing__note" :class="{ 'is--error': !isAvailable }">
+        <mt-banner :variant="isAvailable ? 'positive' : 'attention'">
             {{ isAvailable
                 ? $tc('fastmon-collector.serverTiming.sourceOk', 0, { source: source })
                 : $tc('fastmon-collector.serverTiming.sourceMissing') }}
-        </p>
+        </mt-banner>
 
         <ul v-if="layers.length" class="fastmon-collector-server-timing__list">
-            <li v-for="layer in layers" :key="layer.name" class="fastmon-collector-server-timing__item">
+            <li
+                v-for="layer in layers"
+                :key="layer.name"
+                class="fastmon-collector-server-timing__item"
+            >
                 <span class="fastmon-collector-server-timing__name">
                     {{ layer.name }}
-                    <!-- Whether fastmon promotes this name into a dashboard column on
-                         its own, or keeps it for the per-beacon drill-down only. -->
+                    {# Whether fastmon promotes this name into a dashboard column on its
+                       own, or keeps it for the per-beacon drill-down only. #}
                     <span v-if="!layer.recognised" class="fastmon-collector-server-timing__tag">
                         {{ $tc('fastmon-collector.serverTiming.custom') }}
                     </span>
@@ -56,7 +66,7 @@
             </li>
         </ul>
 
-        <p v-else-if="isAvailable" class="fastmon-collector-server-timing__note">
+        <p v-else-if="isAvailable" class="fastmon-collector-server-timing__hint">
             {{ $tc('fastmon-collector.serverTiming.noLayers') }}
         </p>
 
