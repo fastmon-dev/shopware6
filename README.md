@@ -319,12 +319,6 @@ Both snippets are gated on `trackerId`, which only ever gets written once an app
 has actually been linked, so an unconfigured shop renders nothing rather than a script tag
 pointing at an empty id.
 
-The plugin does **not** send a page type in `Server-Timing`, although fastmon accepts
-`fm-pagetype`. The `shopware6` body-class ruleset already classifies every page, and it
-keeps working on pages served from the cache — where a server-side value would be absent.
-Emitting one would make the field present on misses and missing on hits, which is worse
-than not emitting it.
-
 ## Where the token is stored
 
 In `system_config`, in plain text, like every other Shopware plugin's API credentials.
@@ -363,6 +357,14 @@ shopware-cli extension zip . --release
 `shopware-cli extension validate --full` reports one warning on the no-JS pixel's empty
 `alt`. That is correct markup for a 1×1 beacon carrying no content — the rule cannot tell
 a decorative image from an undescribed one, and giving it a description would be wrong.
+
+### PHP version
+
+`composer.json` requires PHP `>=8.2`, lower than the PHP 8.5 baseline the maintainers
+use for new code. That is deliberate: a Store plugin cannot raise the floor above what
+the Shopware releases it supports run on, and Shopware 6.6 supports PHP 8.2–8.4, 6.7
+supports 8.2–8.5. The code is written to stay forward-compatible up to PHP 8.5 — nothing
+here relies on a construct that only works on the older end of that range.
 
 The dev container ships a full Shopware 6.7 to test against; see
 [`.devcontainer/README.md`](.devcontainer/README.md).
