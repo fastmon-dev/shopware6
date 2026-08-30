@@ -7,6 +7,7 @@ use Fastmon\Collector\Api\DevicePollStatus;
 use Fastmon\Collector\Api\FastmonApiException;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
+use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
 use Psr\Log\LoggerInterface;
 
@@ -236,7 +237,7 @@ final class ConnectionService
         $token = trim($token);
 
         if ($token === '') {
-            throw new \InvalidArgumentException('No token was given.');
+            throw FastmonCollectorException::emptyToken();
         }
 
         $account = $this->client->account($this->config->apiBaseUrl(), $token);

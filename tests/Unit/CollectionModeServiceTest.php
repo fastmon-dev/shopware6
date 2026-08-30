@@ -12,6 +12,7 @@ use Fastmon\Collector\Collection\EndpointChecker;
 use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Connection\DeviceAuthorizationSession;
+use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -95,10 +96,31 @@ class CollectionModeServiceTest extends TestCase
         self::assertSame('https://metrics.example.com', $this->storedValue('customCollectorDomain'));
     }
 
+    public function testAnUnlinkedShopIsRefusedBeforeAnythingIsProbed(): void
+    {
+        // Without an application there are no hashes to probe for. The checker would
+        // answer with an empty list, and that would surface as "not ready" naming no
+        // origin at all - so the clear message has to come first.
+        $this->stored[ConfigResolver::DOMAIN . 'applicationId'] = '';
+        $this->stored[ConfigResolver::DOMAIN . 'trackerId'] = '';
+        $service = $this->service(['https://shop.example' => true]);
+
+        try {
+            $service->apply(CollectionMode::RELATIVE);
+            self::fail('expected the unlinked shop to be refused');
+        } catch (FastmonCollectorException $e) {
+            self::assertSame('No fastmon application is linked to this shop.', $e->getMessage());
+        }
+
+        self::assertSame([], $this->probed);
+        self::assertSame([], $this->calls);
+    }
+
     public function testCustomWithoutADomainIsRefusedBeforeAnythingIsProbed(): void
     {
         $service = $this->service(['https://shop.example' => true]);
 
+        $this->expectException(FastmonCollectorException::class);
         $this->expectExceptionMessage('Enter the domain');
         $service->apply(CollectionMode::CUSTOM, '   ');
     }
