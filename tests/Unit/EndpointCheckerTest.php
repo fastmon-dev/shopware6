@@ -184,7 +184,10 @@ class EndpointCheckerTest extends TestCase
     /**
      * @param list<string>       $origins
      * @param list<MockResponse> $responses
-     */
+ *
+ * The MockHttpClient callback is positional; the method is not needed to route by URL.
+ * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+ */
     private function checker(array $origins, array $responses, bool $provisioned = true): EndpointChecker
     {
         $client = new MockHttpClient(function (string $method, string $url) use (&$responses): MockResponse {

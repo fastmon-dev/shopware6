@@ -21,13 +21,12 @@ class SnippetsCoverProviderStatesTest extends TestCase
     public function testEveryStateHasASnippetInEveryLocale(): void
     {
         foreach (self::LOCALES as $locale) {
-            $states = $this->snippets($locale)['fastmon-collector']['serverTiming']['state'] ?? [];
-
-            self::assertIsArray($states);
+            $states = $this->section($locale, 'fastmon-collector', 'serverTiming', 'state');
 
             foreach (self::STATES as $state) {
                 self::assertArrayHasKey($state, $states, $locale . ' is missing the state "' . $state . '"');
-                self::assertNotSame('', trim((string) $states[$state]));
+                self::assertIsString($states[$state]);
+                self::assertNotSame('', trim($states[$state]));
             }
 
             self::assertSame([], array_diff(array_keys($states), self::STATES), 'stale state snippets in ' . $locale);
@@ -44,7 +43,7 @@ class SnippetsCoverProviderStatesTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function snippets(string $locale): array
     {
@@ -60,5 +59,23 @@ class SnippetsCoverProviderStatesTest extends TestCase
         self::assertIsArray($decoded);
 
         return $decoded;
+    }
+
+    /**
+     * One nested section of a snippet file, asserted to exist on the way down.
+     *
+     * @return array<mixed>
+     */
+    private function section(string $locale, string ...$path): array
+    {
+        $node = $this->snippets($locale);
+
+        foreach ($path as $key) {
+            $child = $node[$key] ?? null;
+            self::assertIsArray($child, $locale . ' has no section ' . implode('.', $path));
+            $node = $child;
+        }
+
+        return $node;
     }
 }

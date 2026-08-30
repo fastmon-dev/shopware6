@@ -2,9 +2,17 @@
 
 namespace Fastmon\Collector\ServerTiming;
 
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
+
 /**
  * Picks the measurement source to use on this host: the first tagged provider that
- * reports itself available, in service-definition order.
+ * reports itself available, in tag-priority order. A source that should be asked before
+ * the others declares `#[AutoconfigureTag('fastmon_collector.layer_metrics_provider',
+ * ['priority' => 10])]` on its class; without one, discovery order applies.
+ *
+ * Implementing the interface tags the registry itself as a source too. The iterator
+ * excludes the service it is injected into, so the registry never asks itself.
  *
  * One source at a time, deliberately. Two profilers measure overlapping things with
  * different boundaries, and summing two views of the same database time would produce a
@@ -14,7 +22,8 @@ namespace Fastmon\Collector\ServerTiming;
  * long-running worker the answer cannot change (an extension does not get loaded
  * mid-process), and in FPM the object does not outlive the request anyway.
  */
-class LayerMetricsProviderRegistry implements LayerMetricsProviderInterface
+#[AsAlias(LayerMetricsProviderInterface::class)]
+final class LayerMetricsProviderRegistry implements LayerMetricsProviderInterface
 {
     private ?LayerMetricsProviderInterface $resolved = null;
 
@@ -24,6 +33,7 @@ class LayerMetricsProviderRegistry implements LayerMetricsProviderInterface
      * @param iterable<LayerMetricsProviderInterface> $providers
      */
     public function __construct(
+        #[AutowireIterator('fastmon_collector.layer_metrics_provider')]
         private readonly iterable $providers,
     ) {
     }

@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<ruleset name="fastmon-collector"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd"
+         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+    <description>
+        Every stock ruleset, with the handful of rules turned off that would flag the
+        language rather than the code. Where a single method legitimately exceeds a
+        threshold it says so in its own docblock (@SuppressWarnings with a reason)
+        instead of the threshold being raised for everyone.
+    </description>
+
+    <rule ref="rulesets/cleancode.xml">
+        <!-- Enums, named constructors and Uuid helpers are the language, not a smell. -->
+        <exclude name="StaticAccess"/>
+        <!-- A symmetric if/else reads better than an early return that hides the pairing. -->
+        <exclude name="ElseExpression"/>
+        <!-- describe(bool $verify): verification is a round trip, and the panel decides. -->
+        <exclude name="BooleanArgumentFlag"/>
+    </rule>
+
+    <rule ref="rulesets/codesize.xml">
+        <exclude name="TooManyPublicMethods"/>
+    </rule>
+    <!-- Test methods are public by definition; a class with twelve is a thorough test. -->
+    <rule ref="rulesets/codesize.xml/TooManyPublicMethods">
+        <properties>
+            <property name="ignorepattern" value="(^(set|get|is|has|with|test))i"/>
+        </properties>
+    </rule>
+
+    <rule ref="rulesets/design.xml">
+        <exclude name="CouplingBetweenObjects"/>
+    </rule>
+    <!-- Constructor injection counts every collaborator. The default of 13 is below what a
+         subscriber with a config, a provider, a builder, a writer, two resolvers and a
+         logger needs, and that fan-in is the design, not a smell. -->
+    <rule ref="rulesets/design.xml/CouplingBetweenObjects">
+        <properties>
+            <property name="maximum" value="20"/>
+        </properties>
+    </rule>
+
+    <rule ref="rulesets/naming.xml">
+        <!-- $r in a one-line closure, $a/$b in a comparator. -->
+        <exclude name="ShortVariable"/>
+        <!-- $verificationUriComplete is RFC 8628's own name for it. -->
+        <exclude name="LongVariable"/>
+        <!-- ok() next to error(). -->
+        <exclude name="ShortMethodName"/>
+    </rule>
+
+    <rule ref="rulesets/unusedcode.xml"/>
+
+    <rule ref="rulesets/controversial.xml">
+        <!-- $_SERVER for the per-node environment overrides, where a setting cannot work. -->
+        <exclude name="Superglobals"/>
+    </rule>
+</ruleset>

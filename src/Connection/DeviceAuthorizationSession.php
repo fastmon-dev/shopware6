@@ -34,7 +34,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * One authorization at a time, which is what a shop connecting to one account needs.
  * Starting a second one replaces the first, so an abandoned attempt cannot linger.
  */
-class DeviceAuthorizationSession
+final class DeviceAuthorizationSession
 {
     private const KEY = ConfigResolver::DOMAIN . 'deviceAuthorization';
 
@@ -85,21 +85,25 @@ class DeviceAuthorizationSession
             return null;
         }
 
+        $storedHandle = $stored['handle'] ?? null;
+
         // Compared in constant time: the handle arrives over HTTP, and a timing oracle on
         // it would be an oracle on an in-flight authorization.
-        if (!hash_equals((string) ($stored['handle'] ?? ''), $handle)) {
+        if (!\is_string($storedHandle) || !hash_equals($storedHandle, $handle)) {
             return null;
         }
 
-        if ((int) ($stored['expiresAt'] ?? 0) < time()) {
+        $expiresAt = $stored['expiresAt'] ?? null;
+
+        if (!\is_int($expiresAt) || $expiresAt < time()) {
             $this->clear();
 
             return null;
         }
 
-        $deviceCode = (string) ($stored['deviceCode'] ?? '');
+        $deviceCode = $stored['deviceCode'] ?? null;
 
-        return $deviceCode !== '' ? $deviceCode : null;
+        return \is_string($deviceCode) && $deviceCode !== '' ? $deviceCode : null;
     }
 
     /** Called once the authorization ended, successfully or not. */
@@ -107,9 +111,15 @@ class DeviceAuthorizationSession
     {
         $stored = $this->read();
 
+        if ($stored === null) {
+            return;
+        }
+
+        $storedHandle = $stored['handle'] ?? null;
+
         // Only the authorization this handle belongs to: a stale poll arriving after a
         // new attempt started must not wipe the new one.
-        if ($stored !== null && hash_equals((string) ($stored['handle'] ?? ''), $handle)) {
+        if (\is_string($storedHandle) && hash_equals($storedHandle, $handle)) {
             $this->clear();
         }
     }
@@ -121,7 +131,7 @@ class DeviceAuthorizationSession
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array<mixed>|null
      */
     private function read(): ?array
     {

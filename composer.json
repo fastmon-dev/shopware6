@@ -12,13 +12,16 @@
     ],
     "require": {
         "php": ">=8.2",
+        "monolog/monolog": "^3.5",
         "shopware/core": "~6.6.0 || ~6.7.0",
         "shopware/storefront": "~6.6.0 || ~6.7.0"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.58",
+        "phpmd/phpmd": "^2.15",
         "phpstan/phpstan": "^2.2",
-        "phpunit/phpunit": "^10.5",
+        "phpunit/phpunit": "^10.5 || ^11.5",
+        "symfony/browser-kit": "^6.4 || ^7.0",
         "symfony/http-client": "^6.4 || ^7.0"
     },
     "suggest": {
@@ -60,5 +63,24 @@
             "symfony/runtime": false,
             "symfony/flex": false
         }
+    },
+    "scripts": {
+        "test": "phpunit --testsuite unit",
+        "test-integration": "phpunit --testsuite integration",
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "phpstan": "phpstan analyse",
+        "phpmd": "phpmd src,tests text phpmd.xml",
+        "ci": [
+            "@cs-check",
+            "@phpstan",
+            "@phpmd",
+            "@test"
+        ]
+    },
+    "scripts-descriptions": {
+        "test": "Unit suite: no shop, no database.",
+        "test-integration": "Integration suite: boots Shopware; run from inside a project (see README).",
+        "ci": "Everything that runs without a shop: style, static analysis, mess detection, unit suite."
     }
 }

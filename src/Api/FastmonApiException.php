@@ -9,6 +9,7 @@ namespace Fastmon\Collector\Api;
  * `request_id` when one was returned, because that is the string support needs to find
  * the request in the backend logs.
  */
+/** Open on purpose: the base of the plugin's API error hierarchy. */
 class FastmonApiException extends \RuntimeException
 {
 }

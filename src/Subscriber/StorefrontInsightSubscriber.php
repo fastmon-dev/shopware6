@@ -24,7 +24,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * header reports. `RequestInsights` decides ownership instead, and is reset between
  * requests by the `kernel.reset` tag.
  */
-class StorefrontInsightSubscriber implements EventSubscriberInterface
+final class StorefrontInsightSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private readonly PageTypeResolver $pageTypeResolver,

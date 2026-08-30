@@ -7,7 +7,9 @@ use Fastmon\Collector\Api\DevicePollStatus;
 use Fastmon\Collector\Api\FastmonApiException;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
+use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -22,7 +24,8 @@ use Psr\Log\LoggerInterface;
  * only "there is a token", so which of the two produced it never has to be recorded and
  * never has to be migrated when the second one goes away.
  */
-class ConnectionService
+#[WithMonologChannel('fastmon_collector')]
+final class ConnectionService
 {
     public function __construct(
         private readonly FastmonClient $client,
@@ -43,7 +46,11 @@ class ConnectionService
      *     trackerId: string, pixelId: string, apiBaseUrl: string, tokenValid: bool|null,
      *     applicationValid: bool|null, error: string
      * }
-     */
+ *
+ * A status report: every branch is one line of the answer the panel renders.
+ * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+ * @SuppressWarnings("PHPMD.NPathComplexity")
+ */
     public function describe(bool $verify = false): array
     {
         $connection = $this->store->load();
@@ -236,7 +243,7 @@ class ConnectionService
         $token = trim($token);
 
         if ($token === '') {
-            throw new \InvalidArgumentException('No token was given.');
+            throw FastmonCollectorException::emptyToken();
         }
 
         $account = $this->client->account($this->config->apiBaseUrl(), $token);

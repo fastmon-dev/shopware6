@@ -35,7 +35,7 @@ use Symfony\Contracts\Service\ResetInterface;
  * that produces one owns the request, and everything after it is ignored - which is also
  * what keeps the render time from being the footer's.
  */
-class RequestInsights implements ResetInterface
+final class RequestInsights implements ResetInterface
 {
     /** Wall time spent rendering the template, in milliseconds. */
     private ?float $renderMilliseconds = null;

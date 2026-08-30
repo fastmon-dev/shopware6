@@ -14,23 +14,23 @@ use Fastmon\Collector\Collection\CollectionMode;
  *
  * @internal resolved by ConfigResolver; nothing else constructs this
  */
-final class StorefrontConfig
+final readonly class StorefrontConfig
 {
     public function __construct(
-        public readonly bool $active,
-        public readonly string $trackerId,
-        public readonly string $pixelId,
+        public bool $active,
+        public string $trackerId,
+        public string $pixelId,
         /**
          * Where the browser loads the tracker and the pixel from. Derived from the mode
          * rather than typed in: empty for RELATIVE (same-origin), the merchant's host for
          * CUSTOM, fastmon's for DEFAULT. Keeping it derived is what stops the script and
          * the beacon from ending up on different hosts.
          */
-        public readonly string $scriptBaseUrl,
-        public readonly bool $errorBootstrap,
-        public readonly bool $pixel,
-        public readonly CollectionMode $collectionMode,
-        public readonly string $customDomain,
+        public string $scriptBaseUrl,
+        public bool $errorBootstrap,
+        public bool $pixel,
+        public CollectionMode $collectionMode,
+        public string $customDomain,
     ) {
     }
 }

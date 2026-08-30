@@ -5,7 +5,9 @@ namespace Fastmon\Collector\Collection;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStore;
+use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
@@ -27,7 +29,8 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * plugin's template decides where the *script* comes from. If they disagreed, the tracker
  * would load from one host and post to another.
  */
-class CollectionModeService
+#[WithMonologChannel('fastmon_collector')]
+final class CollectionModeService
 {
     public function __construct(
         private readonly FastmonClient $client,
@@ -106,17 +109,24 @@ class CollectionModeService
     /**
      * Apply a collection mode, with proof when the mode needs it.
      *
-     * @throws \RuntimeException when the chosen mode's endpoints do not answer
+     * @throws FastmonCollectorException when nothing is linked or the custom domain is missing
+     * @throws CollectionNotReadyException when the chosen mode's endpoints do not answer
      */
     public function apply(CollectionMode $mode, string $customDomain = ''): void
     {
+        // Before any probe. A shop with nothing linked has no hashes to probe for, so the
+        // checker would answer with an empty list - and an empty list surfaces as a
+        // not-ready refusal naming no origin at all, which tells the merchant nothing.
+        $applicationId = $this->requireApplicationId();
+        $token = $this->connection->requireToken();
+
         $endpoint = '';
 
         if ($mode === CollectionMode::CUSTOM) {
             $endpoint = $this->checker->normaliseOrigin($customDomain);
 
             if ($endpoint === '') {
-                throw new \RuntimeException('Enter the domain the tracker and beacon should be served from.');
+                throw FastmonCollectorException::customDomainMissing();
             }
         }
 
@@ -134,8 +144,8 @@ class CollectionModeService
         // the storefront emitting a script URL for a mode the bundle knows nothing about.
         $this->client->setCollectorMode(
             $this->config->apiBaseUrl(),
-            $this->connection->requireToken(),
-            $this->requireApplicationId(),
+            $token,
+            $applicationId,
             $mode->value,
             $mode === CollectionMode::CUSTOM ? $endpoint : null,
         );
@@ -169,7 +179,7 @@ class CollectionModeService
         $applicationId = $this->store->load()->applicationId;
 
         if ($applicationId === '') {
-            throw new \RuntimeException('No fastmon application is linked to this shop.');
+            throw FastmonCollectorException::noApplicationLinked();
         }
 
         return $applicationId;

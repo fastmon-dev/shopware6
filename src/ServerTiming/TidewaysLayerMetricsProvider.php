@@ -17,7 +17,7 @@ namespace Fastmon\Collector\ServerTiming;
  * to be silenced for it. `is_callable()` costs nothing and is true only when the
  * extension is loaded *and* new enough to have the method.
  */
-class TidewaysLayerMetricsProvider implements LayerMetricsProviderInterface
+final class TidewaysLayerMetricsProvider implements LayerMetricsProviderInterface
 {
     private const PROFILER = 'Tideways\\Profiler';
     private const METHOD = 'getLayerMetrics';
@@ -52,7 +52,11 @@ class TidewaysLayerMetricsProvider implements LayerMetricsProviderInterface
             ? 'outdated'
             : 'absent';
     }
-
+    /**
+     * Every branch is a guard against a profiler shape the plugin does not control; each one degrades to "no metrics".
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     */
     public function metrics(): array
     {
         $callable = [self::PROFILER, self::METHOD];

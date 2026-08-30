@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ['*']
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Everything that runs without a shop, against every PHP and Shopware branch the
+  # plugin supports. No lockfile is committed: the plugin resolves against whichever
+  # Shopware the matrix names, and --with pins the branch without editing composer.json.
+  quality:
+    name: composer ci (PHP ${{ matrix.php }}, Shopware ${{ matrix.shopware }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+        shopware: ['~6.6.0', '~6.7.0']
+        include:
+          # 6.6 stops at PHP 8.4; 6.7 is the branch that runs on 8.5.
+          - php: '8.5'
+            shopware: '~6.7.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, intl, gd, zip, sodium, pdo_mysql, dom, xml, curl, fileinfo
+          coverage: none
+      - name: Resolve dependencies against Shopware ${{ matrix.shopware }}
+        run: >
+          composer update --no-interaction --prefer-dist --no-progress
+          --with "shopware/core:${{ matrix.shopware }}"
+          --with "shopware/storefront:${{ matrix.shopware }}"
+      - run: composer ci
+
+  # The integration suite needs a real shop. Shopware's reusable workflow installs one,
+  # requires the plugin into it and runs the plugin's phpunit.xml.dist with the suite
+  # named in filterName - see tests/TestBootstrap.php for what happens then.
+  integration:
+    name: integration (Shopware ${{ matrix.shopware }}, PHP ${{ matrix.php }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { shopware: 'v6.6.10.23', php: '8.2' }
+          - { shopware: 'v6.6.10.23', php: '8.4' }
+          - { shopware: 'v6.7.13.1', php: '8.2' }
+          - { shopware: 'v6.7.13.1', php: '8.5' }
+    uses: shopware/github-actions/.github/workflows/phpunit.yml@dad4f02d83cd8d75f48272ab6eae22b480858efc
+    with:
+      extensionName: FastmonCollector
+      shopwareVersion: ${{ matrix.shopware }}
+      phpVersion: ${{ matrix.php }}
+      filterName: integration
+
+  # The store validator. It reports one warning on the no-JS pixel's empty alt, which is
+  # correct markup for a 1x1 beacon (see README, Development); anything else is news.
+  validate:
+    name: shopware-cli extension validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3.0.0
+      - run: shopware-cli extension validate --full --check-against highest .

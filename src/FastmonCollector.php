@@ -2,20 +2,26 @@
 
 namespace Fastmon\Collector;
 
-use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Connection\ConnectionStore;
+use Fastmon\Collector\Connection\DeviceAuthorizationSession;
 use Shopware\Core\Framework\Plugin;
 use Shopware\Core\Framework\Plugin\Context\UninstallContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
-class FastmonCollector extends Plugin
+final class FastmonCollector extends Plugin
 {
     /**
      * Drop the stored fastmon credential on uninstall, unless the merchant asked to keep
      * the plugin's data.
      *
-     * Shopware clears a plugin's `system_config` rows itself, so this is belt and braces
-     * - but the row in question is an API token that authenticates against a live
-     * account, and "belt and braces" is the correct amount of care for one of those.
+     * Shopware clears a plugin's `system_config` rows itself right after this returns
+     * (`PluginLifecycleService::uninstallPlugin()`), so this is belt and braces - but the
+     * row in question is an API token that authenticates against a live account, and
+     * "belt and braces" is the correct amount of care for one of those.
+     *
+     * It goes through the store rather than naming keys: the store is the one place that
+     * knows what it owns, and a second list here would be the one that is forgotten the
+     * day a key is added.
      *
      * The token stays valid on fastmon's side either way: revoking it is done under
      * "Connected apps" in the fastmon dashboard, and no uninstall here can reach it.
@@ -34,6 +40,7 @@ class FastmonCollector extends Plugin
             return;
         }
 
-        $systemConfig->delete(ConfigResolver::DOMAIN . 'apiToken');
+        (new ConnectionStore($systemConfig))->clear();
+        (new DeviceAuthorizationSession($systemConfig))->abandon();
     }
 }

@@ -2,12 +2,26 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
+use Fastmon\Collector\Collection\CollectionModeService;
+use Fastmon\Collector\ServerTiming\LayerMetricsProviderRegistry;
+use Fastmon\Collector\ServerTiming\ServerIdentity;
+use Fastmon\Collector\ServerTiming\TidewaysLayerMetricsProvider;
+use Fastmon\Collector\Service\ConfigResolver;
 use Fastmon\Collector\Subscriber\HttpCacheStatusSubscriber;
 use Fastmon\Collector\Subscriber\ServerTimingSubscriber;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+use ReflectionClass;
+use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
+use Symfony\Component\DependencyInjection\Compiler\AutowirePass;
+use Symfony\Component\DependencyInjection\Compiler\RegisterAutoconfigureAttributesPass;
+use Symfony\Component\DependencyInjection\Compiler\ResolveClassPass;
+use Symfony\Component\DependencyInjection\Compiler\ResolveInstanceofConditionalsPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
@@ -25,6 +39,9 @@ use Symfony\Component\DependencyInjection\Reference;
  *
  * So this asserts it structurally, against the real service definitions: nothing the
  * storefront path can reach may depend on the API client or on an HTTP client.
+ *
+ * Imports half the DI compiler on purpose: the walk has to see what the kernel sees.
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 class StorefrontPathIsIsolatedTest extends TestCase
 {
@@ -63,13 +80,28 @@ class StorefrontPathIsIsolatedTest extends TestCase
         }
     }
 
+    public function testTheWalkSeesRealDependencies(): void
+    {
+        $container = $this->container();
+
+        // Positive control: what the request path is known to need.
+        $reachable = $this->closure($container, ServerTimingSubscriber::class);
+
+        foreach ([ConfigResolver::class, LayerMetricsProviderRegistry::class, TidewaysLayerMetricsProvider::class, ServerIdentity::class] as $needed) {
+            self::assertContains($needed, $reachable);
+        }
+
+        // Negative control: a service that does talk to fastmon is seen doing so.
+        self::assertContains(FastmonClient::class, $this->closure($container, CollectionModeService::class));
+    }
+
     public function testTheSubscriberSwallowsEveryFailure(): void
     {
         // A monitoring header is never worth a broken response, so the whole body is
         // wrapped. Asserted on the source because the alternative - provoking each of
         // the ways config, profiler or writer could throw - tests the mocks instead.
         $source = (string) file_get_contents(
-            (string) (new \ReflectionClass(ServerTimingSubscriber::class))->getFileName()
+            (string) (new ReflectionClass(ServerTimingSubscriber::class))->getFileName()
         );
 
         self::assertStringContainsString('catch (\Throwable $e)', $source);
@@ -146,7 +178,9 @@ class StorefrontPathIsIsolatedTest extends TestCase
         $walk($definition->getArguments());
 
         foreach ($definition->getMethodCalls() as $call) {
-            $walk($call[1] ?? []);
+            if (\is_array($call)) {
+                $walk($call[1] ?? []);
+            }
         }
 
         return $found;
@@ -155,8 +189,30 @@ class StorefrontPathIsIsolatedTest extends TestCase
     private function container(): ContainerBuilder
     {
         $container = new ContainerBuilder();
+
+        // What the shop provides and the plugin only consumes. Synthetic: the walk needs
+        // the ids to resolve, not the objects.
+        $container->register(SystemConfigService::class, SystemConfigService::class)->setSynthetic(true);
+        $container->register(DbalConnection::class, DbalConnection::class)->setSynthetic(true);
+        $container->register('logger', NullLogger::class);
+        $container->setAlias(LoggerInterface::class, 'logger');
+
         $loader = new YamlFileLoader($container, new FileLocator(__DIR__ . '/../../src/Resources/config'));
         $loader->load('services.yaml');
+
+        // The part of the compiler that turns constructor types and #[Autowire…]
+        // attributes into references, in the kernel's order. AutowirePass throws on
+        // anything it cannot resolve, so a missing stub fails here rather than leaving
+        // a definition without arguments - which the walk would read as "depends on
+        // nothing".
+        foreach ([
+            new ResolveClassPass(),
+            new RegisterAutoconfigureAttributesPass(),
+            new ResolveInstanceofConditionalsPass(),
+            new AutowirePass(),
+        ] as $pass) {
+            $pass->process($container);
+        }
 
         return $container;
     }

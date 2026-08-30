@@ -226,7 +226,8 @@ class FastmonClientTest extends TestCase
     {
         $sent = null;
         $client = new FastmonClient(new MockHttpClient(function (string $method, string $url, array $options) use (&$sent): MockResponse {
-            $sent = ['method' => $method, 'url' => $url, 'body' => json_decode((string) $options['body'], true)];
+            $body = $options['body'] ?? '';
+            $sent = ['method' => $method, 'url' => $url, 'body' => json_decode(\is_string($body) ? $body : '', true)];
 
             return new MockResponse(json_encode([
                 'id' => 'app-1',
@@ -246,8 +247,10 @@ class FastmonClientTest extends TestCase
         self::assertSame(self::BASE . '/v1/organizations/org-1/applications', $sent['url']);
         // The two values that make one application cover every sales channel without
         // the plugin ever enumerating them.
-        self::assertSame('auto', $sent['body']['site_policy']);
-        self::assertSame('shopware6', $sent['body']['pagetype_ruleset']);
+        $body = $sent['body'];
+        self::assertIsArray($body);
+        self::assertSame('auto', $body['site_policy']);
+        self::assertSame('shopware6', $body['pagetype_ruleset']);
 
         // fastmon's wire names become the names the templates use.
         self::assertSame('src123', $application['trackerId']);

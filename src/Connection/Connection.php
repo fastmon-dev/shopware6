@@ -9,17 +9,17 @@ namespace Fastmon\Collector\Connection;
  * All of it is shop-wide. One application covers every sales channel, so there is
  * nothing here that could sensibly differ between them.
  */
-final class Connection
+final readonly class Connection
 {
     public function __construct(
-        public readonly string $token,
-        public readonly string $accountEmail,
-        public readonly string $accountName,
-        public readonly string $organizationId,
-        public readonly string $organizationName,
-        public readonly string $applicationId,
-        public readonly string $trackerId,
-        public readonly string $pixelId,
+        public string $token,
+        public string $accountEmail,
+        public string $accountName,
+        public string $organizationId,
+        public string $organizationName,
+        public string $applicationId,
+        public string $trackerId,
+        public string $pixelId,
     ) {
     }
 

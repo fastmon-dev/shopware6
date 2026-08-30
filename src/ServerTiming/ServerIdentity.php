@@ -24,7 +24,7 @@ namespace Fastmon\Collector\ServerTiming;
  * is per node the way a database row can never be: set it to `web-01` from the same
  * manifest that decides which node this is.
  */
-class ServerIdentity
+final class ServerIdentity
 {
     /**
      * The collector caps `desc` at 32 characters and accepts
@@ -36,7 +36,18 @@ class ServerIdentity
     /** Per-node override, for setups where the hostname is not a useful name. */
     private const ENV = 'FASTMON_SERVER_NAME';
 
+    /**
+     * Resolved once per process. The answer cannot change while PHP is running - neither
+     * the hostname nor the environment do - and this is read on every HTML response.
+     */
+    private ?string $name = null;
+
     public function name(): string
+    {
+        return $this->name ??= $this->resolve();
+    }
+
+    private function resolve(): string
     {
         $configured = $_SERVER[self::ENV] ?? getenv(self::ENV);
         $name = \is_string($configured) ? trim($configured) : '';

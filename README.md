@@ -319,12 +319,6 @@ Both snippets are gated on `trackerId`, which only ever gets written once an app
 has actually been linked, so an unconfigured shop renders nothing rather than a script tag
 pointing at an empty id.
 
-The plugin does **not** send a page type in `Server-Timing`, although fastmon accepts
-`fm-pagetype`. The `shopware6` body-class ruleset already classifies every page, and it
-keeps working on pages served from the cache — where a server-side value would be absent.
-Emitting one would make the field present on misses and missing on hits, which is worse
-than not emitting it.
-
 ## Where the token is stored
 
 In `system_config`, in plain text, like every other Shopware plugin's API credentials.
@@ -353,16 +347,54 @@ wrong value is a connection that fails in a way no merchant can diagnose. Set
 
 ```bash
 composer install
-vendor/bin/phpunit
-vendor/bin/phpstan analyse
-vendor/bin/php-cs-fixer fix
+composer ci                  # php-cs-fixer, phpstan (level max), phpmd, unit suite
+composer test-integration    # from inside a Shopware project - see Tests below
 shopware-cli extension validate --full --check-against highest .
 shopware-cli extension zip . --release
 ```
 
+The individual steps are `composer cs-check` / `cs-fix`, `phpstan`, `phpmd` and `test`.
+`phpmd.xml` says which stock rules are off and why; a method that legitimately exceeds
+a threshold carries the reason in its own docblock rather than the threshold being
+raised for everyone.
+
+### Tests
+
+Two suites, and they need different things.
+
+The **unit** suite needs nothing but the plugin's own Composer dependencies: no shop, no
+database. It covers the header building, the connection and provisioning logic, the
+collection-mode guarantee and the structural check that nothing on the storefront path can
+reach fastmon.
+
+The **integration** suite boots a real Shopware kernel and covers the places where the
+plugin touches Shopware itself: the raw origin query against the actual schema, the ACL
+on the admin routes, what the storefront templates render per collection mode, and the
+`Server-Timing` header on a real page. It runs from inside a Shopware project with the
+plugin under `custom/plugins/`, using the project's PHPUnit:
+
+```bash
+vendor/bin/phpunit -c custom/plugins/fastmon-collector/phpunit.xml.dist --testsuite integration
+```
+
+`tests/TestBootstrap.php` uses Shopware's `TestBootstrapper`, which installs a separate
+`<database>_test` on the first run (a few minutes) and keeps the plugin installed and
+active in it. The same bootstrap serves `shopware/github-actions` in CI. Inside a project,
+`FASTMON_TEST_MODE=unit` runs the unit suite without booting the kernel.
+
 `shopware-cli extension validate --full` reports one warning on the no-JS pixel's empty
 `alt`. That is correct markup for a 1×1 beacon carrying no content — the rule cannot tell
 a decorative image from an undescribed one, and giving it a description would be wrong.
+
+### PHP version
+
+`composer.json` requires PHP `>=8.2`, lower than the PHP 8.5 baseline the maintainers
+use for new code. That is deliberate: a Store plugin cannot raise the floor above what
+the Shopware releases it supports run on, and Shopware 6.6 supports PHP 8.2–8.4, 6.7
+supports 8.2–8.5. The code is written to stay forward-compatible up to PHP 8.5 — nothing
+here relies on a construct that only works on the older end of that range — and CI proves
+it: `composer ci` runs on PHP 8.2–8.4 against both Shopware branches and on 8.5 against
+6.7, and the integration suite runs against the latest release of each branch.
 
 The dev container ships a full Shopware 6.7 to test against; see
 [`.devcontainer/README.md`](.devcontainer/README.md).

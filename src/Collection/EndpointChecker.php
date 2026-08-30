@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
@@ -39,8 +40,22 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * fastmon, and an unknown hash means the beacon is dropped before anything is recorded.
  * Probing with the real hash would work too, and would write a synthetic pageview into
  * the customer's data every time someone pressed the button.
+ *
+ * ## Why private origins are not rejected
+ *
+ * The custom domain is typed by an administrator and then fetched from the shop server,
+ * which is the shape of a request-forgery surface: `http://169.254.169.254` or an
+ * internal host would be probed, and the transport error comes back as `detail`. It is
+ * left as it is, deliberately. The caller holds `system_config:update`, and that right
+ * already lets them point a sales-channel domain anywhere - the same origins this class
+ * probes in `RELATIVE` mode. Blocking private ranges here would take nothing away from
+ * such an account and would break every shop that legitimately lives on one: a staging
+ * system, an intranet shop, the dev container, all of which need the probe most. And
+ * `detail` is the diagnosis - "could not resolve host" versus "HTTP 502" is the
+ * difference between a DNS entry and a proxy rule, which is what the merchant is here
+ * to find out.
  */
-class EndpointChecker
+final class EndpointChecker
 {
     /**
      * A syntactically valid collector hash that cannot resolve to an application, so the
@@ -55,6 +70,7 @@ class EndpointChecker
     private const TIMEOUT_SECONDS = 5;
 
     public function __construct(
+        #[Autowire(service: 'fastmon_collector.http_client')]
         private readonly HttpClientInterface $httpClient,
         private readonly ConnectionStore $store,
         private readonly DbalConnection $database,
@@ -130,8 +146,9 @@ class EndpointChecker
 
     /**
      * Scheme, host and port of a URL, with everything else dropped. Empty when there is no
-     * host to speak of - which is what a merchant typing a bare path into the domain field
-     * produces, and what the headless channel's `default.headless0` looks like.
+     * host to speak of, which is what a merchant typing a bare path into the domain field
+     * produces. (The headless channel's `default.headless0` would pass this - it is the
+     * storefront-only filter in `storefrontOrigins()` that keeps it out.)
      */
     public function normaliseOrigin(string $url): string
     {
@@ -157,7 +174,10 @@ class EndpointChecker
 
         return isset($parts['port']) ? $origin . ':' . $parts['port'] : $origin;
     }
-
+    /**
+     * Two probes with four outcomes each; the reason codes are the point and are enumerated in DomainCheckResult.
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     */
     private function checkOrigin(string $origin, string $trackerId, string $pixelId): DomainCheckResult
     {
         $scriptOk = false;

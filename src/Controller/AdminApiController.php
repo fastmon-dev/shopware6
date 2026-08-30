@@ -11,6 +11,7 @@ use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Collection\CollectionModeService;
 use Fastmon\Collector\Collection\CollectionNotReadyException;
 use Fastmon\Collector\Connection\ConnectionService;
+use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Provisioning\ApplicationProvisioner;
 use Fastmon\Collector\ServerTiming\ServerTimingStatus;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
@@ -33,13 +34,23 @@ use Symfony\Component\Routing\Attribute\Route;
  * fastmon errors are translated into a `{success: false, error}` body rather than an
  * exception, because all of them are things the merchant is meant to read and act on -
  * a declined authorization, a revoked token, an unreachable API - and none of them are
- * faults in the shop.
+ * faults in the shop. Anything else is a fault and propagates: Shopware's API error
+ * handler logs it and answers 500, which is where a programming error belongs.
  */
 #[Route(defaults: [PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID]])]
-class AdminApiController extends AbstractController
+/**
+ * One public method per route. The routes are the API; the logic behind them lives in the services.
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ */
+final class AdminApiController extends AbstractController
 {
     private const READ = [PlatformRequest::ATTRIBUTE_ACL => ['system_config:read']];
     private const WRITE = [PlatformRequest::ATTRIBUTE_ACL => ['system_config:update']];
+
+    /** Every key this controller reads from a JSON body. */
+    private const BODY_KEYS = [
+        'handle', 'token', 'organizationId', 'applicationId', 'mode', 'domain', 'name', 'environment', 'preset',
+    ];
 
     public function __construct(
         private readonly ConnectionService $connection,
@@ -91,7 +102,7 @@ class AdminApiController extends AbstractController
     )]
     public function pollDeviceAuthorization(Request $request): JsonResponse
     {
-        $handle = (string) $this->body($request)['handle'];
+        $handle = $this->body($request)['handle'];
 
         return $this->guard(fn (): array => $this->connection->pollDeviceAuthorization($handle));
     }
@@ -104,7 +115,7 @@ class AdminApiController extends AbstractController
     )]
     public function connectWithToken(Request $request): JsonResponse
     {
-        $token = (string) $this->body($request)['token'];
+        $token = $this->body($request)['token'];
 
         return $this->guard(fn (): array => $this->connection->connectWithToken($token));
     }
@@ -159,10 +170,10 @@ class AdminApiController extends AbstractController
         $body = $this->body($request);
 
         return $this->guard(fn (): array => ['application' => $this->provisioner->create(
-            (string) $body['organizationId'],
-            (string) $body['name'],
-            (string) $body['environment'],
-            (string) $body['preset'],
+            $body['organizationId'],
+            $body['name'],
+            $body['environment'],
+            $body['preset'],
         )]);
     }
 
@@ -177,8 +188,8 @@ class AdminApiController extends AbstractController
         $body = $this->body($request);
 
         return $this->guard(fn (): array => ['application' => $this->provisioner->attach(
-            (string) $body['organizationId'],
-            (string) $body['applicationId'],
+            $body['organizationId'],
+            $body['applicationId'],
         )]);
     }
 
@@ -232,14 +243,14 @@ class AdminApiController extends AbstractController
     public function applyCollectionMode(Request $request): JsonResponse
     {
         $body = $this->body($request);
-        $mode = CollectionMode::tryFrom((string) $body['mode']);
+        $mode = CollectionMode::tryFrom($body['mode']);
 
         if ($mode === null) {
             return $this->error('Unknown collection mode.');
         }
 
         return $this->guard(function () use ($mode, $body): array {
-            $this->collection->apply($mode, (string) $body['domain']);
+            $this->collection->apply($mode, $body['domain']);
 
             return [];
         });
@@ -274,6 +285,12 @@ class AdminApiController extends AbstractController
     /**
      * Run an action and turn the failures a merchant is meant to read into a body.
      *
+     * Only the plugin's own types are caught. `FastmonApiException` is what fastmon said,
+     * `FastmonCollectorException` is what the shop's own setup is missing; both are
+     * addressed to the merchant. A bare `\RuntimeException` or `\InvalidArgumentException`
+     * from anywhere else is a fault, and catching it here would turn a stack trace that
+     * belongs in the log into a sentence in the panel.
+     *
      * @param callable(): array<string, mixed> $action
      */
     private function guard(callable $action): JsonResponse
@@ -298,7 +315,7 @@ class AdminApiController extends AbstractController
             // Naming the missing permission is what turns this from a support ticket into
             // something the merchant can fix in the fastmon dashboard themselves.
             return $this->error($e->getMessage(), Response::HTTP_OK, ['permission' => $e->permission]);
-        } catch (FastmonApiException | \InvalidArgumentException | \RuntimeException $e) {
+        } catch (FastmonApiException | FastmonCollectorException $e) {
             return $this->error($e->getMessage());
         }
     }
@@ -323,24 +340,25 @@ class AdminApiController extends AbstractController
     }
 
     /**
-     * The JSON body, with every key this controller reads present as a string.
+     * The JSON body, reduced to the keys this controller reads, each guaranteed a string.
      *
-     * @return array<string, mixed>
+     * Anything that is not a string - a missing key, a number, `["x"]` - becomes '' rather
+     * than being cast: `(string) ['x']` is a warning and the value "Array", and the
+     * merchant would be told that application "Array" does not exist.
+     *
+     * @return array<string, string>
      */
     private function body(Request $request): array
     {
         $decoded = json_decode($request->getContent(), true);
+        $decoded = \is_array($decoded) ? $decoded : [];
+        $body = [];
 
-        return (\is_array($decoded) ? $decoded : []) + [
-            'handle' => '',
-            'token' => '',
-            'organizationId' => '',
-            'applicationId' => '',
-            'mode' => '',
-            'domain' => '',
-            'name' => '',
-            'environment' => '',
-            'preset' => '',
-        ];
+        foreach (self::BODY_KEYS as $key) {
+            $value = $decoded[$key] ?? null;
+            $body[$key] = \is_string($value) ? $value : '';
+        }
+
+        return $body;
     }
 }

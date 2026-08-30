@@ -14,6 +14,6 @@ namespace Fastmon\Collector\Api;
  * Told apart from a generic error so the admin module can say "waiting for approval"
  * instead of showing a red message next to a button the merchant will now press again.
  */
-class FastmonOrganizationNotApprovedException extends FastmonApiException
+final class FastmonOrganizationNotApprovedException extends FastmonApiException
 {
 }

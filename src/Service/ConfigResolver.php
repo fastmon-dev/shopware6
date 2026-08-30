@@ -20,7 +20,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * Only the switches an operator would plausibly want to differ per storefront are read
  * per sales channel.
  */
-class ConfigResolver
+final class ConfigResolver
 {
     public const DOMAIN = 'FastmonCollector.config.';
 

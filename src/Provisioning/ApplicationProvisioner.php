@@ -5,7 +5,9 @@ namespace Fastmon\Collector\Provisioning;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStore;
+use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -26,7 +28,8 @@ use Psr\Log\LoggerInterface;
  *
  * What is left for this class is choosing which application, and remembering the answer.
  */
-class ApplicationProvisioner
+#[WithMonologChannel('fastmon_collector')]
+final class ApplicationProvisioner
 {
     /**
      * Naming a new application after the shop is the one piece of context fastmon cannot
@@ -116,7 +119,7 @@ class ApplicationProvisioner
         );
 
         if ($application['trackerId'] === '') {
-            throw new \RuntimeException('That fastmon application has no tracker id.');
+            throw FastmonCollectorException::applicationWithoutTrackerId();
         }
 
         $this->persist($organizationId, $application);
@@ -143,7 +146,7 @@ class ApplicationProvisioner
         $connection = $this->store->load();
 
         if ($connection->applicationId === '') {
-            throw new \RuntimeException('No fastmon application is linked to this shop.');
+            throw FastmonCollectorException::noApplicationLinked();
         }
 
         return $this->attach($connection->organizationId, $connection->applicationId);

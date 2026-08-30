@@ -10,6 +10,7 @@ use Fastmon\Collector\ServerTiming\ServerIdentity;
 use Fastmon\Collector\ServerTiming\ServerTimingHeaderBuilder;
 use Fastmon\Collector\ServerTiming\ServerTimingResponseWriter;
 use Fastmon\Collector\Service\ConfigResolver;
+use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Event\BeforeSendResponseEvent;
 use Shopware\Core\PlatformRequest;
@@ -59,7 +60,8 @@ use Symfony\Component\HttpFoundation\Response;
  * Writing twice therefore appends a second set of layers rather than replacing the
  * first, and the summed columns - kv, http, search - would count both.
  */
-class ServerTimingSubscriber implements EventSubscriberInterface
+#[WithMonologChannel('fastmon_collector')]
+final class ServerTimingSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private readonly ConfigResolver $configResolver,
@@ -68,6 +70,7 @@ class ServerTimingSubscriber implements EventSubscriberInterface
         private readonly ServerTimingResponseWriter $responseWriter,
         private readonly CacheStatusResolver $cacheStatusResolver,
         private readonly RequestInsights $insights,
+        private readonly ServerIdentity $serverIdentity,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -144,7 +147,11 @@ class ServerTimingSubscriber implements EventSubscriberInterface
      * clear of the collector's budget for names it does not recognise.
      *
      * @return list<array{0: string, 1: float|null, 2: string|null}>
-     */
+ *
+ * One guarded entry per setting - a table, not a tangle. Splitting it would spread the rules for one header over six methods.
+ * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+ * @SuppressWarnings("PHPMD.NPathComplexity")
+ */
     private function ownEntries(Request $request, Response $response, ServerTimingConfig $config): array
     {
         $own = [];
@@ -167,7 +174,7 @@ class ServerTimingSubscriber implements EventSubscriberInterface
         }
 
         if ($config->reportServer && $isDocument) {
-            $server = (new ServerIdentity())->name();
+            $server = $this->serverIdentity->name();
 
             if ($server !== '') {
                 $own[] = ['fm-node', null, $server];

@@ -25,7 +25,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * Everything is stored globally (`null` sales channel). The per-channel switches live in
  * config.xml and are read by ConfigResolver; nothing here is per channel.
  */
-class ConnectionStore
+final class ConnectionStore
 {
     private const TOKEN = 'apiToken';
     private const ACCOUNT_EMAIL = 'accountEmail';

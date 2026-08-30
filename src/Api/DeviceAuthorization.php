@@ -10,15 +10,15 @@ namespace Fastmon\Collector\Api;
  * user code in the URL so the common case is one click and no typing; it is optional in
  * the RFC, so the plain `verificationUri` is always populated as the fallback.
  */
-final class DeviceAuthorization
+final readonly class DeviceAuthorization
 {
     public function __construct(
-        public readonly string $deviceCode,
-        public readonly string $userCode,
-        public readonly string $verificationUri,
-        public readonly string $verificationUriComplete,
-        public readonly int $expiresIn,
-        public readonly int $interval,
+        public string $deviceCode,
+        public string $userCode,
+        public string $verificationUri,
+        public string $verificationUriComplete,
+        public int $expiresIn,
+        public int $interval,
     ) {
     }
 }

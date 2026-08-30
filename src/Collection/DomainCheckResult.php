@@ -12,7 +12,7 @@ namespace Fastmon\Collector\Collection;
  *
  * @internal produced by EndpointChecker
  */
-final class DomainCheckResult
+final readonly class DomainCheckResult
 {
     /** `/s/` answered, but with a status instead of the bundle. `detail` is the status. */
     public const REASON_SCRIPT_STATUS = 'script_status';
@@ -30,13 +30,13 @@ final class DomainCheckResult
     public const REASON_COLLECTOR_UNREACHABLE = 'collector_unreachable';
 
     public function __construct(
-        public readonly string $domain,
-        public readonly bool $scriptOk,
-        public readonly bool $collectorOk,
+        public string $domain,
+        public bool $scriptOk,
+        public bool $collectorOk,
         /** One of the REASON_* codes; empty when both probes passed. */
-        public readonly string $reason = '',
+        public string $reason = '',
         /** Whatever the reason needs to be concrete: a status code, an error text. */
-        public readonly string $detail = '',
+        public string $detail = '',
     ) {
     }
 
