@@ -165,24 +165,31 @@ for every page the cache is actually working on, and `miss` never appears at all
 
 ### What the plugin measures itself
 
-Five entries need no profiler at all, which is what a shop without Tideways gets instead
-of nothing:
+Six entries need no profiler at all, which is what a shop without Tideways gets instead of
+nothing:
 
 | Entry | What it is |
 |---|---|
 | `fm-fpc` | the full-page-cache verdict: `hit`, `miss`, or `bypass` |
+| `fm-cacheage` | how old the served copy is, in seconds, on a hit |
 | `fm-backend` | total PHP wall time |
 | `fm-render` | template render time — **no profiler extension reports this**, so `render_dur` is empty on every Shopware shop without it |
 | `fm-pagetype` | the page type, derived from the dispatched route |
 | `fm-node` | which machine answered |
+| `fm-loggedin` | whether a customer was authenticated |
+
+**`fm-cacheage`** is gated on the hit, not on the header being present: Symfony sets an
+`Age` on a miss too, derived from the `Date` header, and that zero would look like a
+measurement.
 
 **`fm-pagetype`** produces exactly the values fastmon's `shopware6` body-class ruleset
 produces, so the two cannot disagree — which matters because only the ruleset works on a
 cache hit, where no controller ran. The route is the more reliable half of that pair: a
 theme can change body classes, and search plugins routinely take over the search page.
 
-**`fm-node`** comes from `gethostname()`, or from `FASTMON_SERVER_NAME` in the
-environment. It is deliberately **not** a plugin setting: settings live in `system_config`,
+**`fm-node`** carries only the first label of `gethostname()` — an FQDN would disclose
+domain structure and internal naming, `web-01` discloses that the servers are called
+`web-01`. `FASTMON_SERVER_NAME` overrides it. It is deliberately **not** a plugin setting: settings live in `system_config`,
 the database every node of the cluster shares, so a configured name would be identical on
 all of them — the exact opposite of what the dimension is for. On orchestrated setups set
 the environment variable to something short and stable (`web-01`): a pod name changes on
@@ -195,20 +202,16 @@ cookieless one, without consent. Switching it on is a decision about that classi
 
 ### Configuration
 
-| Setting | Default | Notes |
-|---|---|---|
-| `serverTiming` | on | master switch; costs nothing on a host without a profiler |
-| `serverTimingCacheStatus` | on | `fm-fpc`; needs no extension |
-| `serverTimingTotal` | on | `fm-backend`, total PHP wall time |
-| `blockedServerTimingLayers` | `unknown` | comma separated; empty reports every layer |
+One switch: **`serverTiming`**, on by default, per sales channel.
 
-`unknown` is Tideways' residual bucket — the time no instrumented layer claimed, usually
-the largest entry and saying nothing. Nothing is lost by hiding it: `fm-backend` minus the
-entries that follow *is* that number.
+There used to be one per entry — total, cache verdict, page type, render, node, login —
+and a layer blocklist. They are gone on purpose: every entry is either free (cache verdict
+and age, total, node) or measured anyway (render time, page type), so a knob offered a
+choice nobody has a reason to make, and each one was another way for a shop to report less
+than it thinks.
 
-The configuration page shows which layers this host actually reports, measured from the
-request that loaded the page — a real sample of the machine rather than a list of
-possibilities.
+The configuration page reports which sources exist on this host and what each is doing:
+measuring, installed but too old, or not installed.
 
 ### Entry budget
 

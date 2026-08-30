@@ -8,45 +8,13 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 class ConfigResolverTest extends TestCase
 {
-    public function testABooleanThatWasNeverWrittenKeepsTheDocumentedDefault(): void
+    public function testServerTimingIsOnUnlessSwitchedOff(): void
     {
-        // Shopware only writes config.xml defaults on install or activate. A field added
-        // by a later release has no stored value on a shop that merely pulled new files,
-        // and `(bool) null` would silently turn a documented "on by default" into off.
-        $config = $this->resolver([])->serverTiming(null);
-
-        self::assertTrue($config->enabled);
-        self::assertTrue($config->reportTotal);
-        self::assertTrue($config->reportCacheStatus);
-    }
-
-    public function testAnExplicitFalseIsHonoured(): void
-    {
-        $config = $this->resolver(['serverTiming' => false])->serverTiming(null);
-
-        self::assertFalse($config->enabled);
-    }
-
-    public function testTheBlocklistFallsBackToTheBuiltInDefaults(): void
-    {
-        self::assertSame(['unknown'], $this->resolver([])->serverTiming(null)->blockedLayers);
-    }
-
-    public function testAnEmptiedBlocklistMeansReportEverything(): void
-    {
-        // Including `unknown`. The distinction between "never configured" and
-        // "deliberately cleared" is the whole reason the fallback is on null and not on
-        // emptiness.
-        $config = $this->resolver(['blockedServerTimingLayers' => ''])->serverTiming(null);
-
-        self::assertSame([], $config->blockedLayers);
-    }
-
-    public function testTheBlocklistIsNormalised(): void
-    {
-        $config = $this->resolver(['blockedServerTimingLayers' => ' Unknown , , GC '])->serverTiming(null);
-
-        self::assertSame(['unknown', 'gc'], $config->blockedLayers);
+        // Shopware writes the config.xml defaults only on install or activate, so a shop
+        // that merely pulled new files has no stored value - and `(bool) null` would turn
+        // a documented "on by default" into off.
+        self::assertTrue($this->resolver([])->serverTiming(null)->enabled);
+        self::assertFalse($this->resolver(['serverTiming' => false])->serverTiming(null)->enabled);
     }
 
     public function testTheScriptBaseFollowsTheCollectionMode(): void

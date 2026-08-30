@@ -16,7 +16,7 @@
             <template v-else>
                 {{ error }}
                 <template v-if="missingPermission">
-                    {{ $tc('fastmon-collector.connect.missingPermission', 0, { permission: missingPermission }) }}
+                    {{ $t('fastmon-collector.connect.missingPermission', { permission: missingPermission }) }}
                 </template>
             </template>
         </mt-banner>

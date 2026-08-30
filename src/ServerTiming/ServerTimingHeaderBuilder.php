@@ -43,17 +43,6 @@ final class ServerTimingHeaderBuilder
     public const CACHE_METRIC = 'fm-fpc';
 
     /**
-     * `unknown` is Tideways' residual bucket: the request time no instrumented layer
-     * claimed, which on a Shopware page is mostly PHP executing application code. It is
-     * usually the largest entry, the name says nothing about that, and Tideways' own UI
-     * never shows it as a row either. Nothing is lost by hiding it - `fm-backend` minus
-     * the entries that follow *is* this number. Clear the setting to get it back.
-     *
-     * @var string[]
-     */
-    public const DEFAULT_BLOCKED_LAYERS = ['unknown'];
-
-    /**
      * Layer names the fastmon collector promotes into a dashboard column or keeps as a
      * documented drill-down key. These never count against the unrecognised budget.
      *
@@ -71,8 +60,12 @@ final class ServerTimingHeaderBuilder
         'http', 'fetch', 'api', 'ext',
         'render', 'view', 'ssr',
         'processing', 'total', 'app',
-        // Documented drill-down keys.
-        'apcu', 'session', 'dns', 'queue', 'twig', 'parse', 'cpu', 'auth', 'db_async',
+        // Catalogued drill-down keys, including every layer Tideways reports. Missing one
+        // here does not lose it, it makes it compete for the eight unrecognised slots the
+        // collector would not have applied.
+        'amqp', 'apcu', 'auth', 'autoloading', 'beanstalk', 'compiling', 'cpu',
+        'db_async', 'disk', 'dns', 'email', 'gc', 'kafka', 'parse', 'queue',
+        'session', 'shell', 'sleep', 'theme', 'twig', 'unknown',
     ];
 
     /**
@@ -99,14 +92,13 @@ final class ServerTimingHeaderBuilder
 
     /**
      * @param array<string, float>                                     $metrics       layer name => milliseconds
-     * @param string[]                                                 $blockedLayers lower-case; empty means report everything
      * @param list<array{0: string, 1: float|null, 2: string|null}>    $own           our own entries as [name, dur, desc]
  *
  * The entry budget is one policy with several limits; they read as one list here and would not as five methods.
  * @SuppressWarnings("PHPMD.CyclomaticComplexity")
  * @SuppressWarnings("PHPMD.NPathComplexity")
  */
-    public function build(array $metrics, array $blockedLayers, array $own = []): string
+    public function build(array $metrics, array $own = []): string
     {
         $entries = [];
 
@@ -128,10 +120,6 @@ final class ServerTimingHeaderBuilder
             $name = mb_strtolower(trim((string) $rawName));
 
             if ($milliseconds < self::MIN_DURATION_MS) {
-                continue;
-            }
-
-            if (\in_array($name, $blockedLayers, true)) {
                 continue;
             }
 

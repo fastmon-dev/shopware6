@@ -2,7 +2,6 @@
 
 namespace Fastmon\Collector\Subscriber;
 
-use Fastmon\Collector\Dto\ServerTimingConfig;
 use Fastmon\Collector\ServerTiming\CacheStatusResolver;
 use Fastmon\Collector\ServerTiming\LayerMetricsProviderInterface;
 use Fastmon\Collector\ServerTiming\RequestInsights;
@@ -112,7 +111,7 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            $own = $this->ownEntries($request, $response, $config);
+            $own = $this->ownEntries($request, $response);
 
             // Checked after the config but before any measurement: on a host with no
             // profiler this is the whole cost of having the feature installed. What we
@@ -125,7 +124,7 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            $header = $this->headerBuilder->build($metrics, $config->blockedLayers, $own);
+            $header = $this->headerBuilder->build($metrics, $own);
 
             if ($header === '') {
                 return;
@@ -152,28 +151,30 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
  * @SuppressWarnings("PHPMD.CyclomaticComplexity")
  * @SuppressWarnings("PHPMD.NPathComplexity")
  */
-    private function ownEntries(Request $request, Response $response, ServerTimingConfig $config): array
+    private function ownEntries(Request $request, Response $response): array
     {
         $own = [];
 
-        // Everything categorical describes a page, and only the top-level document
-        // carries a navigation entry for fastmon to read one from. Emitting them on every
-        // stylesheet and image would add bytes to every response on the page for a reader
-        // that does not exist - the durations still go out, because those are worth
-        // having in devtools on any request.
+        // Categorical entries describe a page, and only the document carries a navigation
+        // entry to read one from. Durations still go out on every response.
         $isDocument = $this->cacheStatusResolver->isDocument($response);
 
-        if ($config->reportCacheStatus && $isDocument) {
+        if ($isDocument) {
             $status = $this->cacheStatusResolver->resolve($request, $response);
 
             if ($status !== null) {
-                // Leads: the cheapest thing to read off a header by eye, and on a hit it
-                // is the only entry that explains the numbers next to it.
+                // Leads: on a hit it is the only entry that explains the numbers next to it.
                 $own[] = [ServerTimingHeaderBuilder::CACHE_METRIC, null, $status];
             }
-        }
 
-        if ($config->reportServer && $isDocument) {
+            // Seconds. Gated on the hit, not on the header: Symfony sets `Age` on a miss
+            // too, derived from the Date header.
+            $age = $response->headers->get('Age');
+
+            if ($status === CacheStatusResolver::HIT && is_numeric($age)) {
+                $own[] = ['fm-cacheage', (float) $age, null];
+            }
+
             $server = $this->serverIdentity->name();
 
             if ($server !== '') {
@@ -181,34 +182,26 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
             }
         }
 
-        if ($config->reportTotal) {
-            $total = $this->totalMilliseconds($request);
+        $total = $this->totalMilliseconds($request);
 
-            if ($total !== null) {
-                $own[] = [ServerTimingHeaderBuilder::TOTAL_METRIC, $total, null];
-            }
+        if ($total !== null) {
+            $own[] = [ServerTimingHeaderBuilder::TOTAL_METRIC, $total, null];
         }
 
-        if ($config->reportRender) {
-            $render = $this->insights->renderMilliseconds();
+        // Absent on a cache hit: a zero would be a real-looking number in the column.
+        $render = $this->insights->renderMilliseconds();
 
-            // Absent on a cache hit, where no template was rendered - which is correct:
-            // reporting a render time of zero would put a real-looking number into the
-            // column and drag every average towards it.
-            if ($render !== null) {
-                $own[] = ['fm-render', $render, null];
-            }
+        if ($render !== null) {
+            $own[] = ['fm-render', $render, null];
         }
 
-        if ($config->reportPageType && $isDocument) {
+        if ($isDocument) {
             $pageType = $this->insights->pageType();
 
             if ($pageType !== null && $pageType !== '') {
                 $own[] = ['fm-pagetype', null, $pageType];
             }
-        }
 
-        if ($config->reportLoggedIn && $isDocument) {
             $loggedIn = $this->insights->loggedIn();
 
             if ($loggedIn !== null) {

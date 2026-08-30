@@ -41,5 +41,11 @@ final class ServerTimingWiringTest extends TestCase
         self::assertMatchesRegularExpression('/fm-node;desc=[a-zA-Z0-9 _.:\/-]{1,32}/', $header);
         self::assertStringContainsString('fm-pagetype;desc=home', $header);
         self::assertMatchesRegularExpression('/fm-render;dur=[0-9.]+/', $header);
+        // Always reported, and both values are emitted, so an absent entry cannot be read
+        // as "logged out".
+        self::assertStringContainsString('fm-loggedin;desc=no', $header);
+        // A miss has no age. Symfony sets `Age` on one anyway, derived from the Date
+        // header, so the entry is gated on the hit rather than on the header.
+        self::assertStringNotContainsString('fm-cacheage', $header);
     }
 }

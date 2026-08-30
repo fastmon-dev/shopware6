@@ -73,72 +73,9 @@
             <name>serverTiming</name>
             <label>Publish a Server-Timing header</label>
             <label lang="de-DE">Server-Timing-Header ausliefern</label>
-            <helpText>Reports what this request spent where, so fastmon can correlate backend phases with the Web Vitals of the same pageview. Costs nothing on a host without a profiler extension.</helpText>
-            <helpText lang="de-DE">Meldet, wo dieser Request seine Zeit verbracht hat, damit fastmon Backend-Phasen mit den Web Vitals desselben Seitenaufrufs korrelieren kann. Kostet auf einem Host ohne Profiler-Extension nichts.</helpText>
+            <helpText>Reports the full-page-cache verdict and age, total time, render time, page type, login state and which machine answered, so fastmon can correlate backend phases with the Web Vitals of the same pageview. With the Tideways extension it adds the per-layer breakdown. Costs nothing on a host without a profiler.</helpText>
+            <helpText lang="de-DE">Meldet Full-Page-Cache-Ergebnis und -Alter, Gesamtzeit, Renderzeit, Seitentyp, Login-Status und welche Maschine geantwortet hat, damit fastmon Backend-Phasen mit den Web Vitals desselben Seitenaufrufs korrelieren kann. Mit der Tideways-Extension kommt die Layer-Aufschlüsselung dazu. Kostet auf einem Host ohne Profiler nichts.</helpText>
             <defaultValue>true</defaultValue>
-        </input-field>
-
-        <input-field type="bool">
-            <name>serverTimingCacheStatus</name>
-            <label>Report the full-page-cache verdict</label>
-            <label lang="de-DE">Full-Page-Cache-Ergebnis melden</label>
-            <helpText>Adds fm-fpc with hit, miss or bypass. Needs no profiler extension and is the single most useful entry in the header.</helpText>
-            <helpText lang="de-DE">Ergänzt fm-fpc mit hit, miss oder bypass. Braucht keine Profiler-Extension und ist der nützlichste Eintrag im Header.</helpText>
-            <defaultValue>true</defaultValue>
-        </input-field>
-
-        <input-field type="bool">
-            <name>serverTimingTotal</name>
-            <label>Report total PHP wall time</label>
-            <label lang="de-DE">Gesamte PHP-Laufzeit melden</label>
-            <helpText>Adds fm-backend, the number the individual layers are a share of.</helpText>
-            <helpText lang="de-DE">Ergänzt fm-backend, den Wert, von dem die einzelnen Layer ein Anteil sind.</helpText>
-            <defaultValue>true</defaultValue>
-        </input-field>
-
-        <input-field type="bool">
-            <name>serverTimingPageType</name>
-            <label>Report the page type</label>
-            <label lang="de-DE">Seitentyp melden</label>
-            <helpText>Adds fm-pagetype, derived from the dispatched route. More reliable than the body-class detection, which a theme can change.</helpText>
-            <helpText lang="de-DE">Ergänzt fm-pagetype, abgeleitet aus der aufgerufenen Route. Verlässlicher als die Body-Class-Erkennung, die ein Theme verändern kann.</helpText>
-            <defaultValue>true</defaultValue>
-        </input-field>
-
-        <input-field type="bool">
-            <name>serverTimingRender</name>
-            <label>Report template render time</label>
-            <label lang="de-DE">Template-Renderzeit melden</label>
-            <helpText>Adds fm-render. No profiler extension reports this, so the render column stays empty without it.</helpText>
-            <helpText lang="de-DE">Ergänzt fm-render. Keine Profiler-Extension meldet diesen Wert, ohne ihn bleibt die Render-Spalte leer.</helpText>
-            <defaultValue>true</defaultValue>
-        </input-field>
-
-        <input-field type="bool">
-            <name>serverTimingServer</name>
-            <label>Report which server answered</label>
-            <label lang="de-DE">Melden, welcher Server geantwortet hat</label>
-            <helpText>Adds fm-node with this machine's hostname. In a cluster this is what makes one slow node visible instead of a slightly slower average. Set FASTMON_SERVER_NAME in the environment where the hostname is not a useful name - a setting could not work here, it would be the same on every node.</helpText>
-            <helpText lang="de-DE">Ergänzt fm-node mit dem Hostnamen dieser Maschine. Im Cluster macht das einen langsamen Knoten sichtbar statt nur einen etwas schlechteren Durchschnitt. Wo der Hostname kein brauchbarer Name ist, FASTMON_SERVER_NAME in der Umgebung setzen - ein Konfigurationsfeld könnte das nicht leisten, es wäre auf jedem Knoten dasselbe.</helpText>
-            <defaultValue>true</defaultValue>
-        </input-field>
-
-        <input-field type="bool">
-            <name>serverTimingLoggedIn</name>
-            <label>Report whether a customer was logged in</label>
-            <label lang="de-DE">Melden, ob ein Kunde eingeloggt war</label>
-            <helpText>Off by default. Adds fm-loggedin (yes/no). This is a visitor attribute in a header fastmon treats as server self-measurement and collects in every privacy mode, including the cookieless one - decide deliberately.</helpText>
-            <helpText lang="de-DE">Standardmäßig aus. Ergänzt fm-loggedin (yes/no). Das ist ein Besucherattribut in einem Header, den fastmon als Server-Selbstmessung behandelt und in jedem Datenschutzmodus erfasst, auch im cookiefreien - bewusst entscheiden.</helpText>
-            <defaultValue>false</defaultValue>
-        </input-field>
-
-        <input-field type="text">
-            <name>blockedServerTimingLayers</name>
-            <label>Layers to keep out of the header</label>
-            <label lang="de-DE">Layer, die nicht in den Header sollen</label>
-            <helpText>Comma separated. Empty reports every layer, including "unknown" - the residual bucket that is usually the largest entry and says nothing.</helpText>
-            <helpText lang="de-DE">Kommagetrennt. Leer meldet jeden Layer, auch "unknown" - den Restposten, der meist der größte Eintrag ist und nichts aussagt.</helpText>
-            <defaultValue>unknown</defaultValue>
         </input-field>
     </card>
 </config>

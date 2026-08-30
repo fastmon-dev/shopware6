@@ -100,7 +100,7 @@
 
         {# Said once, at the end: which mode stays out of reach, and what to do next. #}
         <mt-banner v-else-if="checkedThisMode && !status.ready" variant="attention">
-            {{ $tc('fastmon-collector.collection.blocked', 0, { mode: selectedModeLabel }) }}
+            {{ $t('fastmon-collector.collection.blocked', { mode: selectedModeLabel }) }}
             <mt-link
                 as="a"
                 type="external"
@@ -113,7 +113,7 @@
         </mt-banner>
 
         <mt-banner v-else-if="checkedThisMode" variant="positive">
-            {{ $tc('fastmon-collector.collection.allReady', 0, { mode: selectedModeLabel }) }}
+            {{ $t('fastmon-collector.collection.allReady', { mode: selectedModeLabel }) }}
         </mt-banner>
 
         <template v-if="needsProof">

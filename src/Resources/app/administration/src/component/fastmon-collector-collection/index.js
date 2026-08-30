@@ -133,7 +133,7 @@ Component.register('fastmon-collector-collection', {
                 return '';
             }
 
-            return this.$tc(`fastmon-collector.collection.reason.${domain.reason}`, 0, {
+            return this.$t(`fastmon-collector.collection.reason.${domain.reason}`, {
                 detail: domain.detail || '',
             });
         },

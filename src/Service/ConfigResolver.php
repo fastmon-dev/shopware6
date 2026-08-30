@@ -5,7 +5,6 @@ namespace Fastmon\Collector\Service;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Dto\ServerTimingConfig;
 use Fastmon\Collector\Dto\StorefrontConfig;
-use Fastmon\Collector\ServerTiming\ServerTimingHeaderBuilder;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /**
@@ -86,13 +85,6 @@ final class ConfigResolver
     {
         return new ServerTimingConfig(
             enabled: $this->bool('serverTiming', $salesChannelId, true),
-            reportTotal: $this->bool('serverTimingTotal', $salesChannelId, true),
-            reportCacheStatus: $this->bool('serverTimingCacheStatus', $salesChannelId, true),
-            reportPageType: $this->bool('serverTimingPageType', $salesChannelId, true),
-            reportRender: $this->bool('serverTimingRender', $salesChannelId, true),
-            reportServer: $this->bool('serverTimingServer', $salesChannelId, true),
-            reportLoggedIn: $this->bool('serverTimingLoggedIn', $salesChannelId, false),
-            blockedLayers: $this->blockedLayers($salesChannelId),
         );
     }
 
@@ -125,26 +117,4 @@ final class ConfigResolver
         return \is_scalar($value) ? trim((string) $value) : '';
     }
 
-    /**
-     * Comma separated in the admin. A value that was never written falls back to the
-     * built-in list, so a plugin update can extend the defaults; an explicitly emptied
-     * field means the shop wants every layer in the header, `unknown` included.
-     *
-     * @return string[]
-     */
-    private function blockedLayers(?string $salesChannelId): array
-    {
-        $configured = $this->systemConfigService->get(self::DOMAIN . 'blockedServerTimingLayers', $salesChannelId);
-
-        if (!\is_string($configured)) {
-            return ServerTimingHeaderBuilder::DEFAULT_BLOCKED_LAYERS;
-        }
-
-        $names = array_map(
-            static fn (string $name): string => mb_strtolower(trim($name)),
-            explode(',', $configured)
-        );
-
-        return array_values(array_filter($names, static fn (string $name): bool => $name !== ''));
-    }
 }

@@ -16,10 +16,6 @@
         </mt-button>
     </div>
 
-    <p class="fastmon-collector-server-timing__hint">
-        {{ $tc('fastmon-collector.serverTiming.sampleHint') }}
-    </p>
-
     <mt-loader v-if="isLoading" size="32px" />
 
     <mt-banner v-else-if="error" variant="critical">
@@ -40,39 +36,9 @@
             </li>
         </ul>
 
-        <mt-banner :variant="isAvailable ? 'positive' : 'attention'">
-            {{ isAvailable
-                ? $tc('fastmon-collector.serverTiming.sourceOk', 0, { source: source })
-                : $tc('fastmon-collector.serverTiming.sourceMissing') }}
+        <mt-banner v-if="!isAvailable" variant="attention">
+            {{ $tc('fastmon-collector.serverTiming.sourceMissing') }}
         </mt-banner>
-
-        <ul v-if="layers.length" class="fastmon-collector-server-timing__list">
-            <li
-                v-for="layer in layers"
-                :key="layer.name"
-                class="fastmon-collector-server-timing__item"
-            >
-                <span class="fastmon-collector-server-timing__name">
-                    {{ layer.name }}
-                    {# Whether fastmon promotes this name into a dashboard column on its
-                       own, or keeps it for the per-beacon drill-down only. #}
-                    <span v-if="!layer.recognised" class="fastmon-collector-server-timing__tag">
-                        {{ $tc('fastmon-collector.serverTiming.custom') }}
-                    </span>
-                </span>
-                <span class="fastmon-collector-server-timing__duration">
-                    {{ formatDuration(layer.milliseconds) }}
-                </span>
-            </li>
-        </ul>
-
-        <p v-else-if="isAvailable" class="fastmon-collector-server-timing__hint">
-            {{ $tc('fastmon-collector.serverTiming.noLayers') }}
-        </p>
-
-        <p v-if="idleLayers.length" class="fastmon-collector-server-timing__idle">
-            {{ $tc('fastmon-collector.serverTiming.idleLayers') }} {{ idleLayers.join(', ') }}
-        </p>
     </template>
 </div>
 {% endblock %}
