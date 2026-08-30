@@ -75,6 +75,7 @@
             "needsApplication": "Verknüpfe zuerst eine fastmon-Application — Tracker- und Pixel-ID kommen von dort.",
             "intro": "Adblocker schlucken rund ein Drittel der Third-Party-Analytics. Wenn Tracker und Beacon von der eigenen Domain kommen, fällt das weg. Das Plugin leitet diese Pfade nicht selbst weiter — das wäre ein Request pro Seitenaufruf durch PHP — das muss dein Webserver tun.",
             "docs": "Anleitung zur Einrichtung →",
+            "docsUrl": "https://docs.fastmon.eu/de/guides/first-party-proxy",
             "modeDefault": "fastmons Collector",
             "modeDefaultHint": "Lädt von fastmon.site. Funktioniert überall, braucht keine Einrichtung, und ist das, was Adblocker erkennen.",
             "modeCustom": "Eigene Domain",

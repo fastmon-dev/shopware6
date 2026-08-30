@@ -267,7 +267,7 @@ so one embed is first-party on all of them without per-domain configuration.
 put fastmon's latency in front of the shop's worker pool — and on a shop with Varnish or a
 CDN in front, where cached pages never reach PHP at all, it would turn "PHP on cache
 misses" into "PHP on every pageview". The forwarding belongs in the web server; the
-[fastmon docs](https://docs.fastmon.eu/first-party) cover the configuration.
+[fastmon docs](https://docs.fastmon.eu/en/guides/first-party-proxy) cover the configuration.
 
 What the plugin does is refuse a mode it cannot prove. **Check setup** probes the origins
 the chosen mode would use, and the apply button stays out of reach until every one of them

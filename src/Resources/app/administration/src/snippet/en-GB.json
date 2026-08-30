@@ -75,6 +75,7 @@
             "needsApplication": "Link a fastmon application first — the tracker and pixel ids come from it.",
             "intro": "Ad blockers drop roughly a third of third-party analytics. Serving the tracker and the beacon from your own domain avoids that. The plugin does not forward those paths itself — that would put a request per pageview through PHP — so your web server has to.",
             "docs": "How to set it up →",
+            "docsUrl": "https://docs.fastmon.eu/en/guides/first-party-proxy",
             "modeDefault": "fastmon's collector",
             "modeDefaultHint": "Loads from fastmon.site. Works everywhere, needs no setup, and is what ad blockers recognise.",
             "modeCustom": "Your own domain",
