@@ -9,6 +9,11 @@
         margin-bottom: 16px;
     }
 
+    // A banner that offers an action puts it under its own text, not beside it.
+    &__banner-action {
+        margin-top: 12px;
+    }
+
     &__hint,
     &__account {
         color: $color-darkgray-200;
