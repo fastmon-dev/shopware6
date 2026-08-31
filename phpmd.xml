@@ -54,7 +54,10 @@
     <rule ref="rulesets/unusedcode.xml"/>
 
     <rule ref="rulesets/controversial.xml">
-        <!-- $_SERVER for the per-node environment overrides, where a setting cannot work. -->
+        <!-- Only the tests still need this: they arrange the environment by setting
+             $_SERVER, which is the only way to reach code that reads one. Production code
+             goes through Shopware's EnvironmentHelper, and PHPMD cannot scope a rule to
+             one of the two paths it is given. -->
         <exclude name="Superglobals"/>
     </rule>
 </ruleset>
