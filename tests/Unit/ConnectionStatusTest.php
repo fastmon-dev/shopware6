@@ -170,8 +170,11 @@ class ConnectionStatusTest extends TestCase
         self::assertTrue($status['applicationValid']);
         self::assertSame('', $status['error']);
 
-        // And the storefront is emitting the new ones from here on.
+        // And the storefront is emitting the new ones from here on. Loudly, unlike the
+        // credential writes: the pages in the cache still carry the old id, and a page
+        // with a dead tracker id collects nothing.
         self::assertSame('newhash', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
         self::assertSame('newpixel', $this->stored[ConfigResolver::DOMAIN . 'pixelId']);
         self::assertSame('newhash', $status['trackerId']);
     }

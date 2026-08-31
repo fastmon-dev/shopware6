@@ -215,8 +215,11 @@ final class CollectionModeService
      */
     private function store(CollectionMode $mode, string $endpoint): void
     {
-        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'collectionMode', $mode->value);
-        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'customCollectorDomain', $endpoint);
+        // Deliberately not silent: both decide the `<script src>` the templates render,
+        // so every cached page has to be built again. Contrast the credential writes in
+        // `ConnectionStore`, which no visitor can see.
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'collectionMode', $mode->value, null, false);
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'customCollectorDomain', $endpoint, null, false);
 
         $this->logger->info(
             'fastmon: collection mode is now ' . $mode->value . ($endpoint !== '' ? ' (' . $endpoint . ')' : '')

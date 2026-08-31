@@ -20,6 +20,13 @@ trait StoresSystemConfig
     private array $stored = [];
 
     /**
+     * Which keys were written without invalidating the shop's page cache.
+     *
+     * @var array<string, bool>
+     */
+    private array $silent = [];
+
+    /**
      * @param bool $memoized emulate `MemoizedSystemConfigStore`, which loads the whole
      *                       configuration once per request and only drops it when this
      *                       process writes. The real one does; a fake that reads live
@@ -36,8 +43,11 @@ trait StoresSystemConfig
             }
         );
         $systemConfig->method('set')->willReturnCallback(
-            function (string $key, mixed $value) use (&$snapshot): void {
+            /** @param string|null $salesChannelId everything this plugin writes is global */
+            function (string $key, mixed $value, ?string $salesChannelId = null, bool $silent = false) use (&$snapshot): void {
+                unset($salesChannelId);
                 $this->stored[$key] = $value;
+                $this->silent[$key] = $silent;
 
                 // Writing is what drops the memo, in the process that writes.
                 if ($snapshot !== null) {
@@ -46,8 +56,9 @@ trait StoresSystemConfig
             }
         );
         $systemConfig->method('delete')->willReturnCallback(
-            function (string $key) use (&$snapshot): void {
-                unset($this->stored[$key]);
+            function (string $key, ?string $salesChannelId = null, bool $silent = false) use (&$snapshot): void {
+                unset($salesChannelId, $this->stored[$key]);
+                $this->silent[$key] = $silent;
 
                 if ($snapshot !== null) {
                     $snapshot = $this->stored;

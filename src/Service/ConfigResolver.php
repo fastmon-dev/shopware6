@@ -5,6 +5,7 @@ namespace Fastmon\Collector\Service;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Dto\ServerTimingConfig;
 use Fastmon\Collector\Dto\StorefrontConfig;
+use Shopware\Core\DevOps\Environment\EnvironmentHelper;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /**
@@ -112,10 +113,13 @@ final class ConfigResolver
 
     private function baseUrl(string $variable, string $default): string
     {
-        $override = $_SERVER[$variable] ?? getenv($variable);
+        // Through Shopware's helper rather than the superglobal: it reads `$_SERVER` and
+        // `$_ENV`, and it is the one place core lets an installation rewrite what an
+        // environment variable means.
+        $override = EnvironmentHelper::getVariable($variable, '');
 
-        return \is_string($override) && trim($override) !== ''
-            ? rtrim(trim($override), '/')
+        return \is_scalar($override) && trim((string) $override) !== ''
+            ? rtrim(trim((string) $override), '/')
             : $default;
     }
 

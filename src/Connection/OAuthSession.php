@@ -72,13 +72,15 @@ final class OAuthSession
         $state = bin2hex(random_bytes(self::STATE_BYTES));
         $verifier = Pkce::verifier();
 
+        // Silent: an authorization in flight is internal state, and writing it loudly
+        // would drop the shop's page cache every time someone presses Connect.
         $this->systemConfigService->set(self::KEY, json_encode([
             'state' => $state,
             'verifier' => $verifier,
             'clientId' => $clientId,
             'redirectUri' => $redirectUri,
             'expiresAt' => time() + self::LIFETIME_SECONDS,
-        ], \JSON_THROW_ON_ERROR));
+        ], \JSON_THROW_ON_ERROR), null, true);
 
         return ['state' => $state, 'verifier' => $verifier];
     }
@@ -150,7 +152,7 @@ final class OAuthSession
     /** Drop any attempt in flight, whatever it is. Used when disconnecting. */
     public function abandon(): void
     {
-        $this->systemConfigService->delete(self::KEY);
+        $this->systemConfigService->delete(self::KEY, null, true);
     }
 
     /**

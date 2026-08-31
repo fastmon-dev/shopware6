@@ -2,6 +2,8 @@
 
 namespace Fastmon\Collector\ServerTiming;
 
+use Shopware\Core\DevOps\Environment\EnvironmentHelper;
+
 /**
  * Which machine answered this request.
  *
@@ -48,7 +50,7 @@ final class ServerIdentity
 
     private function resolve(): string
     {
-        $configured = $_SERVER[self::ENV] ?? getenv(self::ENV);
+        $configured = EnvironmentHelper::getVariable(self::ENV, '');
         $name = \is_string($configured) ? trim($configured) : '';
 
         if ($name === '') {

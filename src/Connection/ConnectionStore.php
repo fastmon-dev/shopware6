@@ -69,6 +69,25 @@ final class ConnectionStore
     private const TRACKER_ID = 'trackerId';
     private const PIXEL_ID = 'pixelId';
 
+    /**
+     * The two values the storefront actually renders.
+     *
+     * Writing any configuration key invalidates the HTTP cache tag `system.config-…`,
+     * which every cached page carries because rendering it reads configuration. That is
+     * right for these two: a new tracker id has to reach the pages, and a page cached
+     * with the old one collects nothing.
+     *
+     * It is wrong for everything else this store owns. A rotated refresh token changes
+     * nothing a visitor can see, and rotation happens every quarter of an hour while
+     * somebody works in the administration, so writing it loudly would drop the entire
+     * full page cache of the shop four times an hour. Those writes are silent, which is
+     * the flag core added for exactly this: "SystemConfig is often used to store internal
+     * values."
+     *
+     * @var string[]
+     */
+    private const RENDERED_KEYS = [self::TRACKER_ID, self::PIXEL_ID];
+
     /** Everything that authenticates. Dropped together, whichever kind is stored. */
     private const CREDENTIAL_KEYS = [
         self::ACCESS_TOKEN,
@@ -195,7 +214,7 @@ final class ConnectionStore
         $this->set(self::SCOPES, $tokens->scope);
         $this->set(self::EXPIRES_AT, (string) (time() + $tokens->expiresIn));
         $this->set(self::ACCESS_TOKEN, $tokens->accessToken);
-        $this->systemConfigService->delete(ConfigResolver::DOMAIN . self::MANUAL_TOKEN);
+        $this->forget(self::MANUAL_TOKEN);
     }
 
     /**
@@ -207,7 +226,7 @@ final class ConnectionStore
     public function saveManualToken(string $token): void
     {
         foreach (self::CREDENTIAL_KEYS as $key) {
-            $this->systemConfigService->delete(ConfigResolver::DOMAIN . $key);
+            $this->forget($key);
         }
 
         $this->set(self::MANUAL_TOKEN, $token);
@@ -257,7 +276,7 @@ final class ConnectionStore
     public function clearCredentials(): void
     {
         foreach (self::CREDENTIAL_KEYS as $key) {
-            $this->systemConfigService->delete(ConfigResolver::DOMAIN . $key);
+            $this->forget($key);
         }
     }
 
@@ -273,7 +292,7 @@ final class ConnectionStore
         $this->clearCredentials();
 
         foreach (self::IDENTITY_KEYS as $key) {
-            $this->systemConfigService->delete(ConfigResolver::DOMAIN . $key);
+            $this->forget($key);
         }
     }
 
@@ -281,7 +300,7 @@ final class ConnectionStore
     public function clearAll(): void
     {
         foreach (self::KEYS as $key) {
-            $this->systemConfigService->delete(ConfigResolver::DOMAIN . $key);
+            $this->forget($key);
         }
     }
 
@@ -294,6 +313,22 @@ final class ConnectionStore
 
     private function set(string $key, string $value): void
     {
-        $this->systemConfigService->set(ConfigResolver::DOMAIN . $key, $value);
+        // The fourth argument is `silent`. It reaches core through `func_get_args()`
+        // until 6.8 puts it in the signature, where it also becomes the default.
+        $this->systemConfigService->set(
+            ConfigResolver::DOMAIN . $key,
+            $value,
+            null,
+            !\in_array($key, self::RENDERED_KEYS, true)
+        );
+    }
+
+    private function forget(string $key): void
+    {
+        $this->systemConfigService->delete(
+            ConfigResolver::DOMAIN . $key,
+            null,
+            !\in_array($key, self::RENDERED_KEYS, true)
+        );
     }
 }
