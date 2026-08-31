@@ -22,15 +22,23 @@ namespace Fastmon\Collector\ServerTiming;
  *   - `fm-backend` for total PHP wall time. Our own measurement, and the one entry the
  *     layers below are a share of.
  *   - `fm-fpc` for the full-page-cache verdict, which no profiler reports.
+ *   - `fm-host` for the machine that answered. A name, never a duration.
  *
- * ## Why the entry budget is enforced here
+ * And one layer is renamed rather than left alone: `rdbms` goes out as `fm-db`, which is
+ * the collector's own first-choice alias for the same column and the word every dashboard
+ * and every operator uses for that tier. Nothing is lost, because the relational database
+ * is one layer promoted into one column - the drill-down argument above applies to the
+ * tiers that have several members, not to this one.
  *
- * The collector accepts at most 32 entries per pageview and, of those, at most 8 whose
- * names it does not recognise - the rest are dropped silently. Tideways can easily
- * report a dozen layers nobody has a column for (compiling, autoloading, gc, shell,
- * sleep, ...), so left alone the interesting ones would compete with the noise for
- * those 8 slots and lose at random. Sorting slowest first and spending the unrecognised
- * budget deliberately means the entries that survive are the ones worth having.
+ * ## Why nothing here arbitrates the collector's caps
+ *
+ * The collector keeps at most 32 entries per pageview and, of those, at most 8 whose
+ * names are outside its catalog. Neither limit needs a policy on this side. Every layer
+ * Tideways reports is either promoted into a column (`rdbms`, `redis`, `http`, ...) or
+ * listed in that catalog (`autoloading`, `compiling`, `gc`, `disk`, ...), so nothing this
+ * plugin produces reaches the second limit at all. And where a third-party provider does
+ * emit a foreign vocabulary, the collector fills that budget in the order the header
+ * arrives, which is the order below: slowest first.
  *
  * @see docs/server-timing-setup.md in the fastmon backend for the full contract.
  */
@@ -54,34 +62,10 @@ final class ServerTimingHeaderBuilder
     public const DEFAULT_BLOCKED_LAYERS = ['unknown'];
 
     /**
-     * Layer names the fastmon collector promotes into a dashboard column or keeps as a
-     * documented drill-down key. These never count against the unrecognised budget.
-     *
-     * Kept in sync with the alias tables in the collector's `_normalize_server_timing()`
-     * - a name that drops off that list here only loses its budget exemption, so drift
-     * costs precision, never correctness.
-     *
-     * @var string[]
-     */
-    public const RECOGNISED_LAYERS = [
-        // Promoted into a column.
-        'rdbms', 'db', 'sql', 'mongodb', 'sqlite',
-        'redis', 'valkey', 'memcache', 'kv', 'cache',
-        'elasticsearch', 'opensearch', 'solr', 'search',
-        'http', 'fetch', 'api', 'ext',
-        'render', 'view', 'ssr',
-        'processing', 'total', 'app',
-        // Documented drill-down keys.
-        'apcu', 'session', 'dns', 'queue', 'twig', 'parse', 'cpu', 'auth', 'db_async',
-    ];
-
-    /**
-     * Entries the collector accepts per pageview, and how many of those may carry a name
-     * it does not recognise. Anything past either limit is dropped on arrival, so the
-     * header is trimmed to fit before it is sent rather than after.
+     * Entries the collector accepts per pageview. Anything past it is dropped on arrival,
+     * so the header is trimmed to fit before it is sent rather than after.
      */
     private const MAX_ENTRIES = 32;
-    private const MAX_UNRECOGNISED = 8;
 
     /**
      * Sub-millisecond entries without a `desc` are discarded by the collector, so
@@ -101,10 +85,6 @@ final class ServerTimingHeaderBuilder
      * @param array<string, float>                                     $metrics       layer name => milliseconds
      * @param string[]                                                 $blockedLayers lower-case; empty means report everything
      * @param list<array{0: string, 1: float|null, 2: string|null}>    $own           our own entries as [name, dur, desc]
- *
- * The entry budget is one policy with several limits; they read as one list here and would not as five methods.
- * @SuppressWarnings("PHPMD.CyclomaticComplexity")
- * @SuppressWarnings("PHPMD.NPathComplexity")
  */
     public function build(array $metrics, array $blockedLayers, array $own = []): string
     {
@@ -121,8 +101,7 @@ final class ServerTimingHeaderBuilder
             }
         }
 
-        $recognised = [];
-        $unrecognised = [];
+        $layers = [];
 
         foreach ($metrics as $rawName => $milliseconds) {
             $name = mb_strtolower(trim((string) $rawName));
@@ -139,29 +118,20 @@ final class ServerTimingHeaderBuilder
                 continue;
             }
 
-            if (\in_array($name, self::RECOGNISED_LAYERS, true)) {
-                $recognised[$name] = (float) $milliseconds;
-            } else {
-                $unrecognised[$name] = (float) $milliseconds;
-            }
+            $layers[$name] = (float) $milliseconds;
         }
 
-        // Slowest first, in both buckets: it is the order a reader wants, and it makes
-        // the truncation below drop the least interesting entries rather than arbitrary
-        // ones.
-        arsort($recognised);
-        arsort($unrecognised);
+        // Slowest first: it is the order a reader wants, and it is also the order the
+        // collector reads. Where its own caps bite, they bite from the end, so the
+        // entries that survive are the ones worth having.
+        arsort($layers);
 
-        $unrecognised = \array_slice($unrecognised, 0, self::MAX_UNRECOGNISED, true);
-
-        foreach ([$recognised, $unrecognised] as $bucket) {
-            foreach ($bucket as $name => $milliseconds) {
-                if (\count($entries) >= self::MAX_ENTRIES) {
-                    break 2;
-                }
-
-                $entries[] = $this->entry($name, $milliseconds);
+        foreach ($layers as $name => $milliseconds) {
+            if (\count($entries) >= self::MAX_ENTRIES) {
+                break;
             }
+
+            $entries[] = $this->entry($name, $milliseconds);
         }
 
         return implode(', ', $entries);

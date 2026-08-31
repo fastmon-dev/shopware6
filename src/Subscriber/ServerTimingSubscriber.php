@@ -177,7 +177,7 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
             $server = $this->serverIdentity->name();
 
             if ($server !== '') {
-                $own[] = ['fm-node', null, $server];
+                $own[] = ['fm-host', null, $server];
             }
         }
 

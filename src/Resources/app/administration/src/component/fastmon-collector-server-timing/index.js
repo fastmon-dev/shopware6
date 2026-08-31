@@ -82,7 +82,7 @@ Component.register('fastmon-collector-server-timing', {
         },
 
         sourceState(source) {
-            return this.$tc(`fastmon-collector.serverTiming.state.${source.state}`);
+            return this.$t(`fastmon-collector.serverTiming.state.${source.state}`);
         },
 
         formatDuration(milliseconds) {

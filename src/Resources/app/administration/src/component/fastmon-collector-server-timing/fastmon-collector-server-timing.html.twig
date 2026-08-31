@@ -2,7 +2,7 @@
 <div class="fastmon-collector-server-timing">
     <div class="fastmon-collector-server-timing__header">
         <span class="fastmon-collector-server-timing__title">
-            {{ $tc('fastmon-collector.serverTiming.title') }}
+            {{ $t('fastmon-collector.serverTiming.title') }}
         </span>
 
         <mt-button
@@ -12,12 +12,12 @@
             :is-loading="isLoading"
             @click="load"
         >
-            {{ $tc('fastmon-collector.serverTiming.reload') }}
+            {{ $t('fastmon-collector.serverTiming.reload') }}
         </mt-button>
     </div>
 
     <p class="fastmon-collector-server-timing__hint">
-        {{ $tc('fastmon-collector.serverTiming.sampleHint') }}
+        {{ $t('fastmon-collector.serverTiming.sampleHint') }}
     </p>
 
     <mt-loader v-if="isLoading" size="32px" />
@@ -42,8 +42,8 @@
 
         <mt-banner :variant="isAvailable ? 'positive' : 'attention'">
             {{ isAvailable
-                ? $tc('fastmon-collector.serverTiming.sourceOk', 0, { source: source })
-                : $tc('fastmon-collector.serverTiming.sourceMissing') }}
+                ? $t('fastmon-collector.serverTiming.sourceOk', { source: source })
+                : $t('fastmon-collector.serverTiming.sourceMissing') }}
         </mt-banner>
 
         <ul v-if="layers.length" class="fastmon-collector-server-timing__list">
@@ -54,11 +54,6 @@
             >
                 <span class="fastmon-collector-server-timing__name">
                     {{ layer.name }}
-                    {# Whether fastmon promotes this name into a dashboard column on its
-                       own, or keeps it for the per-beacon drill-down only. #}
-                    <span v-if="!layer.recognised" class="fastmon-collector-server-timing__tag">
-                        {{ $tc('fastmon-collector.serverTiming.custom') }}
-                    </span>
                 </span>
                 <span class="fastmon-collector-server-timing__duration">
                     {{ formatDuration(layer.milliseconds) }}
@@ -67,11 +62,11 @@
         </ul>
 
         <p v-else-if="isAvailable" class="fastmon-collector-server-timing__hint">
-            {{ $tc('fastmon-collector.serverTiming.noLayers') }}
+            {{ $t('fastmon-collector.serverTiming.noLayers') }}
         </p>
 
         <p v-if="idleLayers.length" class="fastmon-collector-server-timing__idle">
-            {{ $tc('fastmon-collector.serverTiming.idleLayers') }} {{ idleLayers.join(', ') }}
+            {{ $t('fastmon-collector.serverTiming.idleLayers') }} {{ idleLayers.join(', ') }}
         </p>
     </template>
 </div>

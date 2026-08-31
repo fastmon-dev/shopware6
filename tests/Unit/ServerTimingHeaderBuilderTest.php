@@ -88,28 +88,24 @@ class ServerTimingHeaderBuilderTest extends TestCase
         self::assertSame('rdbms;dur=5.0', $header);
     }
 
-    public function testSpendsTheUnrecognisedBudgetOnTheSlowestEntries(): void
+    public function testTheSlowestEntriesAreTheOnesThatSurviveATruncation(): void
     {
-        // The collector keeps at most 8 names it does not recognise and drops the rest
-        // silently, so the choice of which 8 is made here rather than at random.
-        $metrics = ['rdbms' => 5.0];
+        // The collector fills its own caps in the order the header arrives, so the order
+        // here is the whole policy: emit slowest first and whatever it drops is the least
+        // interesting.
+        $metrics = [];
 
         foreach (range(1, 12) as $i) {
             $metrics['custom' . $i] = (float) $i * 10;
         }
 
-        $header = $this->builder->build($metrics, []);
         $names = array_map(
             static fn (string $entry): string => explode(';', $entry)[0],
-            explode(', ', $header)
+            explode(', ', $this->builder->build($metrics, []))
         );
 
-        $customs = array_values(array_filter($names, static fn (string $n): bool => str_starts_with($n, 'custom')));
-
-        self::assertCount(8, $customs);
-        self::assertSame('custom12', $customs[0], 'the slowest unrecognised layer must survive');
-        self::assertNotContains('custom1', $customs, 'the fastest must be the one dropped');
-        self::assertContains('rdbms', $names, 'a recognised layer never competes for that budget');
+        self::assertSame('custom12', $names[0]);
+        self::assertSame('custom1', $names[array_key_last($names)]);
     }
 
     public function testNeverExceedsTheCollectorsEntryCap(): void
@@ -117,7 +113,7 @@ class ServerTimingHeaderBuilderTest extends TestCase
         $metrics = [];
 
         foreach (range(1, 40) as $i) {
-            // All recognised-shaped names would still be capped by the total limit.
+            // Well-formed names are still capped by the total limit.
             $metrics['layer' . $i] = (float) $i * 10;
         }
 

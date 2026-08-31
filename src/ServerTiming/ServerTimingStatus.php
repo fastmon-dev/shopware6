@@ -35,7 +35,7 @@ final class ServerTimingStatus
      *     source: string,
      *     providers: list<array{name: string, available: bool, state: string, active: bool}>,
      *     extensions: string[],
-     *     layers: list<array{name: string, milliseconds: float, recognised: bool}>,
+     *     layers: list<array{name: string, milliseconds: float}>,
      *     known: list<string>
      * }
      */
@@ -47,14 +47,6 @@ final class ServerTimingStatus
             $layers[] = [
                 'name' => $name,
                 'milliseconds' => round($milliseconds, 1),
-                // Whether fastmon promotes this name into a column on its own. The panel
-                // uses it to explain why a layer shows up in the dashboard and another
-                // one only in the per-beacon drill-down.
-                'recognised' => \in_array(
-                    mb_strtolower($name),
-                    ServerTimingHeaderBuilder::RECOGNISED_LAYERS,
-                    true
-                ),
             ];
         }
 

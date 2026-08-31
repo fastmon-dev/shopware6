@@ -42,17 +42,6 @@
         font-size: 13px;
     }
 
-    &__tag {
-        background: $color-gray-50;
-        border: 1px solid $color-gray-300;
-        border-radius: 3px;
-        color: $color-gray-900;
-        font-family: inherit;
-        font-size: 11px;
-        margin-left: 8px;
-        padding: 1px 5px;
-    }
-
     &__duration {
         font-variant-numeric: tabular-nums;
     }

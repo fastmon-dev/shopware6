@@ -133,7 +133,7 @@ class ServerTimingSubscriberTest extends TestCase
         // The node name comes from the machine, so it is normalised away with the
         // duration - what matters here is that the entries are emitted at all.
         self::assertSame(
-            'fm-fpc;desc=miss, fm-node;desc=node, fm-backend;dur=0.0',
+            'fm-fpc;desc=miss, fm-host;desc=node, fm-backend;dur=0.0',
             $this->normalise($response)
         );
     }
@@ -189,7 +189,7 @@ class ServerTimingSubscriberTest extends TestCase
         $header = (string) $response->headers->get('Server-Timing');
 
         self::assertStringNotContainsString('fm-fpc', $header);
-        self::assertStringNotContainsString('fm-node', $header);
+        self::assertStringNotContainsString('fm-host', $header);
         // The durations still go out: useful in devtools on any request.
         self::assertStringContainsString('rdbms;dur=42.5', $header);
     }
@@ -201,8 +201,8 @@ class ServerTimingSubscriberTest extends TestCase
     private function normalise(Response $response): string
     {
         return (string) preg_replace(
-            ['/fm-backend;dur=[0-9.]+/', '/fm-node;desc=[^,]+/'],
-            ['fm-backend;dur=0.0', 'fm-node;desc=node'],
+            ['/fm-backend;dur=[0-9.]+/', '/fm-host;desc=[^,]+/'],
+            ['fm-backend;dur=0.0', 'fm-host;desc=node'],
             (string) $response->headers->get('Server-Timing')
         );
     }

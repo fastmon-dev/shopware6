@@ -38,7 +38,7 @@ final class ServerTimingWiringTest extends TestCase
 
         self::assertStringContainsString('fm-fpc;desc=miss', $header);
         self::assertMatchesRegularExpression('/fm-backend;dur=[0-9.]+/', $header);
-        self::assertMatchesRegularExpression('/fm-node;desc=[a-zA-Z0-9 _.:\/-]{1,32}/', $header);
+        self::assertMatchesRegularExpression('/fm-host;desc=[a-zA-Z0-9 _.:\/-]{1,32}/', $header);
         self::assertStringContainsString('fm-pagetype;desc=home', $header);
         self::assertMatchesRegularExpression('/fm-render;dur=[0-9.]+/', $header);
     }
