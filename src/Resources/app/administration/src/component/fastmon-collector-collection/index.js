@@ -1,6 +1,6 @@
 import template from './fastmon-collector-collection.html.twig';
 import './fastmon-collector-collection.scss';
-import { onConnectionChanged } from '../../util/panel-bus';
+import { onConnectionChanged, storefrontChanged } from '../../util/panel-bus';
 
 const { Component, Mixin } = Shopware;
 
@@ -202,6 +202,10 @@ Component.register('fastmon-collector-collection', {
                 .applyCollectionMode(this.selectedMode, this.customDomain)
                 .then(() => {
                     this.proxySecret = '';
+
+                    // The mode decides the `<script src>` the storefront renders, so the
+                    // panel above has a stale cache to report now.
+                    storefrontChanged();
 
                     return this.load();
                 })

@@ -74,74 +74,79 @@
                 </mt-link>
             </p>
 
+            {# A rejected credential is the one state that replaces everything below it:
+               nothing can be provisioned with it, so the panel says so and stops. #}
             <mt-banner v-if="needsReconnect" variant="critical">
                 {{ $t('fastmon-collector.connect.rejected') }}
             </mt-banner>
 
-            {# Nothing here clears the cache on its own: on a large shop that is minutes
-               of rebuilding, and the merchant knows when that is affordable. #}
-            <mt-banner v-if="cacheStale" variant="attention">
-                {{ $t('fastmon-collector.cache.stale') }}
-
-                <template #footer>
-                    <mt-button
-                        variant="secondary"
-                        size="small"
-                        :disabled="isBusy"
-                        @click="askToClearCache"
-                    >
-                        {{ $t('fastmon-collector.cache.clear') }}
-                    </mt-button>
-                </template>
-            </mt-banner>
-
-            <mt-banner v-else-if="missingScopes.length" variant="attention">
-                {{ $t('fastmon-collector.connect.missingScopes', { scopes: missingScopes.join(', ') }) }}
-            </mt-banner>
-
-            {# Connected, but no usable application: the token is good, so this is a
-               choice to make rather than a disconnect. #}
-            <fastmon-collector-connection-provisioning
-                v-else-if="!isProvisioned || needsRelink"
-                :status="status"
-                @linked="onLinked"
-                @error="applyFastmonError"
-            />
-
-            {# Connected and linked. The domains fastmon has actually seen are the honest
-               answer to "is it collecting?" in a way an id and a checkmark are not. #}
             <template v-else>
-                <p class="fastmon-collector-connection__label">
-                    {{ $t('fastmon-collector.summary.sites') }}
-                </p>
+                {# These two are notices, not states. They stack above whatever the panel
+                   is showing rather than taking its place. #}
+                <mt-banner v-if="cacheStale" variant="attention">
+                    {{ $t('fastmon-collector.cache.stale') }}
 
-                <ul v-if="sites.length" class="fastmon-collector-connection__domains">
-                    <li
-                        v-for="site in sites"
-                        :key="site.id"
-                        class="fastmon-collector-connection__domain"
-                    >
-                        {{ site.domain }}
-                    </li>
-                </ul>
+                    <template #footer>
+                        <mt-button
+                            variant="secondary"
+                            size="small"
+                            :disabled="isBusy"
+                            @click="askToClearCache"
+                        >
+                            {{ $t('fastmon-collector.cache.clear') }}
+                        </mt-button>
+                    </template>
+                </mt-banner>
 
-                <p v-else class="fastmon-collector-connection__hint">
-                    {{ $t('fastmon-collector.summary.noSites') }}
-                </p>
+                <mt-banner v-if="missingScopes.length" variant="attention">
+                    {{ $t('fastmon-collector.connect.missingScopes', { scopes: missingScopes.join(', ') }) }}
+                </mt-banner>
 
-                {# Ids belong here and not on the surface: nobody acts on them, and
-                   support asks for them roughly once a year. #}
-                <details class="fastmon-collector-connection__debug">
-                    <summary>{{ $t('fastmon-collector.summary.debug') }}</summary>
-                    <dl class="fastmon-collector-connection__summary">
-                        <dt>{{ $t('fastmon-collector.summary.application') }}</dt>
-                        <dd><code>{{ status.applicationId }}</code></dd>
-                        <dt>{{ $t('fastmon-collector.summary.trackerId') }}</dt>
-                        <dd><code>{{ status.trackerId }}</code></dd>
-                        <dt>{{ $t('fastmon-collector.summary.pixelId') }}</dt>
-                        <dd><code>{{ status.pixelId || '-' }}</code></dd>
-                    </dl>
-                </details>
+                {# Connected, but no usable application: the credential is good, so this
+                   is a choice to make rather than a disconnect. #}
+                <fastmon-collector-connection-provisioning
+                    v-if="!isProvisioned || needsRelink"
+                    :status="status"
+                    @linked="onLinked"
+                    @error="applyFastmonError"
+                />
+
+                {# Connected and linked. The domains fastmon has actually seen are the
+                   honest answer to "is it collecting?" in a way an id and a checkmark are
+                   not. #}
+                <template v-else>
+                    <p class="fastmon-collector-connection__label">
+                        {{ $t('fastmon-collector.summary.sites') }}
+                    </p>
+
+                    <ul v-if="sites.length" class="fastmon-collector-connection__domains">
+                        <li
+                            v-for="site in sites"
+                            :key="site.id"
+                            class="fastmon-collector-connection__domain"
+                        >
+                            {{ site.domain }}
+                        </li>
+                    </ul>
+
+                    <p v-else class="fastmon-collector-connection__hint">
+                        {{ $t('fastmon-collector.summary.noSites') }}
+                    </p>
+
+                    {# Ids belong here and not on the surface: nobody acts on them, and
+                       support asks for them roughly once a year. #}
+                    <details class="fastmon-collector-connection__debug">
+                        <summary>{{ $t('fastmon-collector.summary.debug') }}</summary>
+                        <dl class="fastmon-collector-connection__summary">
+                            <dt>{{ $t('fastmon-collector.summary.application') }}</dt>
+                            <dd><code>{{ status.applicationId }}</code></dd>
+                            <dt>{{ $t('fastmon-collector.summary.trackerId') }}</dt>
+                            <dd><code>{{ status.trackerId }}</code></dd>
+                            <dt>{{ $t('fastmon-collector.summary.pixelId') }}</dt>
+                            <dd><code>{{ status.pixelId || '-' }}</code></dd>
+                        </dl>
+                    </details>
+                </template>
             </template>
 
             <div class="fastmon-collector-connection__actions">

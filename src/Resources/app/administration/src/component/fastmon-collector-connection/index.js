@@ -1,6 +1,6 @@
 import template from './fastmon-collector-connection.html.twig';
 import './fastmon-collector-connection.scss';
-import { connectionChanged } from '../../util/panel-bus';
+import { connectionChanged, onStorefrontChanged } from '../../util/panel-bus';
 
 const { Component, Mixin } = Shopware;
 
@@ -97,6 +97,14 @@ Component.register('fastmon-collector-connection', {
 
     created() {
         this.load(true);
+
+        // The collection card below changes what the storefront renders as well, and the
+        // notice for it lives up here.
+        this.stopListening = onStorefrontChanged(() => this.load(false));
+    },
+
+    beforeUnmount() {
+        this.stopListening();
     },
 
     methods: {
@@ -110,8 +118,17 @@ Component.register('fastmon-collector-connection', {
                     // waiting for the merchant to reload the page.
                     const linkChanged = this.status !== null && this.status.trackerId !== status.trackerId;
 
+                    // Ask the moment it goes out of date, once. Opening the dialog on
+                    // every panel load with a flag still raised would be nagging; the
+                    // banner is what carries it from then on.
+                    const wentStale = this.status !== null && !this.cacheStale && status.cacheStale === true;
+
                     this.status = status;
                     this.error = status.error || null;
+
+                    if (wentStale) {
+                        this.showCacheModal = true;
+                    }
 
                     if (linkChanged) {
                         connectionChanged();
