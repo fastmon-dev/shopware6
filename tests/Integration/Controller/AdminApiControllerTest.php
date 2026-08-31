@@ -19,6 +19,8 @@ final class AdminApiControllerTest extends TestCase
     private const STATUS = '/api/_action/fastmon-collector/status';
     private const DISCONNECT = '/api/_action/fastmon-collector/disconnect';
     private const COLLECTION = '/api/_action/fastmon-collector/collection';
+    private const CONNECT_START = '/api/_action/fastmon-collector/connect/start';
+    private const CONNECT_CALLBACK = '/api/_action/fastmon-collector/connect/callback';
 
     public function testEveryRouteIsClosedWithoutTheConfigPrivilege(): void
     {
@@ -42,9 +44,17 @@ final class AdminApiControllerTest extends TestCase
         self::assertTrue($body['success']);
         self::assertFalse($body['connected']);
 
-        // Read does not imply write: the token is exactly as sensitive as the payment
-        // credentials next to it.
+        // Read does not imply write: the credential is exactly as sensitive as the
+        // payment credentials next to it.
         $browser->request('POST', self::DISCONNECT);
+        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
+
+        // Starting a connection registers this shop with fastmon and writes a client id,
+        // so it belongs on the same side of the gate.
+        $browser->request('POST', self::CONNECT_START);
+        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
+
+        $browser->request('POST', self::CONNECT_CALLBACK);
         self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
     }
 
@@ -56,6 +66,31 @@ final class AdminApiControllerTest extends TestCase
 
         self::assertSame(Response::HTTP_OK, $browser->getResponse()->getStatusCode());
         self::assertTrue($this->json($browser)['success']);
+    }
+
+    public function testACallbackThisShopDidNotStartIsARefusalNotAFault(): void
+    {
+        // Whatever reaches the callback route without a matching attempt - a stale tab, a
+        // bookmarked URL, somebody guessing - has no verifier behind it and cannot be
+        // redeemed. The merchant reads a sentence and starts again; nothing here is a
+        // fault in the shop.
+        $browser = $this->getBrowser(true, [], ['system_config:read', 'system_config:update']);
+
+        $browser->request(
+            'POST',
+            self::CONNECT_CALLBACK,
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            (string) json_encode(['code' => 'whatever', 'state' => str_repeat('a', 32)])
+        );
+
+        self::assertSame(Response::HTTP_OK, $browser->getResponse()->getStatusCode());
+
+        $body = $this->json($browser);
+        self::assertFalse($body['success']);
+        self::assertIsString($body['error']);
+        self::assertStringContainsString('no longer open', $body['error']);
     }
 
     public function testABodyValueThatIsNotAStringIsARefusalNotAFault(): void

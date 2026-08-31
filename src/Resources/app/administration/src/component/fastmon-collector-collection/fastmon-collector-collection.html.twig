@@ -3,7 +3,7 @@
     <mt-loader v-if="isLoading" size="32px" />
 
     <mt-banner v-else-if="!provisioned" variant="info">
-        {{ $tc('fastmon-collector.collection.needsApplication') }}
+        {{ $t('fastmon-collector.collection.needsApplication') }}
     </mt-banner>
 
     <template v-else>
@@ -12,15 +12,15 @@
         </mt-banner>
 
         <p class="fastmon-collector-collection__hint">
-            {{ $tc('fastmon-collector.collection.intro') }}
+            {{ $t('fastmon-collector.collection.intro') }}
             <mt-link
                 as="a"
                 type="external"
-                :href="$tc('fastmon-collector.collection.docsUrl')"
+                :href="$t('fastmon-collector.collection.docsUrl')"
                 target="_blank"
                 rel="noopener noreferrer"
             >
-                {{ $tc('fastmon-collector.collection.docs') }}
+                {{ $t('fastmon-collector.collection.docs') }}
             </mt-link>
         </p>
 
@@ -35,7 +35,7 @@
             v-if="selectedMode === modes.CUSTOM"
             :model-value="customDomain"
             name="fastmon-custom-domain"
-            :label="$tc('fastmon-collector.collection.modeCustom')"
+            :label="$t('fastmon-collector.collection.modeCustom')"
             placeholder="https://metrics.example.com"
             :disabled="isBusy || isChecking"
             @update:model-value="onCustomDomainInput"
@@ -47,7 +47,7 @@
             v-if="selectedMode === modes.RELATIVE && storefrontOrigins.length"
             class="fastmon-collector-collection__meta"
         >
-            {{ $tc('fastmon-collector.collection.origins') }}
+            {{ $t('fastmon-collector.collection.origins') }}
             {{ storefrontOrigins.join(', ') }}
         </p>
 
@@ -59,7 +59,7 @@
                 :is-loading="isChecking"
                 @click="check"
             >
-                {{ $tc('fastmon-collector.collection.check') }}
+                {{ $t('fastmon-collector.collection.check') }}
             </mt-button>
 
             <mt-button
@@ -68,7 +68,7 @@
                 :is-loading="isBusy"
                 @click="apply"
             >
-                {{ $tc('fastmon-collector.collection.apply') }}
+                {{ $t('fastmon-collector.collection.apply') }}
             </mt-button>
         </div>
 
@@ -82,8 +82,8 @@
                     <strong>{{ domain.domain }}</strong>
                     <span :class="domain.ready ? 'is--ok' : 'is--error'">
                         {{ domain.ready
-                            ? $tc('fastmon-collector.collection.domainOk')
-                            : $tc('fastmon-collector.collection.domainFailed') }}
+                            ? $t('fastmon-collector.collection.domainOk')
+                            : $t('fastmon-collector.collection.domainFailed') }}
                     </span>
                 </span>
                 {# What was found and what it means, rather than a status code on its
@@ -95,32 +95,32 @@
         </ul>
 
         <mt-banner v-if="checkedThisMode && !checkedDomains.length" variant="critical">
-            {{ $tc('fastmon-collector.collection.nothingChecked') }}
+            {{ $t('fastmon-collector.collection.nothingChecked') }}
         </mt-banner>
 
         {# Said once, at the end: which mode stays out of reach, and what to do next. #}
         <mt-banner v-else-if="checkedThisMode && !status.ready" variant="attention">
-            {{ $tc('fastmon-collector.collection.blocked', 0, { mode: selectedModeLabel }) }}
+            {{ $t('fastmon-collector.collection.blocked', { mode: selectedModeLabel }) }}
             <mt-link
                 as="a"
                 type="external"
-                :href="$tc('fastmon-collector.collection.docsUrl')"
+                :href="$t('fastmon-collector.collection.docsUrl')"
                 target="_blank"
                 rel="noopener noreferrer"
             >
-                {{ $tc('fastmon-collector.collection.docs') }}
+                {{ $t('fastmon-collector.collection.docs') }}
             </mt-link>
         </mt-banner>
 
         <mt-banner v-else-if="checkedThisMode" variant="positive">
-            {{ $tc('fastmon-collector.collection.allReady', 0, { mode: selectedModeLabel }) }}
+            {{ $t('fastmon-collector.collection.allReady', { mode: selectedModeLabel }) }}
         </mt-banner>
 
         <template v-if="needsProof">
             {# Without the secret fastmon cannot trust the visitor IP the proxy forwards,
                and every visitor ends up on the shop server's location. #}
             <p class="fastmon-collector-collection__hint">
-                {{ $tc('fastmon-collector.collection.secretHint') }}
+                {{ $t('fastmon-collector.collection.secretHint') }}
             </p>
 
             <div v-if="proxySecret" class="fastmon-collector-collection__secret">{{ proxySecret }}</div>
@@ -130,7 +130,7 @@
                 :disabled="isBusy"
                 @click="generateProxySecret"
             >
-                {{ $tc('fastmon-collector.collection.secret') }}
+                {{ $t('fastmon-collector.collection.secret') }}
             </mt-button>
         </template>
     </template>

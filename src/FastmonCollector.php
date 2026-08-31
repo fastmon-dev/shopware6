@@ -3,7 +3,7 @@
 namespace Fastmon\Collector;
 
 use Fastmon\Collector\Connection\ConnectionStore;
-use Fastmon\Collector\Connection\DeviceAuthorizationSession;
+use Fastmon\Collector\Connection\OAuthSession;
 use Shopware\Core\Framework\Plugin;
 use Shopware\Core\Framework\Plugin\Context\UninstallContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -11,20 +11,24 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
 final class FastmonCollector extends Plugin
 {
     /**
-     * Drop the stored fastmon credential on uninstall, unless the merchant asked to keep
+     * Drop the stored fastmon credentials on uninstall, unless the merchant asked to keep
      * the plugin's data.
      *
      * Shopware clears a plugin's `system_config` rows itself right after this returns
      * (`PluginLifecycleService::uninstallPlugin()`), so this is belt and braces - but the
-     * row in question is an API token that authenticates against a live account, and
-     * "belt and braces" is the correct amount of care for one of those.
+     * rows in question authenticate against a live account, and "belt and braces" is the
+     * correct amount of care for one of those.
      *
      * It goes through the store rather than naming keys: the store is the one place that
      * knows what it owns, and a second list here would be the one that is forgotten the
      * day a key is added.
      *
-     * The token stays valid on fastmon's side either way: revoking it is done under
-     * "Connected apps" in the fastmon dashboard, and no uninstall here can reach it.
+     * This does not reach fastmon. An uninstall runs where no HTTP call belongs - it must
+     * finish on a shop that cannot reach the internet - so the connection is ended the way
+     * it should be ended: with "Disconnect" in the panel, which hands the refresh token
+     * back and closes the grant. What is left here after that is an empty row, and what is
+     * left after an uninstall without it is a grant the merchant can drop in
+     * **Organization settings -> Access**.
      */
     public function uninstall(UninstallContext $uninstallContext): void
     {
@@ -40,7 +44,7 @@ final class FastmonCollector extends Plugin
             return;
         }
 
-        (new ConnectionStore($systemConfig))->clear();
-        (new DeviceAuthorizationSession($systemConfig))->abandon();
+        (new ConnectionStore($systemConfig))->clearAll();
+        (new OAuthSession($systemConfig))->abandon();
     }
 }

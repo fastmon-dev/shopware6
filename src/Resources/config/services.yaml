@@ -9,6 +9,7 @@ services:
     # What a service needs is on its constructor, and the container reads the types. The
     # few things a type cannot say are attributes next to the code they concern:
     #   #[Autowire(service: 'fastmon_collector.http_client')]         the plugin's own HTTP client
+    #   #[Autowire(service: 'lock.factory')]                          serialises the token refresh
     #   #[AutowireIterator('fastmon_collector.layer_metrics_provider')] the measurement sources
     #   #[AutoconfigureTag(...)] on LayerMetricsProviderInterface       what makes a class a source
     #   #[AsAlias(LayerMetricsProviderInterface::class)]                which source callers get
@@ -22,10 +23,10 @@ services:
             - '../../FastmonCollectorException.php'
             - '../../Resources/'
             - '../../Dto/'
-            - '../../Api/{DeviceAuthorization,DevicePollResult,DevicePollStatus}.php'
+            - '../../Api/{OAuthMetadata,OAuthTokens,Pkce,ReadsJsonResponses}.php'
             - '../../Api/*Exception.php'
             - '../../Collection/{CollectionMode,CollectionNotReadyException,DomainCheckResult}.php'
-            - '../../Connection/Connection.php'
+            - '../../Connection/{Connection,Credentials}.php'
 
     # Built from the factory rather than injected as `http_client`, so the plugin does
     # not depend on the framework's HTTP client being configured in the shop.

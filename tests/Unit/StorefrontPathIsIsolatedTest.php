@@ -26,6 +26,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\Lock\LockFactory;
 
 /**
  * The plugin must not be able to make a storefront request slower, and must not be able
@@ -54,8 +55,12 @@ class StorefrontPathIsIsolatedTest extends TestCase
     /** Things whose presence on the request path would mean a network call. */
     private const FORBIDDEN = [
         FastmonClient::class,
+        'Fastmon\Collector\Api\FastmonOAuthClient',
         'fastmon_collector.http_client',
         'Fastmon\Collector\Connection\ConnectionService',
+        'Fastmon\Collector\Connection\ConnectionStatus',
+        // Hands out an access token, and refreshes it over the network when it is due.
+        'Fastmon\Collector\Connection\AccessTokenProvider',
         'Fastmon\Collector\Provisioning\ApplicationProvisioner',
     ];
 
@@ -194,6 +199,7 @@ class StorefrontPathIsIsolatedTest extends TestCase
         // the ids to resolve, not the objects.
         $container->register(SystemConfigService::class, SystemConfigService::class)->setSynthetic(true);
         $container->register(DbalConnection::class, DbalConnection::class)->setSynthetic(true);
+        $container->register('lock.factory', LockFactory::class)->setSynthetic(true);
         $container->register('logger', NullLogger::class);
         $container->setAlias(LoggerInterface::class, 'logger');
 

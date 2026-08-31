@@ -65,16 +65,16 @@ Component.register('fastmon-collector-connection-provisioning', {
 
         environmentOptions() {
             return [
-                { id: 'prod', value: 'prod', label: this.$tc('fastmon-collector.environment.prod') },
-                { id: 'dev', value: 'dev', label: this.$tc('fastmon-collector.environment.dev') },
+                { id: 'prod', value: 'prod', label: this.$t('fastmon-collector.environment.prod') },
+                { id: 'dev', value: 'dev', label: this.$t('fastmon-collector.environment.dev') },
             ];
         },
 
         presetOptions() {
             return [
-                { id: 'minimal', value: 'minimal', label: this.$tc('fastmon-collector.preset.minimal') },
-                { id: 'standard', value: 'standard', label: this.$tc('fastmon-collector.preset.standard') },
-                { id: 'full', value: 'full', label: this.$tc('fastmon-collector.preset.full') },
+                { id: 'minimal', value: 'minimal', label: this.$t('fastmon-collector.preset.minimal') },
+                { id: 'standard', value: 'standard', label: this.$t('fastmon-collector.preset.standard') },
+                { id: 'full', value: 'full', label: this.$t('fastmon-collector.preset.full') },
             ];
         },
 
@@ -84,8 +84,8 @@ Component.register('fastmon-collector-connection-provisioning', {
          */
         createTitle() {
             return this.applications.length
-                ? this.$tc('fastmon-collector.provision.createTitle')
-                : this.$tc('fastmon-collector.provision.createOnlyTitle');
+                ? this.$t('fastmon-collector.provision.createTitle')
+                : this.$t('fastmon-collector.provision.createOnlyTitle');
         },
     },
 

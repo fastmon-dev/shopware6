@@ -8,59 +8,42 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
- * Talks to the fastmon API.
+ * Talks to the fastmon API: organizations, applications, sites, and the settings that
+ * decide where a beacon goes.
  *
- * ## Why this is not the flow the fastmon Shopware *app* uses
+ * Everything here authenticates with a bearer token and knows nothing about where that
+ * token came from. Getting one is `FastmonOAuthClient`'s job, and the two are separate
+ * because they speak different protocols against the same server - JSON bodies and
+ * fastmon's error envelope here, form-encoded bodies and OAuth error codes there.
  *
- * The app runs the OAuth Authorization Code grant as a confidential client: its app
- * server holds a `client_secret` and has one fixed, pre-registered `redirect_uri`. A
- * plugin has neither. It runs on the merchant's own server, under a domain nobody can
- * register in advance, and a secret shipped inside a Store zip is a secret in every
- * shop that ever downloaded it.
+ * Callers do not pass a token they read themselves. They go through
+ * `AccessTokenProvider::call()`, which hands over one that is fresh and retries once if
+ * fastmon rejects it anyway - an access token lives fifteen minutes, and the panel must
+ * not show a merchant an error for that.
  *
- * So this client uses the Device Authorization Grant (RFC 8628) instead - the same
- * OAuth 2.0 family, and the grant that exists precisely for a client that can hold no
- * secret and own no redirect. The shop asks for a code, the merchant approves it in
- * their own browser on fastmon, and the shop polls until a token comes back. Nothing
- * secret is distributed and no redirect URI has to exist.
- *
- * Until the fastmon backend serves that grant, `startDeviceAuthorization()` raises
- * `DeviceFlowUnsupportedException` and the merchant pastes a token from the dashboard
- * instead. Everything past the point where a token exists is identical either way,
- * which is why the rest of the plugin never learns which of the two happened.
- *
- * The whole API surface in one client, deliberately: one place to read what the plugin asks fastmon.
+ * The whole resource surface in one client, deliberately: one place to read what the
+ * plugin asks fastmon.
  * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  */
 final class FastmonClient
 {
-    /** RFC 8628 §3.4. */
-    private const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
+    use ReadsJsonResponses;
 
     /**
-     * Identifies this integration to fastmon. Public by design in the device grant -
-     * RFC 8628 clients are public clients and authenticate nothing - so shipping it in
-     * the plugin source is correct rather than merely tolerable. It lands in
-     * `issued_via` on every token fastmon mints, which is what makes tokens filterable
-     * and revocable per integration.
-     */
-    public const CLIENT_ID = 'shopware-plugin';
-
-    /**
-     * Every route lives under this prefix.
+     * Every resource route lives under this prefix.
      *
      * fastmon's own notes describe the API as served unprefixed, with `/v1` kept alive
-     * only as a legacy alias. That is where it is going, not where production is:
-     * `GET /account` answers 404 on api.fastmon.eu today while `GET /v1/account` answers
-     * 401, so the unprefixed form is the one that does not exist yet.
+     * only as a legacy alias. That is where it is going, not where production is: the
+     * unprefixed form answers 404 on api.fastmon.eu today while the `/v1` one answers,
+     * so the newer spelling is the one that does not exist yet.
      *
      * `/v1` is the right choice permanently rather than a stopgap, because the prefix
      * stays valid after the unprefixed routes ship - a plugin in the wild cannot be
      * redeployed in step with the backend, and a prefix that works before and after is
      * worth more than one that is merely newer.
      *
-     * Verified against the live API rather than inferred: the failure mode is a plugin
-     * that reaches nothing while reporting a perfectly ordinary "not found".
+     * The OAuth endpoints are not reached this way at all: they are read from the
+     * discovery document, which names them absolutely - see `FastmonOAuthClient`.
      */
     private const PATH_PREFIX = '/v1';
 
@@ -74,122 +57,6 @@ final class FastmonClient
         #[Autowire(service: 'fastmon_collector.http_client')]
         private readonly HttpClientInterface $httpClient,
     ) {
-    }
-
-    /**
-     * Begin a device authorization. The caller shows `userCode` and
-     * `verificationUriComplete` to the merchant, then polls `pollDeviceToken()`.
-     */
-    public function startDeviceAuthorization(string $baseUrl): DeviceAuthorization
-    {
-        $response = $this->request('POST', $baseUrl, '/auth/app/device/code', [
-            'body' => ['client_id' => self::CLIENT_ID],
-        ]);
-
-        $status = $response->getStatusCode();
-
-        // An instance that predates the grant answers 404 (no route) or 405 (the path
-        // exists for another method). Both mean the same thing to the merchant.
-        if ($status === 404 || $status === 405) {
-            throw new DeviceFlowUnsupportedException(
-                'This fastmon instance does not offer the device authorization flow yet.'
-            );
-        }
-
-        if ($status !== 200) {
-            $this->fail($response, 'fastmon device authorization failed');
-        }
-
-        $data = $this->decode($response);
-
-        $deviceCode = $this->str($data, 'device_code');
-        $userCode = $this->str($data, 'user_code');
-        $verificationUri = $this->str($data, 'verification_uri');
-
-        if ($deviceCode === '' || $userCode === '' || $verificationUri === '') {
-            throw new FastmonApiException('fastmon device authorization returned an incomplete response');
-        }
-
-        return new DeviceAuthorization(
-            deviceCode: $deviceCode,
-            userCode: $userCode,
-            verificationUri: $verificationUri,
-            // Optional in the RFC; fall back to the plain URI so the caller always has
-            // something to link to.
-            verificationUriComplete: $this->str($data, 'verification_uri_complete') ?: $verificationUri,
-            expiresIn: $this->int($data, 'expires_in', 600),
-            interval: max(1, $this->int($data, 'interval', 5)),
-        );
-    }
-
-    /**
-     * Poll once for the token. Pending and slow-down come back as a result; the two
-     * terminal failures throw, because there is nothing left to poll for.
-     */
-    public function pollDeviceToken(string $baseUrl, string $deviceCode): DevicePollResult
-    {
-        $response = $this->request('POST', $baseUrl, '/auth/app/token', [
-            'body' => [
-                'grant_type' => self::DEVICE_GRANT,
-                'device_code' => $deviceCode,
-                'client_id' => self::CLIENT_ID,
-            ],
-        ]);
-
-        if ($response->getStatusCode() === 200) {
-            $data = $this->decode($response);
-            $token = $this->str($data, 'access_token');
-
-            if ($token === '') {
-                throw new FastmonApiException('fastmon token response carried no access_token');
-            }
-
-            $account = \is_array($data['account'] ?? null) ? $data['account'] : [];
-            // Present once fastmon carries the approved organization through the grant.
-            // Absent on an older instance, where the shop asks instead.
-            $organization = \is_array($data['organization'] ?? null) ? $data['organization'] : [];
-
-            return DevicePollResult::complete(
-                $token,
-                $this->str($account, 'email'),
-                $this->str($account, 'name'),
-                $this->str($organization, 'id'),
-                $this->str($organization, 'name'),
-            );
-        }
-
-        // RFC 8628 §3.5 puts the state in an `error` code on a 400. fastmon's own
-        // envelope nests it under `error.code`, so both shapes are read.
-        return match ($this->oauthError($response)) {
-            'authorization_pending' => DevicePollResult::pending(),
-            'slow_down' => DevicePollResult::slowDown(),
-            'access_denied' => throw new FastmonApiException('The connection was declined in fastmon.'),
-            'expired_token' => throw new FastmonApiException('The code expired before it was approved. Start again.'),
-            default => $this->fail($response, 'fastmon token request failed'),
-        };
-    }
-
-    /**
-     * Who a token belongs to. Doubles as the cheapest way to find out whether a token
-     * works at all, which is what the paste-a-token path uses it for.
-     *
-     * @return array{email: string, name: string}
-     */
-    public function account(string $baseUrl, string $token): array
-    {
-        $response = $this->request('GET', $baseUrl, '/account', ['auth_bearer' => $token]);
-
-        if ($response->getStatusCode() !== 200) {
-            $this->fail($response, 'fastmon account lookup failed');
-        }
-
-        $data = $this->decode($response);
-
-        return [
-            'email' => $this->str($data, 'email'),
-            // Optional on the fastmon side, so an account without one is normal.
-            'name' => $this->str($data, 'full_name'),
-        ];
     }
 
     /**
@@ -221,7 +88,7 @@ final class FastmonClient
      * The applications already present in an organization, so the merchant can attach
      * the shop to one instead of creating a duplicate.
      *
-     * @return list<array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}>
+     * @return list<array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}>
      */
     public function applications(string $baseUrl, string $token, string $organizationId): array
     {
@@ -250,7 +117,7 @@ final class FastmonClient
      * runs on. Which domain a beacon belongs to is resolved on arrival from the page
      * URL, so a shop with twelve sales channels still needs exactly one of these.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
+     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function createApplication(
         string $baseUrl,
@@ -344,7 +211,7 @@ final class FastmonClient
      * one without the other: they are an atomic pair, and a mode change that left a stale
      * endpoint behind would point every beacon at the wrong host.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
+     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function setCollectorMode(
         string $baseUrl,
@@ -419,7 +286,7 @@ final class FastmonClient
      * Re-read one application, to confirm a stored id still exists and its hashes still
      * match what the storefront is emitting.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
+     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function fetchApplication(string $baseUrl, string $token, string $applicationId): array
     {
@@ -440,7 +307,7 @@ final class FastmonClient
     /**
      * @param array<mixed> $data
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
+     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     private function application(array $data): array
     {
@@ -453,6 +320,13 @@ final class FastmonClient
             'pixelId' => $this->str($data, 'collector_hash'),
             'environment' => $this->str($data, 'environment'),
             'siteCount' => $this->int($data, 'site_count', 0),
+            // Where fastmon currently sends the beacon. The shop mirrors it rather than
+            // assuming its own stored value is still the truth: the endpoint is baked
+            // into the bundle fastmon serves, so a mode changed in the dashboard has
+            // already taken effect in every browser.
+            'collectorMode' => $this->str($data, 'collector_mode'),
+            // Null unless the mode is `custom`, which `str()` reads as an empty string.
+            'collectorEndpoint' => $this->str($data, 'collector_endpoint'),
         ];
     }
 
@@ -482,20 +356,6 @@ final class FastmonClient
     }
 
     /**
-     * @return array<mixed> keys and values are whatever fastmon sent; every reader narrows what it takes
-     */
-    private function decode(ResponseInterface $response): array
-    {
-        try {
-            $data = $response->toArray(false);
-        } catch (\Throwable $e) {
-            throw new FastmonApiException('fastmon returned a response that is not JSON', 0, $e);
-        }
-
-        return $data;
-    }
-
-    /**
      * The `data` array of a paginated list response.
      *
      * @return list<array<mixed>>
@@ -509,26 +369,6 @@ final class FastmonClient
         }
 
         return array_values(array_filter($rows, static fn (mixed $row): bool => \is_array($row)));
-    }
-
-    /**
-     * The OAuth error code of a failed token request, in either shape it can arrive in:
-     * flat (`{"error": "authorization_pending"}`, RFC 6749 §5.2) or nested in fastmon's
-     * own envelope (`{"error": {"code": "...", ...}}`).
-     */
-    private function oauthError(ResponseInterface $response): string
-    {
-        try {
-            $error = $this->decode($response)['error'] ?? null;
-        } catch (FastmonApiException) {
-            return '';
-        }
-
-        if (\is_string($error)) {
-            return $error;
-        }
-
-        return \is_array($error) ? $this->str($error, 'code') : '';
     }
 
     /**
@@ -613,25 +453,5 @@ final class FastmonClient
         throw $status === 401
             ? new FastmonUnauthorizedException($full)
             : new FastmonApiException($full);
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function str(array $data, string $key): string
-    {
-        $value = $data[$key] ?? null;
-
-        return \is_string($value) ? trim($value) : '';
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function int(array $data, string $key, int $default): int
-    {
-        $value = $data[$key] ?? null;
-
-        return is_numeric($value) ? (int) $value : $default;
     }
 }

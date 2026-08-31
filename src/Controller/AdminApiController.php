@@ -2,15 +2,16 @@
 
 namespace Fastmon\Collector\Controller;
 
-use Fastmon\Collector\Api\DeviceFlowUnsupportedException;
 use Fastmon\Collector\Api\FastmonApiException;
 use Fastmon\Collector\Api\FastmonOrganizationNotApprovedException;
 use Fastmon\Collector\Api\FastmonPermissionDeniedException;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
+use Fastmon\Collector\Api\OAuthUnavailableException;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Collection\CollectionModeService;
 use Fastmon\Collector\Collection\CollectionNotReadyException;
 use Fastmon\Collector\Connection\ConnectionService;
+use Fastmon\Collector\Connection\ConnectionStatus;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Provisioning\ApplicationProvisioner;
 use Fastmon\Collector\ServerTiming\ServerTimingStatus;
@@ -49,11 +50,13 @@ final class AdminApiController extends AbstractController
 
     /** Every key this controller reads from a JSON body. */
     private const BODY_KEYS = [
-        'handle', 'token', 'organizationId', 'applicationId', 'mode', 'domain', 'name', 'environment', 'preset',
+        'redirectUri', 'code', 'state', 'error', 'token',
+        'organizationId', 'applicationId', 'mode', 'domain', 'name', 'environment', 'preset',
     ];
 
     public function __construct(
         private readonly ConnectionService $connection,
+        private readonly ConnectionStatus $status,
         private readonly ApplicationProvisioner $provisioner,
         private readonly CollectionModeService $collection,
         private readonly ServerTimingStatus $serverTimingStatus,
@@ -72,39 +75,41 @@ final class AdminApiController extends AbstractController
         // opens and skips it while polling.
         $verify = $request->query->getBoolean('verify');
 
-        return $this->ok($this->connection->describe($verify));
+        return $this->ok($this->status->describe($verify));
     }
 
     #[Route(
-        path: '/api/_action/fastmon-collector/connect/device',
-        name: 'api.action.fastmon_collector.connect.device',
+        path: '/api/_action/fastmon-collector/connect/start',
+        name: 'api.action.fastmon_collector.connect.start',
         defaults: self::WRITE,
         methods: [Request::METHOD_POST]
     )]
-    public function startDeviceAuthorization(): JsonResponse
+    public function startAuthorization(Request $request): JsonResponse
     {
-        return $this->guard(function (): array {
-            try {
-                return $this->connection->startDeviceAuthorization();
-            } catch (DeviceFlowUnsupportedException) {
-                // Not a fault, and the answer is specific enough to be worth its own
-                // flag: the module swaps the button for the token field.
-                return ['unsupported' => true];
-            }
-        });
+        // The administration sends its own address, because it is the only party that
+        // knows where it is actually served from. What may be done with that is decided
+        // in RedirectUri, against the shop's own APP_URL.
+        $redirectUri = $this->body($request)['redirectUri'];
+
+        return $this->guard(fn (): array => $this->connection->beginAuthorization($redirectUri));
     }
 
     #[Route(
-        path: '/api/_action/fastmon-collector/connect/device/poll',
-        name: 'api.action.fastmon_collector.connect.device.poll',
+        path: '/api/_action/fastmon-collector/connect/callback',
+        name: 'api.action.fastmon_collector.connect.callback',
         defaults: self::WRITE,
         methods: [Request::METHOD_POST]
     )]
-    public function pollDeviceAuthorization(Request $request): JsonResponse
+    public function completeAuthorization(Request $request): JsonResponse
     {
-        $handle = $this->body($request)['handle'];
+        // The administration hands over what fastmon put in its return URL. The code is
+        // useless on its own: redeeming it needs the PKCE verifier, which never left the
+        // shop, and the `state` has to match the attempt this shop started.
+        $body = $this->body($request);
 
-        return $this->guard(fn (): array => $this->connection->pollDeviceAuthorization($handle));
+        return $this->guard(fn (): array => $body['error'] !== ''
+            ? $this->connection->declineAuthorization($body['state'], $body['error'])
+            : $this->connection->completeAuthorization($body['code'], $body['state']));
     }
 
     #[Route(
@@ -191,17 +196,6 @@ final class AdminApiController extends AbstractController
             $body['organizationId'],
             $body['applicationId'],
         )]);
-    }
-
-    #[Route(
-        path: '/api/_action/fastmon-collector/applications/refresh',
-        name: 'api.action.fastmon_collector.applications.refresh',
-        defaults: self::WRITE,
-        methods: [Request::METHOD_POST]
-    )]
-    public function refreshApplication(): JsonResponse
-    {
-        return $this->guard(fn (): array => ['application' => $this->provisioner->refresh()]);
     }
 
     #[Route(
@@ -297,7 +291,15 @@ final class AdminApiController extends AbstractController
     {
         try {
             return $this->ok($action());
+        } catch (OAuthUnavailableException $e) {
+            // Not a fault, and the answer is specific enough to be worth its own flag:
+            // this shop cannot run the guided connection, so the module offers the field
+            // for a key from the dashboard instead. Caught before the unauthorized branch
+            // because it is not about a credential at all.
+            return $this->error($e->getMessage(), Response::HTTP_OK, ['unsupported' => true]);
         } catch (FastmonUnauthorizedException $e) {
+            // FastmonCredentialExpiredException lands here too, which is right: a
+            // connection that ended and one that was rejected are the same click.
             return $this->error($e->getMessage(), Response::HTTP_OK, ['reconnect' => true]);
         } catch (FastmonOrganizationNotApprovedException $e) {
             // A waiting state, not a fault: the module renders it as such rather than as

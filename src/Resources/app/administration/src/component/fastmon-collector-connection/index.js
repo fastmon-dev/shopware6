@@ -1,5 +1,6 @@
 import template from './fastmon-collector-connection.html.twig';
 import './fastmon-collector-connection.scss';
+import { connectionChanged } from '../../util/panel-bus';
 
 const { Component, Mixin } = Shopware;
 
@@ -7,7 +8,8 @@ const { Component, Mixin } = Shopware;
  * The connect-and-provision panel in the plugin configuration.
  *
  * Three states, three components. This one holds the status and decides which of the
- * other two is on screen: `fastmon-collector-connection-device` until a token exists,
+ * other two is on screen: `fastmon-collector-connection-authorize` until a credential
+ * exists,
  * `fastmon-collector-connection-provisioning` until an application is linked, and the
  * summary once both are. The children report back with events; every error, wherever it
  * came from, is rendered here, once.
@@ -45,7 +47,7 @@ Component.register('fastmon-collector-connection', {
             return this.status !== null && this.status.provisioned === true;
         },
 
-        /** A stored token fastmon rejected: connected, but nothing will work. */
+        /** A stored credential fastmon rejected: connected, but nothing will work. */
         needsReconnect() {
             return this.isConnected && this.status.tokenValid === false;
         },
@@ -59,12 +61,24 @@ Component.register('fastmon-collector-connection', {
             return this.isProvisioned && this.status.applicationValid === false;
         },
 
-        isLinked() {
-            return this.isProvisioned && !this.needsRelink && !this.needsReconnect;
+        /**
+         * Who approved the connection, shown beside the organisation rather than in
+         * place of it. An app connection outlives this person, and a pasted key names
+         * nobody at all: it belongs to the dashboard, not to a session.
+         */
+        approvedBy() {
+            return this.status.accountEmail || this.status.accountName;
         },
 
-        connectedAs() {
-            return this.status.accountEmail || this.status.accountName;
+        /**
+         * Permissions the plugin asked for and did not get. Worth saying out loud,
+         * because everything looks connected until the first call that needs one fails
+         * with a message from the API rather than from this panel.
+         */
+        missingScopes() {
+            return this.status !== null && Array.isArray(this.status.missingScopes)
+                ? this.status.missingScopes
+                : [];
         },
 
         organizationLabel() {
@@ -82,8 +96,17 @@ Component.register('fastmon-collector-connection', {
 
             return this.fastmonCollectorService.getStatus(verify)
                 .then((status) => {
+                    // Which application the storefront reports for is what the other
+                    // panels depend on, so a change to it is announced rather than
+                    // waiting for the merchant to reload the page.
+                    const linkChanged = this.status !== null && this.status.trackerId !== status.trackerId;
+
                     this.status = status;
                     this.error = status.error || null;
+
+                    if (linkChanged) {
+                        connectionChanged();
+                    }
 
                     // Linked and healthy: show which domains fastmon has actually seen.
                     if (status.provisioned && status.applicationValid !== false) {
@@ -122,13 +145,6 @@ Component.register('fastmon-collector-connection', {
             this.resetError();
 
             return this.load(false);
-        },
-
-        refreshApplication() {
-            // Catches a hash rotated in the dashboard, which otherwise leaves the shop
-            // serving a dead embed while looking perfectly healthy.
-            this.busy(() => this.fastmonCollectorService.refreshApplication()
-                .then(() => this.load(true)));
         },
 
         disconnect() {

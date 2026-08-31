@@ -40,6 +40,17 @@ final class ConfigResolver
 
     private const API_BASE_URL_ENV = 'FASTMON_API_BASE_URL';
 
+    /**
+     * The fastmon dashboard, which is a different host from the API and cannot be derived
+     * from it. Not a setting, for the same reason the API base is not: there is one
+     * production fastmon, and a wrong value here is a link that goes nowhere.
+     *
+     * `FASTMON_APP_BASE_URL` overrides it, for developing against a local dashboard.
+     */
+    public const APP_BASE_URL = 'https://app.fastmon.eu';
+
+    private const APP_BASE_URL_ENV = 'FASTMON_APP_BASE_URL';
+
     public function __construct(
         private readonly SystemConfigService $systemConfigService,
     ) {
@@ -98,11 +109,22 @@ final class ConfigResolver
 
     public function apiBaseUrl(): string
     {
-        $override = $_SERVER[self::API_BASE_URL_ENV] ?? getenv(self::API_BASE_URL_ENV);
+        return $this->baseUrl(self::API_BASE_URL_ENV, self::API_BASE_URL);
+    }
+
+    /** Where the merchant reads what this shop is collecting. */
+    public function appBaseUrl(): string
+    {
+        return $this->baseUrl(self::APP_BASE_URL_ENV, self::APP_BASE_URL);
+    }
+
+    private function baseUrl(string $variable, string $default): string
+    {
+        $override = $_SERVER[$variable] ?? getenv($variable);
 
         return \is_string($override) && trim($override) !== ''
             ? rtrim(trim($override), '/')
-            : self::API_BASE_URL;
+            : $default;
     }
 
     /**

@@ -9,14 +9,6 @@
         <component name="fastmon-collector-connection">
             <name>fastmonConnection</name>
         </component>
-
-        <input-field type="password">
-            <name>apiToken</name>
-            <label>API token</label>
-            <label lang="de-DE">API-Token</label>
-            <helpText>Set by "Connect" above. Paste a token from the fastmon dashboard only if the guided connection is unavailable.</helpText>
-            <helpText lang="de-DE">Wird oben durch "Verbinden" gesetzt. Nur dann selbst ein Token aus dem fastmon-Dashboard einfügen, wenn die geführte Verbindung nicht verfügbar ist.</helpText>
-        </input-field>
     </card>
 
     <card>
@@ -118,8 +110,8 @@
             <name>serverTimingServer</name>
             <label>Report which server answered</label>
             <label lang="de-DE">Melden, welcher Server geantwortet hat</label>
-            <helpText>Adds fm-node with this machine's hostname. In a cluster this is what makes one slow node visible instead of a slightly slower average. Set FASTMON_SERVER_NAME in the environment where the hostname is not a useful name - a setting could not work here, it would be the same on every node.</helpText>
-            <helpText lang="de-DE">Ergänzt fm-node mit dem Hostnamen dieser Maschine. Im Cluster macht das einen langsamen Knoten sichtbar statt nur einen etwas schlechteren Durchschnitt. Wo der Hostname kein brauchbarer Name ist, FASTMON_SERVER_NAME in der Umgebung setzen - ein Konfigurationsfeld könnte das nicht leisten, es wäre auf jedem Knoten dasselbe.</helpText>
+            <helpText>Adds fm-host with this machine's hostname. In a cluster this is what makes one slow node visible instead of a slightly slower average. Set FASTMON_SERVER_NAME in the environment where the hostname is not a useful name - a setting could not work here, it would be the same on every node.</helpText>
+            <helpText lang="de-DE">Ergänzt fm-host mit dem Hostnamen dieser Maschine. Im Cluster macht das einen langsamen Knoten sichtbar statt nur einen etwas schlechteren Durchschnitt. Wo der Hostname kein brauchbarer Name ist, FASTMON_SERVER_NAME in der Umgebung setzen - ein Konfigurationsfeld könnte das nicht leisten, es wäre auf jedem Knoten dasselbe.</helpText>
             <defaultValue>true</defaultValue>
         </input-field>
 

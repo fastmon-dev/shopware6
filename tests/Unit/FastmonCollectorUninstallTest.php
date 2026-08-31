@@ -22,13 +22,15 @@ final class FastmonCollectorUninstallTest extends TestCase
 
         $plugin->uninstall($this->context($plugin, keepUserData: false));
 
-        // Everything the store owns plus any in-flight device authorization. The count
-        // is the guard: a key added to the store must show up here without this test
-        // having to know its name.
+        // Everything the store owns - the registration included, which a disconnect
+        // keeps - plus any authorization in flight. The count is the guard: a key added
+        // to the store must show up here without this test having to know its name.
+        self::assertContains(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->deleted);
+        self::assertContains(ConfigResolver::DOMAIN . 'oauthClientId', $this->deleted);
         self::assertContains(ConfigResolver::DOMAIN . 'apiToken', $this->deleted);
         self::assertContains(ConfigResolver::DOMAIN . 'trackerId', $this->deleted);
-        self::assertContains(ConfigResolver::DOMAIN . 'deviceAuthorization', $this->deleted);
-        self::assertCount(9, $this->deleted);
+        self::assertContains(ConfigResolver::DOMAIN . 'oauthSession', $this->deleted);
+        self::assertCount(15, $this->deleted);
     }
 
     public function testKeepsEverythingWhenAskedTo(): void
