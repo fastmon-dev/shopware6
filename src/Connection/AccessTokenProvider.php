@@ -141,7 +141,10 @@ final class AccessTokenProvider
         $lock->acquire(true);
 
         try {
-            $credentials = $this->store->credentials();
+            // Read past the per-request memo: whoever held the lock before us wrote in a
+            // different process, and our own snapshot predates it. See
+            // `ConnectionStore::freshCredentials()`.
+            $credentials = $this->store->freshCredentials();
 
             if ($credentials->accessToken !== $stale && $credentials->hasFreshAccessToken(self::EXPIRY_SKEW_SECONDS)) {
                 return $credentials->accessToken;

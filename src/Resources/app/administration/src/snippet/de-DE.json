@@ -15,7 +15,7 @@
             "rejected": "Die gespeicherte fastmon-Verbindung wurde abgelehnt. Vermutlich wurde sie unter Organisationseinstellungen → Zugriff getrennt, oder das Konto, das sie freigegeben hat, ist nicht mehr Mitglied der Organisation. Bitte verbinde dich neu.",
             "unsupported": "Dieser Shop kann die geführte Verbindung nicht nutzen. Erstelle stattdessen im fastmon-Dashboard einen API-Key und füge ihn hier ein.",
             "noSessionStorage": "Dieser Browser lässt die Administration den Verbindungsversuch nicht speichern. Dadurch lässt sich die geführte Verbindung nicht abschließen. Erlaube Websitedaten für diesen Shop, oder füge einen API-Key ein.",
-            "useToken": "Geführte Verbindung nicht möglich? API-Key einfügen",
+            "useToken": "Stattdessen mit einem API-Key verbinden",
             "tokenLabel": "fastmon-API-Key",
             "saveToken": "Key speichern",
             "tokenScopes": "Der Key benötigt die Berechtigungen \"app:read\", \"app:write\", \"site:read\" und \"org:read\" und muss an die Organisation gebunden sein, an die dieser Shop melden soll. Dafür braucht es die Rolle Owner oder Member, denn ein Viewer kann keine Applications anlegen.",
@@ -59,12 +59,12 @@
         },
         "serverTiming": {
             "title": "Layer-Zeiten",
-            "lead": "Wohin die Backend-Zeit gegangen ist: Datenbank, Template, Cache, HTTP. Das ist der einzige Teil des Headers, für den eine Profiler-Extension auf dem Host nötig ist.",
+            "lead": "Zeigt, wie sich die Backend-Zeit auf Datenbank, Template, Cache und HTTP verteilt. Nur dafür braucht der Host eine Profiler-Extension, alles andere im Header entsteht ohne.",
             "reload": "Neu laden",
             "sourceMissing": "Layer-Zeiten brauchen die Tideways-Extension 5.23 oder neuer. Alles andere (Cache-Ergebnis und -Alter, Gesamtzeit, Renderzeit, Seitentyp, Server, Login-Status) wird trotzdem gemeldet.",
             "state": {
-                "active": "misst",
-                "outdated": "installiert, aber zu alt, benötigt 5.23 oder neuer",
+                "active": "liefert Messwerte",
+                "outdated": "installiert, aber zu alt, nötig ist 5.23 oder neuer",
                 "absent": "nicht installiert"
             }
         },

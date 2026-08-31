@@ -137,6 +137,28 @@ class AccessTokenProviderTest extends TestCase
         self::assertSame('fmr_old', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
     }
 
+    public function testTheWaiterReadsPastItsOwnRequestSnapshot(): void
+    {
+        // The failure this guards against, seen in production: two admin API calls, one
+        // lock, and a SystemConfigService that memoises the whole configuration per
+        // request. The waiter re-read its own snapshot, found the refresh token it was
+        // about to present, and presented it - which fastmon reads as two parties holding
+        // one token, so it ended the connection.
+        //
+        // No HTTP response is queued on purpose: a refresh going out here is the bug.
+        $this->connected('fmt_stale', expiresIn: 0);
+
+        $provider = $this->provider([], memoized: true);
+
+        // What the winner wrote in its own process while this one waited for the lock.
+        $this->stored[ConfigResolver::DOMAIN . 'oauthAccessToken'] = 'fmt_from_the_winner';
+        $this->stored[ConfigResolver::DOMAIN . 'oauthExpiresAt'] = (string) (time() + 900);
+        $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken'] = 'fmr_successor';
+
+        self::assertSame('fmt_from_the_winner', $provider->token());
+        self::assertSame('fmr_successor', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+    }
+
     public function testARejectedTokenIsRefreshedAndTheCallRetriedOnce(): void
     {
         // An access token can expire between two calls of the same panel load, and a
@@ -249,9 +271,9 @@ class AccessTokenProviderTest extends TestCase
     /**
      * @param list<MockResponse> $responses
      */
-    private function provider(array $responses): AccessTokenProvider
+    private function provider(array $responses, bool $memoized = false): AccessTokenProvider
     {
-        $systemConfig = $this->systemConfig();
+        $systemConfig = $this->systemConfig($memoized);
 
         return new AccessTokenProvider(
             new FastmonOAuthClient(new MockHttpClient($responses)),

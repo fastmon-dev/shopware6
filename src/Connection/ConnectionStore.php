@@ -133,6 +133,42 @@ final class ConnectionStore
         );
     }
 
+    /**
+     * The credential as the database has it **right now**.
+     *
+     * `get()` reads through `MemoizedSystemConfigStore`, which loads the whole
+     * configuration once per request and drops it only when *this* process writes. That
+     * is right for configuration and wrong for exactly one value. A second admin API call
+     * that waits for the refresh lock started its request before the winner wrote, so
+     * reading through `get()` hands it back its own snapshot: the refresh token it was
+     * about to present, which the winner has already spent. Presenting a spent one is
+     * what fastmon reads as theft, and it ends the connection.
+     *
+     * `getDomain()` is the way out and needs no SQL of ours: it builds its own query
+     * against `system_config`, so it never sees the memo, and it unwraps the stored
+     * values the same way `get()` does.
+     */
+    public function freshCredentials(): Credentials
+    {
+        $stored = [];
+
+        foreach ($this->systemConfigService->getDomain(ConfigResolver::DOMAIN) as $key => $value) {
+            $stored[str_replace(ConfigResolver::DOMAIN, '', (string) $key)] = \is_scalar($value)
+                ? trim((string) $value)
+                : '';
+        }
+
+        return new Credentials(
+            clientId: $stored[self::CLIENT_ID] ?? '',
+            redirectUri: $stored[self::REDIRECT_URI] ?? '',
+            accessToken: $stored[self::ACCESS_TOKEN] ?? '',
+            expiresAt: (int) ($stored[self::EXPIRES_AT] ?? '0'),
+            refreshToken: $stored[self::REFRESH_TOKEN] ?? '',
+            scopes: $stored[self::SCOPES] ?? '',
+            manualToken: $stored[self::MANUAL_TOKEN] ?? '',
+        );
+    }
+
     /** Remember the registration, and the redirect URI it is only valid for. */
     public function saveClient(string $clientId, string $redirectUri): void
     {

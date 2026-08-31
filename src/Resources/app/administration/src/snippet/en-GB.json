@@ -15,7 +15,7 @@
             "rejected": "The stored fastmon connection was rejected. It was probably disconnected under Organisation settings → Access, or the approving account lost its membership. Connect again.",
             "unsupported": "This shop cannot run the guided connection. Create an API key in the fastmon dashboard and paste it here instead.",
             "noSessionStorage": "This browser will not let the administration remember the connection attempt, so the guided connection cannot complete. Allow site data for this shop, or paste an API key instead.",
-            "useToken": "Cannot use the guided connection? Paste an API key",
+            "useToken": "Connect with an API key instead",
             "tokenLabel": "fastmon API key",
             "saveToken": "Save key",
             "tokenScopes": "The key needs the permissions \"app:read\", \"app:write\", \"site:read\" and \"org:read\", and must be bound to the organisation this shop should report to. Owner or member role - a viewer cannot create applications.",
