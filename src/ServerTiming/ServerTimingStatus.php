@@ -12,18 +12,6 @@ namespace Fastmon\Collector\ServerTiming;
  */
 final class ServerTimingStatus
 {
-    /**
-     * Every layer the Tideways extension documents, so the panel can also show what
-     * exists but did not fire in the sampling request.
-     *
-     * @var string[]
-     */
-    public const KNOWN_LAYERS = [
-        'amqp', 'apcu', 'autoloading', 'beanstalk', 'compiling', 'disk', 'dns',
-        'elasticsearch', 'email', 'gc', 'http', 'kafka', 'memcache', 'mongodb',
-        'rdbms', 'redis', 'session', 'shell', 'sleep', 'sqlite', 'unknown',
-    ];
-
     public function __construct(
         private readonly LayerMetricsProviderRegistry $providers,
     ) {
@@ -34,31 +22,16 @@ final class ServerTimingStatus
      *     available: bool,
      *     source: string,
      *     providers: list<array{name: string, available: bool, state: string, active: bool}>,
-     *     extensions: string[],
-     *     layers: list<array{name: string, milliseconds: float}>,
-     *     known: list<string>
+     *     extensions: string[]
      * }
      */
     public function describe(): array
     {
-        $layers = [];
-
-        foreach ($this->providers->metrics() as $name => $milliseconds) {
-            $layers[] = [
-                'name' => $name,
-                'milliseconds' => round($milliseconds, 1),
-            ];
-        }
-
-        usort($layers, static fn (array $a, array $b): int => $b['milliseconds'] <=> $a['milliseconds']);
-
         return [
             'available' => $this->providers->isAvailable(),
             'source' => $this->providers->name(),
             'providers' => $this->providers->describeAll(),
             'extensions' => $this->loadedExtensions(),
-            'layers' => $layers,
-            'known' => self::KNOWN_LAYERS,
         ];
     }
 

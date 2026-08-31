@@ -15,43 +15,55 @@
         font-weight: 600;
     }
 
-    &__hint,
-    &__idle {
+    &__lead {
         color: $color-darkgray-200;
         font-size: 13px;
         line-height: 1.5;
-        margin: 8px 0;
+        margin: 8px 0 12px;
     }
 
-    &__sources,
-    &__list {
+    &__sources {
         list-style: none;
-        margin: 8px 0 12px;
+        margin: 0 0 12px;
         padding: 0;
     }
 
     &__item {
+        align-items: center;
         border-bottom: 1px solid $color-gray-200;
         display: flex;
         justify-content: space-between;
-        padding: 6px 0;
+        padding: 8px 0;
     }
 
     &__name {
-        font-family: "SFMono-Regular", Consolas, monospace;
+        font-weight: 600;
+    }
+
+    // A dot carries the verdict before the words are read, so the three states cannot be
+    // told apart by wording alone.
+    &__state {
+        align-items: center;
+        color: $color-darkgray-200;
+        display: flex;
         font-size: 13px;
-    }
+        gap: 7px;
 
-    &__duration {
-        font-variant-numeric: tabular-nums;
-    }
+        &::before {
+            background: currentcolor;
+            border-radius: 50%;
+            content: "";
+            display: block;
+            height: 8px;
+            width: 8px;
+        }
 
-    &__idle {
-        color: $color-gray-900;
-        font-size: 12px;
-    }
+        &.is--active {
+            color: $color-emerald-500;
+        }
 
-    .is--ok {
-        color: $color-emerald-500;
+        &.is--outdated {
+            color: $color-pumpkin-spice-500;
+        }
     }
 }

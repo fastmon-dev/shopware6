@@ -16,13 +16,12 @@ namespace Fastmon\Collector\ServerTiming;
  * all of them, which is precisely the opposite of what this is for. The value has to come
  * from the machine that answered.
  *
- * `gethostname()` is that value, and it is right on a fixed fleet. On an orchestrated one
- * it is the pod name: it changes on every deploy, so it groups nothing, and it is long
- * and random enough to be discarded outright - fastmon drops a `desc` of 24 characters or
- * more that is mostly hex-ish as an identifier, which `shopware-web-7d9f8b6c4d-x2k9p` is.
- * `FASTMON_SERVER_NAME` in the environment overrides it, because an environment variable
- * is per node the way a database row can never be: set it to `web-01` from the same
- * manifest that decides which node this is.
+ * Only the first label of the hostname: an FQDN would disclose domain structure and
+ * internal naming, `web-01` discloses that the servers are called `web-01`.
+ *
+ * `FASTMON_SERVER_NAME` overrides it, because an environment variable is per node the way
+ * a database row can never be - and it is the right move on Kubernetes, where the
+ * hostname is a pod name that changes every deploy and groups nothing.
  */
 final class ServerIdentity
 {
@@ -54,7 +53,8 @@ final class ServerIdentity
 
         if ($name === '') {
             $hostname = gethostname();
-            $name = \is_string($hostname) ? $hostname : '';
+            $label = \is_string($hostname) ? strtok($hostname, '.') : '';
+            $name = \is_string($label) ? $label : '';
         }
 
         // Anything outside the accepted set becomes a dash rather than being dropped:

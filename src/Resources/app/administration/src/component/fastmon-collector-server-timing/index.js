@@ -3,13 +3,14 @@ import './fastmon-collector-server-timing.scss';
 
 const { Component } = Shopware;
 
+// A provider reports an internal id. Product names are not translated, so they belong
+// here rather than in the snippet files.
+const DISPLAY_NAMES = {
+    tideways: 'Tideways',
+};
+
 /**
- * Read-only panel: which measurement source answered on this host, and which layers it
- * reports.
- *
- * The layers shown are the ones measured for the admin API request that fetched them.
- * That is the point - it runs in the same PHP-FPM pool as the storefront, so it is a
- * real sample of this machine rather than a list of what could theoretically appear.
+ * Read-only panel: which measurement sources exist on this host and what each is doing.
  */
 Component.register('fastmon-collector-server-timing', {
     template,
@@ -31,33 +32,14 @@ Component.register('fastmon-collector-server-timing', {
             return this.status !== null && this.status.available === true;
         },
 
-        source() {
-            return this.status === null ? '' : (this.status.source || '');
-        },
-
         /**
-         * Every source the plugin knows about, installed or not. A boolean "available"
-         * cannot tell "Tideways is too old" from "Tideways is not installed", and those
-         * are completely different afternoons - so each carries a state.
+         * Installed or not. A boolean cannot tell "Tideways is too old" from "Tideways is
+         * not installed", and those call for different fixes.
          */
         sources() {
             return this.status === null ? [] : (this.status.providers || []);
         },
 
-        layers() {
-            return this.status === null ? [] : (this.status.layers || []);
-        },
-
-        /** Documented layers this host knows but the sampling request did not touch. */
-        idleLayers() {
-            if (this.status === null) {
-                return [];
-            }
-
-            const reported = this.layers.map((layer) => layer.name);
-
-            return (this.status.known || []).filter((name) => !reported.includes(name));
-        },
     },
 
     created() {
@@ -81,12 +63,13 @@ Component.register('fastmon-collector-server-timing', {
                 });
         },
 
+        sourceName(source) {
+            return DISPLAY_NAMES[source.name] || source.name;
+        },
+
         sourceState(source) {
             return this.$t(`fastmon-collector.serverTiming.state.${source.state}`);
         },
 
-        formatDuration(milliseconds) {
-            return `${Number(milliseconds).toFixed(1)} ms`;
-        },
     },
 });

@@ -58,13 +58,10 @@
             "full": "Full: sessions, error messages and query keys"
         },
         "serverTiming": {
-            "title": "What this host can measure",
+            "title": "Per-layer timings",
+            "lead": "Where the backend time went: database, template, cache, HTTP. This is the one part of the header that needs a profiler extension on the host.",
             "reload": "Reload",
-            "sampleHint": "These are the layers measured for the request that loaded this panel, so they are a real sample of this machine.",
-            "sourceOk": "Per-layer timings come from {source}.",
-            "sourceMissing": "Per-layer timings need the Tideways extension 5.23 or newer. Everything else (cache verdict, total time, render time, page type, server) is reported regardless.",
-            "noLayers": "No layer took more than a millisecond in this request.",
-            "idleLayers": "Known but idle in this request:",
+            "sourceMissing": "Per-layer timings need the Tideways extension 5.23 or newer. Everything else (cache verdict and age, total time, render time, page type, server, login state) is reported regardless.",
             "state": {
                 "active": "measuring",
                 "outdated": "installed, but too old, needs 5.23 or newer",

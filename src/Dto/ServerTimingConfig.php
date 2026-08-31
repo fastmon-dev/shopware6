@@ -3,29 +3,18 @@
 namespace Fastmon\Collector\Dto;
 
 /**
- * The Server-Timing settings in force for one request.
+ * The Server-Timing setting in force for one request.
+ *
+ * One switch: every entry is either free (cache verdict, total, node) or measured anyway
+ * (render time, page type), so a knob per entry offered a choice nobody has a reason to
+ * make - and each was another way for a shop to report less than it thinks.
  *
  * @internal resolved by ConfigResolver; nothing else constructs this
  */
 final readonly class ServerTimingConfig
 {
-    /**
-     * @param string[] $blockedLayers lower-case layer names kept out of the header
-     */
     public function __construct(
         public bool $enabled,
-        public bool $reportTotal,
-        public bool $reportCacheStatus,
-        public bool $reportPageType,
-        public bool $reportRender,
-        public bool $reportServer,
-        /**
-         * Off by default. A login flag is a visitor attribute in a header fastmon
-         * classifies as server self-measurement and collects in every privacy mode, so
-         * turning it on is a decision about that classification, not a display option.
-         */
-        public bool $reportLoggedIn,
-        public array $blockedLayers,
     ) {
     }
 }

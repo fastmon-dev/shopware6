@@ -48,20 +48,57 @@ class ServerTimingSubscriberTest extends TestCase
         self::assertStringContainsString('fm-loggedin;desc=yes', $header);
     }
 
-    public function testTheLoginFlagStaysOffUnlessAskedFor(): void
+    public function testTheLoginFlagIsReportedForBothStates(): void
     {
-        // A visitor attribute in a header fastmon collects in every privacy mode. Opting
-        // in is a decision about that classification, so the default cannot be "on".
-        $this->insights->beginPage('product', true);
+        // Always on, and both values are emitted: a header that only appeared for
+        // logged-in visitors would make "no entry" ambiguous between "logged out" and
+        // "the plugin did not look".
+        foreach ([true => 'yes', false => 'no'] as $loggedIn => $expected) {
+            $this->insights = new RequestInsights();
+            $this->insights->beginPage('product', (bool) $loggedIn);
 
-        $subscriber = $this->subscriber([], available: false);
+            $response = $this->html();
+            $request = $this->request();
+            $request->attributes->set(CacheStatusResolver::STORED_ATTRIBUTE, true);
+
+            $this->subscriber([], available: false)
+                ->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
+
+            self::assertStringContainsString(
+                'fm-loggedin;desc=' . $expected,
+                (string) $response->headers->get('Server-Timing')
+            );
+        }
+    }
+
+    public function testTheCacheAgeIsReportedOnAHit(): void
+    {
+        // Symfony sets `Age` when it serves a stored copy. It separates "served from
+        // cache" from "served from a copy made an hour ago".
+        $request = $this->request();
+        $request->attributes->set(CacheStatusResolver::HIT_ATTRIBUTE, true);
+        $response = $this->html();
+        $response->headers->set('Age', '742');
+
+        $this->subscriber([], available: false)
+            ->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
+
+        self::assertStringContainsString('fm-cacheage;dur=742.0', (string) $response->headers->get('Server-Timing'));
+    }
+
+    public function testNoCacheAgeWithoutAHit(): void
+    {
+        // Symfony sets `Age` on a miss too, derived from the Date header - a zero that
+        // would look like a measurement.
         $request = $this->request();
         $request->attributes->set(CacheStatusResolver::STORED_ATTRIBUTE, true);
         $response = $this->html();
+        $response->headers->set('Age', '0');
 
-        $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
+        $this->subscriber([], available: false)
+            ->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
-        self::assertStringNotContainsString('fm-loggedin', (string) $response->headers->get('Server-Timing'));
+        self::assertStringNotContainsString('fm-cacheage', (string) $response->headers->get('Server-Timing'));
     }
 
     public function testNoRenderTimeIsReportedWhenNothingWasRendered(): void
@@ -162,14 +199,14 @@ class ServerTimingSubscriberTest extends TestCase
         self::assertFalse($response->headers->has('Server-Timing'));
     }
 
-    public function testSaysNothingWhenThereIsNothingToSay(): void
+    public function testTheSwitchIsTheOnlyWayToSilenceIt(): void
     {
-        // No profiler, nothing measured, everything switched off.
-        $subscriber = $this->subscriber([], available: false, config: [
-            'serverTimingCacheStatus' => false,
-            'serverTimingTotal' => false,
-            'serverTimingServer' => false,
-        ]);
+        // One switch, and it is absolute. Everything the plugin emits is either free or
+        // measured anyway, so a knob per entry offered a choice nobody has a reason to
+        // make - and each was another way to report less than the shop thinks.
+        $this->insights->beginPage('product', true);
+
+        $subscriber = $this->subscriber(['rdbms' => 42.5], config: ['serverTiming' => false]);
         $response = $this->html();
 
         $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($this->request(), $response));
@@ -223,13 +260,8 @@ class ServerTimingSubscriberTest extends TestCase
      */
     private function subscriber(array $metrics, bool $available = true, array $config = []): ServerTimingSubscriber
     {
-        $config += [
-            'serverTiming' => true,
-            'serverTimingTotal' => true,
-            'serverTimingCacheStatus' => true,
-            'serverTimingServer' => true,
-            'blockedServerTimingLayers' => 'unknown',
-        ];
+        // One switch decides the whole header now, so there is nothing else to seed.
+        $config += ['serverTiming' => true];
 
         $systemConfig = $this->createMock(SystemConfigService::class);
         $systemConfig->method('get')->willReturnCallback(

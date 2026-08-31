@@ -24,12 +24,6 @@ namespace Fastmon\Collector\ServerTiming;
  *   - `fm-fpc` for the full-page-cache verdict, which no profiler reports.
  *   - `fm-host` for the machine that answered. A name, never a duration.
  *
- * And one layer is renamed rather than left alone: `rdbms` goes out as `fm-db`, which is
- * the collector's own first-choice alias for the same column and the word every dashboard
- * and every operator uses for that tier. Nothing is lost, because the relational database
- * is one layer promoted into one column - the drill-down argument above applies to the
- * tiers that have several members, not to this one.
- *
  * ## Why nothing here arbitrates the collector's caps
  *
  * The collector keeps at most 32 entries per pageview and, of those, at most 8 whose
@@ -49,17 +43,6 @@ final class ServerTimingHeaderBuilder
 
     /** Full-page-cache verdict. Carries a `desc`, never a `dur`. */
     public const CACHE_METRIC = 'fm-fpc';
-
-    /**
-     * `unknown` is Tideways' residual bucket: the request time no instrumented layer
-     * claimed, which on a Shopware page is mostly PHP executing application code. It is
-     * usually the largest entry, the name says nothing about that, and Tideways' own UI
-     * never shows it as a row either. Nothing is lost by hiding it - `fm-backend` minus
-     * the entries that follow *is* this number. Clear the setting to get it back.
-     *
-     * @var string[]
-     */
-    public const DEFAULT_BLOCKED_LAYERS = ['unknown'];
 
     /**
      * Entries the collector accepts per pageview. Anything past it is dropped on arrival,
@@ -83,10 +66,9 @@ final class ServerTimingHeaderBuilder
 
     /**
      * @param array<string, float>                                     $metrics       layer name => milliseconds
-     * @param string[]                                                 $blockedLayers lower-case; empty means report everything
      * @param list<array{0: string, 1: float|null, 2: string|null}>    $own           our own entries as [name, dur, desc]
- */
-    public function build(array $metrics, array $blockedLayers, array $own = []): string
+     */
+    public function build(array $metrics, array $own = []): string
     {
         $entries = [];
 
@@ -107,10 +89,6 @@ final class ServerTimingHeaderBuilder
             $name = mb_strtolower(trim((string) $rawName));
 
             if ($milliseconds < self::MIN_DURATION_MS) {
-                continue;
-            }
-
-            if (\in_array($name, $blockedLayers, true)) {
                 continue;
             }
 
