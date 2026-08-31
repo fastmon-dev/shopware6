@@ -31,6 +31,10 @@ class FastmonCollectorService extends ApiService {
         return this.write('/connect/token', { token });
     }
 
+    clearStorefrontCache() {
+        return this.write('/storefront-cache');
+    }
+
     disconnect() {
         return this.write('/disconnect');
     }

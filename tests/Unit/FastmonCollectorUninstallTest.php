@@ -30,7 +30,7 @@ final class FastmonCollectorUninstallTest extends TestCase
         self::assertContains(ConfigResolver::DOMAIN . 'apiToken', $this->deleted);
         self::assertContains(ConfigResolver::DOMAIN . 'trackerId', $this->deleted);
         self::assertContains(ConfigResolver::DOMAIN . 'oauthSession', $this->deleted);
-        self::assertCount(15, $this->deleted);
+        self::assertCount(16, $this->deleted);
     }
 
     public function testKeepsEverythingWhenAskedTo(): void

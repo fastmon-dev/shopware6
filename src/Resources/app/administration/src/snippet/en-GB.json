@@ -8,6 +8,14 @@
         "disconnect": "Disconnect",
         "disconnectHint": "Disconnecting ends the connection in fastmon as well: the refresh token is revoked and the entry disappears from Organisation settings → Access. Connecting again needs a fresh approval.",
         "disconnectHintToken": "Disconnecting only removes the key from this shop. To make it stop working, revoke it in the fastmon dashboard.",
+        "cache": {
+            "stale": "The storefront is still serving cached pages built with the old values. Nothing changes for visitors until the cache is cleared.",
+            "clear": "Clear the cache",
+            "title": "Clear the storefront cache?",
+            "explain": "Every cached page is dropped and rebuilt on its next visit. On a large shop that takes time and costs CPU, which is why the moment is yours to pick. You can also do it later, here or under Settings, Caches.",
+            "later": "Later",
+            "confirm": "Clear now"
+        },
         "connect": {
             "intro": "Connect this shop to a fastmon account to collect Core Web Vitals and JavaScript errors from real visitors.",
             "start": "Connect to fastmon",

@@ -8,9 +8,11 @@ use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStatus;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Storefront\StorefrontCache;
 use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
@@ -151,6 +153,40 @@ class ConnectionStatusTest extends TestCase
         self::assertStringContainsString('could not be found', $status['error']);
     }
 
+    public function testAChangedTrackerIdTellsThePanelTheStorefrontIsStale(): void
+    {
+        // Nothing invalidates a cached page here. The panel reports it and the merchant
+        // decides when to pay for the rebuild.
+        $this->connected(applicationId: 'app-1');
+
+        $status = $this->reporter(api: [
+            $this->organizations([['id' => 'org-7', 'name' => 'Acme']]),
+            new MockResponse(json_encode([
+                'id' => 'app-1', 'name' => 'Shopware',
+                'source_hash' => 'newhash', 'collector_hash' => 'newpixel',
+            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
+        ])->describe(verify: true);
+
+        self::assertTrue($status['cacheStale']);
+    }
+
+    public function testReadingTheSameHashesBackDoesNotCryStale(): void
+    {
+        // The panel re-reads the application every time it opens. A warning that fires
+        // when nothing moved is a warning nobody reads.
+        $this->connected(applicationId: 'app-1');
+
+        $status = $this->reporter(api: [
+            $this->organizations([['id' => 'org-7', 'name' => 'Acme']]),
+            new MockResponse(json_encode([
+                'id' => 'app-1', 'name' => 'Shopware',
+                'source_hash' => 'src123', 'collector_hash' => '',
+            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
+        ])->describe(verify: true);
+
+        self::assertFalse($status['cacheStale']);
+    }
+
     public function testARotatedTrackerIdIsAdoptedRatherThanReported(): void
     {
         // Rotating in the dashboard invalidates the embed everywhere it is deployed, so a
@@ -170,11 +206,12 @@ class ConnectionStatusTest extends TestCase
         self::assertTrue($status['applicationValid']);
         self::assertSame('', $status['error']);
 
-        // And the storefront is emitting the new ones from here on. Loudly, unlike the
-        // credential writes: the pages in the cache still carry the old id, and a page
-        // with a dead tracker id collects nothing.
+        // And the storefront is emitting the new ones from here on. Written silently,
+        // like everything else: what the cached pages still carry is reported to the
+        // panel rather than thrown away behind the merchant's back.
         self::assertSame('newhash', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertTrue($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertTrue($status['cacheStale']);
         self::assertSame('newpixel', $this->stored[ConfigResolver::DOMAIN . 'pixelId']);
         self::assertSame('newhash', $status['trackerId']);
     }
@@ -233,6 +270,7 @@ class ConnectionStatusTest extends TestCase
             new FastmonClient(new MockHttpClient($api)),
             $store,
             new AccessTokenProvider($oauthClient, $store, $config, new LockFactory(new InMemoryStore()), new NullLogger()),
+            new StorefrontCache($this->createMock(CacheInvalidator::class), $store, new NullLogger()),
             $config,
             new NullLogger(),
         );

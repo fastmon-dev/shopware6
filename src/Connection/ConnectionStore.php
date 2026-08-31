@@ -72,21 +72,26 @@ final class ConnectionStore
     /**
      * The two values the storefront actually renders.
      *
-     * Writing any configuration key invalidates the HTTP cache tag `system.config-…`,
-     * which every cached page carries because rendering it reads configuration. That is
-     * right for these two: a new tracker id has to reach the pages, and a page cached
-     * with the old one collects nothing.
+     * Every write here is silent, this pair included. Writing a configuration key loudly
+     * invalidates the HTTP cache tag `system.config-…`, which every cached page carries
+     * because rendering one reads configuration - so a single write rebuilds the whole
+     * page cache of the shop. That is nobody's decision to make on a merchant's behalf,
+     * least of all as a side effect of pressing a button in a plugin.
      *
-     * It is wrong for everything else this store owns. A rotated refresh token changes
-     * nothing a visitor can see, and rotation happens every quarter of an hour while
-     * somebody works in the administration, so writing it loudly would drop the entire
-     * full page cache of the shop four times an hour. Those writes are silent, which is
-     * the flag core added for exactly this: "SystemConfig is often used to store internal
-     * values."
+     * What changing one of these does instead is raise `CACHE_STALE`. The panel then says
+     * that the storefront is still serving the old value and offers to clear the cache,
+     * and the merchant decides when. Everything else this store owns changes nothing a
+     * visitor can see and does not even raise the flag.
      *
      * @var string[]
      */
     private const RENDERED_KEYS = [self::TRACKER_ID, self::PIXEL_ID];
+
+    /**
+     * Set when a rendered value changed and the storefront cache has not been cleared
+     * since. Read by the panel, cleared when the merchant clears the cache.
+     */
+    private const CACHE_STALE = 'storefrontCacheStale';
 
     /** Everything that authenticates. Dropped together, whichever kind is stored. */
     private const CREDENTIAL_KEYS = [
@@ -112,6 +117,7 @@ final class ConnectionStore
     private const KEYS = [
         self::CLIENT_ID,
         self::REDIRECT_URI,
+        self::CACHE_STALE,
         ...self::CREDENTIAL_KEYS,
         ...self::IDENTITY_KEYS,
     ];
@@ -296,6 +302,27 @@ final class ConnectionStore
         }
     }
 
+    /** Whether the storefront is still serving something this plugin has since changed. */
+    public function isStorefrontCacheStale(): bool
+    {
+        return $this->get(self::CACHE_STALE) !== '';
+    }
+
+    /** Called once the merchant has cleared it. */
+    public function storefrontCacheCleared(): void
+    {
+        $this->systemConfigService->delete(ConfigResolver::DOMAIN . self::CACHE_STALE, null, true);
+    }
+
+    /**
+     * Raised by whoever changes something the storefront renders but does not own a key
+     * here: the collection mode and the custom domain live in the collection settings.
+     */
+    public function markStorefrontCacheStale(): void
+    {
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . self::CACHE_STALE, '1', null, true);
+    }
+
     /** Uninstall: everything this store owns, registration included. */
     public function clearAll(): void
     {
@@ -313,22 +340,34 @@ final class ConnectionStore
 
     private function set(string $key, string $value): void
     {
-        // The fourth argument is `silent`. It reaches core through `func_get_args()`
-        // until 6.8 puts it in the signature, where it also becomes the default.
-        $this->systemConfigService->set(
-            ConfigResolver::DOMAIN . $key,
-            $value,
-            null,
-            !\in_array($key, self::RENDERED_KEYS, true)
-        );
+        $this->rememberIfRendered($key, $value);
+
+        // The fourth argument is `silent`: no cache invalidation. It reaches core through
+        // `func_get_args()` until 6.8 puts it in the signature, where it also becomes the
+        // default.
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . $key, $value, null, true);
     }
 
     private function forget(string $key): void
     {
-        $this->systemConfigService->delete(
-            ConfigResolver::DOMAIN . $key,
-            null,
-            !\in_array($key, self::RENDERED_KEYS, true)
-        );
+        $this->rememberIfRendered($key, '');
+
+        $this->systemConfigService->delete(ConfigResolver::DOMAIN . $key, null, true);
+    }
+
+    /**
+     * Raise the flag when one of the rendered values is actually about to change.
+     *
+     * Compared rather than assumed: re-reading the same application on every panel load
+     * writes the same hashes back, and telling a merchant to clear their cache for a
+     * value that did not move is how a warning learns to be ignored.
+     */
+    private function rememberIfRendered(string $key, string $value): void
+    {
+        if (!\in_array($key, self::RENDERED_KEYS, true) || $this->get($key) === $value) {
+            return;
+        }
+
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . self::CACHE_STALE, '1', null, true);
     }
 }

@@ -7,6 +7,7 @@ use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonCredentialExpiredException;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Storefront\StorefrontCache;
 use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 
@@ -37,6 +38,7 @@ final class ConnectionStatus
         private readonly FastmonClient $client,
         private readonly ConnectionStore $store,
         private readonly AccessTokenProvider $tokens,
+        private readonly StorefrontCache $storefrontCache,
         private readonly ConfigResolver $config,
         private readonly LoggerInterface $logger,
     ) {
@@ -53,7 +55,8 @@ final class ConnectionStatus
      *     accountEmail: string, accountName: string, organizationId: string,
      *     organizationName: string, applicationId: string, trackerId: string, pixelId: string,
      *     apiBaseUrl: string, dashboardUrl: string, applicationsUrl: string,
-     *     tokenValid: bool|null, applicationValid: bool|null, error: string
+     *     tokenValid: bool|null, applicationValid: bool|null, error: string,
+     *     cacheStale: bool
      * }
      */
     public function describe(bool $verify = false): array
@@ -102,6 +105,9 @@ final class ConnectionStatus
             'tokenValid' => $checked['tokenValid'],
             'applicationValid' => $checked['applicationValid'],
             'error' => $checked['error'],
+            // The storefront is still serving pages built before the last change here.
+            // Nothing clears them on its own, deliberately: the panel says so and offers.
+            'cacheStale' => $this->storefrontCache->isStale(),
         ];
     }
 

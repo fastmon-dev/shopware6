@@ -215,11 +215,13 @@ final class CollectionModeService
      */
     private function store(CollectionMode $mode, string $endpoint): void
     {
-        // Deliberately not silent: both decide the `<script src>` the templates render,
-        // so every cached page has to be built again. Contrast the credential writes in
-        // `ConnectionStore`, which no visitor can see.
-        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'collectionMode', $mode->value, null, false);
-        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'customCollectorDomain', $endpoint, null, false);
+        // Silent, like every other write this plugin makes: clearing the page cache is
+        // the merchant's decision, not a side effect. Both values decide the
+        // `<script src>` the templates render, so the panel is told that the storefront
+        // is now out of date and offers to clear it.
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'collectionMode', $mode->value, null, true);
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . 'customCollectorDomain', $endpoint, null, true);
+        $this->store->markStorefrontCacheStale();
 
         $this->logger->info(
             'fastmon: collection mode is now ' . $mode->value . ($endpoint !== '' ? ' (' . $endpoint . ')' : '')

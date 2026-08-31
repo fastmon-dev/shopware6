@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use ReflectionClass;
+use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\Config\FileLocator;
@@ -199,6 +200,7 @@ class StorefrontPathIsIsolatedTest extends TestCase
         // the ids to resolve, not the objects.
         $container->register(SystemConfigService::class, SystemConfigService::class)->setSynthetic(true);
         $container->register('sales_channel_domain.repository', EntityRepository::class)->setSynthetic(true);
+        $container->register(CacheInvalidator::class, CacheInvalidator::class)->setSynthetic(true);
         $container->register('lock.factory', LockFactory::class)->setSynthetic(true);
         $container->register('logger', NullLogger::class);
         $container->setAlias(LoggerInterface::class, 'logger');

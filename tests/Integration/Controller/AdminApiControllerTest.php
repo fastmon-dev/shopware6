@@ -21,6 +21,7 @@ final class AdminApiControllerTest extends TestCase
     private const COLLECTION = '/api/_action/fastmon-collector/collection';
     private const CONNECT_START = '/api/_action/fastmon-collector/connect/start';
     private const CONNECT_CALLBACK = '/api/_action/fastmon-collector/connect/callback';
+    private const STOREFRONT_CACHE = '/api/_action/fastmon-collector/storefront-cache';
 
     public function testEveryRouteIsClosedWithoutTheConfigPrivilege(): void
     {
@@ -55,6 +56,10 @@ final class AdminApiControllerTest extends TestCase
         self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
 
         $browser->request('POST', self::CONNECT_CALLBACK);
+        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
+
+        // Dropping every cached page of the shop is a write if anything is.
+        $browser->request('POST', self::STOREFRONT_CACHE);
         self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
     }
 

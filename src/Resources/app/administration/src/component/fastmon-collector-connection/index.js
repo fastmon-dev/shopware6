@@ -35,6 +35,7 @@ Component.register('fastmon-collector-connection', {
             isBusy: false,
             status: null,
             sites: [],
+            showCacheModal: false,
         };
     },
 
@@ -68,6 +69,14 @@ Component.register('fastmon-collector-connection', {
          */
         approvedBy() {
             return this.status.accountEmail || this.status.accountName;
+        },
+
+        /**
+         * The storefront is still serving pages built before the last change here. The
+         * panel says so and offers; it never clears anything by itself.
+         */
+        cacheStale() {
+            return this.status !== null && this.status.cacheStale === true;
         },
 
         /**
@@ -145,6 +154,19 @@ Component.register('fastmon-collector-connection', {
             this.resetError();
 
             return this.load(false);
+        },
+
+        askToClearCache() {
+            this.showCacheModal = true;
+        },
+
+        clearCache() {
+            this.busy(() => this.fastmonCollectorService.clearStorefrontCache()
+                .then(() => {
+                    this.showCacheModal = false;
+
+                    return this.load(false);
+                }));
         },
 
         disconnect() {
