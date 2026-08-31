@@ -48,7 +48,7 @@ final class CollectionModeService
      *     mode: string, customDomain: string, provisioned: bool, scriptBaseUrl: string,
      *     storefrontOrigins: list<string>,
      *     domains: list<array{domain: string, scriptOk: bool, collectorOk: bool, ready: bool, reason: string, detail: string}>,
-     *     ready: bool, checked: bool, checkedMode: string
+     *     ready: bool, checked: bool, checkedMode: string, cacheStale: bool
      * }
      */
     public function describe(?CollectionMode $probeMode = null, string $customDomain = ''): array
@@ -57,7 +57,7 @@ final class CollectionModeService
         // endpoint is baked into the bundle it serves, so a mode changed in the dashboard
         // has already taken effect in every browser, and a panel reporting the shop's
         // stored value would be describing a setup that no longer exists.
-        $this->pullFromFastmon();
+        $adopted = $this->pullFromFastmon();
 
         $storefront = $this->config->storefront(null);
         $connection = $this->store->load();
@@ -74,6 +74,9 @@ final class CollectionModeService
             'ready' => false,
             'checked' => false,
             'checkedMode' => '',
+            // True when the mode above was taken from fastmon in this very request, so
+            // the cached pages still carry the previous one.
+            'cacheStale' => $adopted,
         ];
 
         if ($probeMode === null) {
@@ -169,12 +172,12 @@ final class CollectionModeService
      * storefront is already emitting, so reporting them while fastmon is unreachable is
      * the honest answer rather than a stale one.
      */
-    private function pullFromFastmon(): void
+    private function pullFromFastmon(): bool
     {
         $applicationId = $this->store->load()->applicationId;
 
         if ($applicationId === '') {
-            return;
+            return false;
         }
 
         try {
@@ -186,7 +189,7 @@ final class CollectionModeService
         } catch (\Throwable $e) {
             $this->logger->warning('fastmon: could not read the collector mode: ' . $e->getMessage());
 
-            return;
+            return false;
         }
 
         $mode = CollectionMode::tryFrom($application['collectorMode']);
@@ -194,17 +197,19 @@ final class CollectionModeService
         if ($mode === null) {
             // A mode this release does not know. Leaving the shop on what it has beats
             // guessing, and the storefront keeps emitting something that works.
-            return;
+            return false;
         }
 
         $endpoint = $mode === CollectionMode::CUSTOM ? $application['collectorEndpoint'] : '';
         $storefront = $this->config->storefront(null);
 
         if ($storefront->collectionMode === $mode && $storefront->customDomain === $endpoint) {
-            return;
+            return false;
         }
 
         $this->store($mode, $endpoint);
+
+        return true;
     }
 
     /**
@@ -217,11 +222,10 @@ final class CollectionModeService
     {
         // Silent, like every other write this plugin makes: clearing the page cache is
         // the merchant's decision, not a side effect. Both values decide the
-        // `<script src>` the templates render, so the panel is told that the storefront
-        // is now out of date and offers to clear it.
+        // `<script src>` the templates render, and the panel is told so in the same
+        // answer that carries the new mode.
         $this->systemConfigService->set(ConfigResolver::DOMAIN . 'collectionMode', $mode->value, null, true);
         $this->systemConfigService->set(ConfigResolver::DOMAIN . 'customCollectorDomain', $endpoint, null, true);
-        $this->store->markStorefrontCacheStale();
 
         $this->logger->info(
             'fastmon: collection mode is now ' . $mode->value . ($endpoint !== '' ? ' (' . $endpoint . ')' : '')

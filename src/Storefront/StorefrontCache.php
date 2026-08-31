@@ -2,7 +2,6 @@
 
 namespace Fastmon\Collector\Storefront;
 
-use Fastmon\Collector\Connection\ConnectionStore;
 use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
@@ -22,8 +21,11 @@ use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
  * screen, at a time nobody chose and with no warning. A merchant who warms their cache
  * after a deployment knows when that is affordable; we do not.
  *
- * So every write this plugin makes is silent, the panel reports that the storefront is
- * out of date, and this is what the button behind that report calls.
+ * So every write this plugin makes is silent, whoever changed something says so in its
+ * own answer to the panel, and this is what the button behind that notice calls. The
+ * notice lives for one panel session and is gone on the next load: it says what just
+ * happened, not what is outstanding, and a merchant who cleared the cache from Settings
+ * does not have to come back here to make a banner go away.
  *
  * The tag is core's own: `SystemConfigService::get()` collects `system.config-…` on every
  * page that reads configuration, which is every page this plugin renders into, and core's
@@ -40,14 +42,8 @@ final class StorefrontCache
 
     public function __construct(
         private readonly CacheInvalidator $invalidator,
-        private readonly ConnectionStore $store,
         private readonly LoggerInterface $logger,
     ) {
-    }
-
-    public function isStale(): bool
-    {
-        return $this->store->isStorefrontCacheStale();
     }
 
     /**
@@ -57,7 +53,6 @@ final class StorefrontCache
     public function clear(): void
     {
         $this->invalidator->invalidate([self::CONFIG_TAG], true);
-        $this->store->storefrontCacheCleared();
         $this->logger->info('fastmon: the storefront cache was cleared from the plugin panel');
     }
 }

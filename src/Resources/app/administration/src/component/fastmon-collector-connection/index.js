@@ -35,6 +35,12 @@ Component.register('fastmon-collector-connection', {
             isBusy: false,
             status: null,
             sites: [],
+
+            // Set by whatever just changed something the storefront renders: this panel
+            // linking an application, the card below applying a mode, or the status call
+            // reporting that it adopted new hashes from fastmon. Deliberately not stored
+            // anywhere: it says what happened, and a reload is a fresh start.
+            cacheStale: false,
         };
     },
 
@@ -71,14 +77,6 @@ Component.register('fastmon-collector-connection', {
         },
 
         /**
-         * The storefront is still serving pages built before the last change here. The
-         * panel says so and offers; it never clears anything by itself.
-         */
-        cacheStale() {
-            return this.status !== null && this.status.cacheStale === true;
-        },
-
-        /**
          * Permissions the plugin asked for and did not get. Worth saying out loud,
          * because everything looks connected until the first call that needs one fails
          * with a message from the API rather than from this panel.
@@ -99,7 +97,11 @@ Component.register('fastmon-collector-connection', {
 
         // The collection card below changes what the storefront renders as well, and the
         // notice for it lives up here.
-        this.stopListening = onStorefrontChanged(() => this.load(false));
+        this.stopListening = onStorefrontChanged(() => {
+            this.cacheStale = true;
+
+            return this.load(false);
+        });
     },
 
     beforeUnmount() {
@@ -119,6 +121,10 @@ Component.register('fastmon-collector-connection', {
 
                     this.status = status;
                     this.error = status.error || null;
+
+                    if (status.cacheStale === true) {
+                        this.cacheStale = true;
+                    }
 
                     if (linkChanged) {
                         connectionChanged();
@@ -159,13 +165,20 @@ Component.register('fastmon-collector-connection', {
 
         onLinked() {
             this.resetError();
+            // The storefront renders the tracker id, and the pages in the cache do not
+            // carry it yet.
+            this.cacheStale = true;
 
             return this.load(false);
         },
 
         clearCache() {
             this.busy(() => this.fastmonCollectorService.clearStorefrontCache()
-                .then(() => this.load(false)));
+                .then(() => {
+                    this.cacheStale = false;
+
+                    return this.load(false);
+                }));
         },
 
         disconnect() {

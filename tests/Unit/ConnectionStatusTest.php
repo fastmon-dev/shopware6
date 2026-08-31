@@ -8,11 +8,9 @@ use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStatus;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Storefront\StorefrontCache;
 use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
@@ -155,8 +153,9 @@ class ConnectionStatusTest extends TestCase
 
     public function testAChangedTrackerIdTellsThePanelTheStorefrontIsStale(): void
     {
-        // Nothing invalidates a cached page here. The panel reports it and the merchant
-        // decides when to pay for the rebuild.
+        // Nothing invalidates a cached page here, and nothing is remembered either: the
+        // answer says what this request changed, and the panel offers the button while it
+        // is on screen.
         $this->connected(applicationId: 'app-1');
 
         $status = $this->reporter(api: [
@@ -172,8 +171,8 @@ class ConnectionStatusTest extends TestCase
 
     public function testReadingTheSameHashesBackDoesNotCryStale(): void
     {
-        // The panel re-reads the application every time it opens. A warning that fires
-        // when nothing moved is a warning nobody reads.
+        // The panel re-reads the application every time it opens. A notice that appears
+        // when nothing moved is one nobody reads.
         $this->connected(applicationId: 'app-1');
 
         $status = $this->reporter(api: [
@@ -207,8 +206,8 @@ class ConnectionStatusTest extends TestCase
         self::assertSame('', $status['error']);
 
         // And the storefront is emitting the new ones from here on. Written silently,
-        // like everything else: what the cached pages still carry is reported to the
-        // panel rather than thrown away behind the merchant's back.
+        // like every other write here: what the cached pages still carry is reported to
+        // the panel rather than thrown away behind the merchant's back.
         self::assertSame('newhash', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
         self::assertTrue($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
         self::assertTrue($status['cacheStale']);
@@ -270,7 +269,6 @@ class ConnectionStatusTest extends TestCase
             new FastmonClient(new MockHttpClient($api)),
             $store,
             new AccessTokenProvider($oauthClient, $store, $config, new LockFactory(new InMemoryStore()), new NullLogger()),
-            new StorefrontCache($this->createMock(CacheInvalidator::class), $store, new NullLogger()),
             $config,
             new NullLogger(),
         );

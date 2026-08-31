@@ -153,6 +153,12 @@ Component.register('fastmon-collector-collection', {
             return this.fastmonCollectorService
                 .getCollectionStatus(probeMode, this.customDomain)
                 .then((status) => {
+                    // fastmon had a different mode and this call took it: the cached
+                    // pages still point at the old host.
+                    if (status.cacheStale === true) {
+                        storefrontChanged();
+                    }
+
                     this.status = status;
 
                     if (probeMode === null) {

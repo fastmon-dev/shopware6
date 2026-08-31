@@ -7,7 +7,6 @@ use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonCredentialExpiredException;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Storefront\StorefrontCache;
 use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
 
@@ -38,11 +37,20 @@ final class ConnectionStatus
         private readonly FastmonClient $client,
         private readonly ConnectionStore $store,
         private readonly AccessTokenProvider $tokens,
-        private readonly StorefrontCache $storefrontCache,
         private readonly ConfigResolver $config,
         private readonly LoggerInterface $logger,
     ) {
     }
+
+    /**
+     * Whether this request adopted a value the storefront renders.
+     *
+     * Not stored anywhere: the panel is told what just happened, not what is outstanding.
+     * A merchant who clears the cache from Settings instead of from here has nothing to
+     * come back and dismiss, and a notice nobody can dismiss is one everybody learns to
+     * ignore.
+     */
+    private bool $adoptedRenderedValue = false;
 
     /**
      * What the admin module renders. Never returns the credential itself - only whether
@@ -105,9 +113,8 @@ final class ConnectionStatus
             'tokenValid' => $checked['tokenValid'],
             'applicationValid' => $checked['applicationValid'],
             'error' => $checked['error'],
-            // The storefront is still serving pages built before the last change here.
-            // Nothing clears them on its own, deliberately: the panel says so and offers.
-            'cacheStale' => $this->storefrontCache->isStale(),
+            // Set only when this very request changed something a cached page carries.
+            'cacheStale' => $this->adoptedRenderedValue,
         ];
     }
 
@@ -192,6 +199,7 @@ final class ConnectionStatus
                     $application['trackerId'],
                     $application['pixelId'],
                 );
+                $this->adoptedRenderedValue = true;
                 $this->logger->info('fastmon: the application hashes changed, the storefront now serves the new ones');
             }
 
