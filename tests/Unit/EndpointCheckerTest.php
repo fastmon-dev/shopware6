@@ -2,12 +2,12 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Collection\DomainCheckResult;
 use Fastmon\Collector\Collection\EndpointChecker;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Tests\Unit\Fake\ServesSalesChannelDomains;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -15,8 +15,6 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 class EndpointCheckerTest extends TestCase
 {
-    use ServesSalesChannelDomains;
-
     private const BUNDLE = 'var e="/c/colhash";!function(){}();';
     private const GIF = "GIF89a\x01\x00\x01\x00";
 
@@ -210,6 +208,9 @@ class EndpointCheckerTest extends TestCase
             static fn (string $key): mixed => $stored[$key] ?? null
         );
 
-        return new EndpointChecker($client, new ConnectionStore($systemConfig), $this->domainRepository($origins));
+        $database = $this->createMock(DbalConnection::class);
+        $database->method('fetchFirstColumn')->willReturn($origins);
+
+        return new EndpointChecker($client, new ConnectionStore($systemConfig), $database);
     }
 }

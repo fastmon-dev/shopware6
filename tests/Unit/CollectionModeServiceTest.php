@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Collection\CollectionMode;
@@ -13,7 +14,6 @@ use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Tests\Unit\Fake\ServesSalesChannelDomains;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -24,8 +24,6 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 class CollectionModeServiceTest extends TestCase
 {
-    use ServesSalesChannelDomains;
-
     /** @var array<string, mixed> */
     private array $stored = [];
 
@@ -236,6 +234,9 @@ class CollectionModeServiceTest extends TestCase
             ConfigResolver::DOMAIN . 'pixelId' => 'colhash',
         ];
 
+        $database = $this->createMock(DbalConnection::class);
+        $database->method('fetchFirstColumn')->willReturn(array_keys($origins));
+
         $systemConfig = $this->createMock(SystemConfigService::class);
         $systemConfig->method('get')->willReturnCallback(fn (string $k): mixed => $this->stored[$k] ?? null);
         $systemConfig->method('set')->willReturnCallback(function (string $k, mixed $v): void {
@@ -295,7 +296,7 @@ class CollectionModeServiceTest extends TestCase
             ),
             $store,
             $config,
-            new EndpointChecker($httpClient, $store, $this->domainRepository(array_keys($origins))),
+            new EndpointChecker($httpClient, $store, $database),
             $systemConfig,
             new NullLogger(),
         );

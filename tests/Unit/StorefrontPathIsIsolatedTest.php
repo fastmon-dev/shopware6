@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Collection\CollectionModeService;
 use Fastmon\Collector\ServerTiming\LayerMetricsProviderRegistry;
@@ -199,7 +200,7 @@ class StorefrontPathIsIsolatedTest extends TestCase
         // What the shop provides and the plugin only consumes. Synthetic: the walk needs
         // the ids to resolve, not the objects.
         $container->register(SystemConfigService::class, SystemConfigService::class)->setSynthetic(true);
-        $container->register('sales_channel_domain.repository', EntityRepository::class)->setSynthetic(true);
+        $container->register(DbalConnection::class, DbalConnection::class)->setSynthetic(true);
         $container->register('scheduled_task.repository', EntityRepository::class)->setSynthetic(true);
         $container->register(CacheInvalidator::class, CacheInvalidator::class)->setSynthetic(true);
         $container->register('lock.factory', LockFactory::class)->setSynthetic(true);

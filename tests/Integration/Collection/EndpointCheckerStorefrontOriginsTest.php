@@ -8,15 +8,14 @@ use Fastmon\Collector\Connection\ConnectionStore;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Defaults;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpClient\MockHttpClient;
 
 /**
- * `storefrontOrigins()` reads `sales_channel_domain` through the DAL, filtered on the
- * channel behind it.
+ * `storefrontOrigins()` reads `sales_channel_domain` with SQL, joined to the channel it
+ * belongs to.
  * The unit test mocks the connection and so never sees the schema; a column renamed in
  * a later Shopware release would first fail in a production shop. This runs the real
  * query, and exercises each of the three filters the docblock promises.
@@ -37,10 +36,7 @@ final class EndpointCheckerStorefrontOriginsTest extends TestCase
         self::assertInstanceOf(SystemConfigService::class, $systemConfig);
 
         $this->database = $database;
-        $domains = static::getContainer()->get('sales_channel_domain.repository');
-        self::assertInstanceOf(EntityRepository::class, $domains);
-
-        $this->checker = new EndpointChecker(new MockHttpClient(), new ConnectionStore($systemConfig), $domains);
+        $this->checker = new EndpointChecker(new MockHttpClient(), new ConnectionStore($systemConfig), $database);
     }
 
     public function testTheStorefrontDomainIsAnOrigin(): void
