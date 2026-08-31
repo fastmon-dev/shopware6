@@ -2,7 +2,6 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
-use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Collection\CollectionModeService;
 use Fastmon\Collector\ServerTiming\LayerMetricsProviderRegistry;
@@ -15,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use ReflectionClass;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
@@ -198,7 +198,7 @@ class StorefrontPathIsIsolatedTest extends TestCase
         // What the shop provides and the plugin only consumes. Synthetic: the walk needs
         // the ids to resolve, not the objects.
         $container->register(SystemConfigService::class, SystemConfigService::class)->setSynthetic(true);
-        $container->register(DbalConnection::class, DbalConnection::class)->setSynthetic(true);
+        $container->register('sales_channel_domain.repository', EntityRepository::class)->setSynthetic(true);
         $container->register('lock.factory', LockFactory::class)->setSynthetic(true);
         $container->register('logger', NullLogger::class);
         $container->setAlias(LoggerInterface::class, 'logger');

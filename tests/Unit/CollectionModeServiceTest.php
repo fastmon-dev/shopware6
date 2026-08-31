@@ -2,7 +2,6 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
-use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Collection\CollectionMode;
@@ -14,6 +13,7 @@ use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Tests\Unit\Fake\ServesSalesChannelDomains;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -24,6 +24,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 class CollectionModeServiceTest extends TestCase
 {
+    use ServesSalesChannelDomains;
+
     /** @var array<string, mixed> */
     private array $stored = [];
 
@@ -263,9 +265,6 @@ class CollectionModeServiceTest extends TestCase
         $store = new ConnectionStore($systemConfig);
         $config = new ConfigResolver($systemConfig);
 
-        $database = $this->createMock(DbalConnection::class);
-        $database->method('fetchFirstColumn')->willReturn(array_keys($origins));
-
         return new CollectionModeService(
             $client,
             // A pasted key is the simplest credential to run these against: it needs no
@@ -279,7 +278,7 @@ class CollectionModeServiceTest extends TestCase
             ),
             $store,
             $config,
-            new EndpointChecker($httpClient, $store, $database),
+            new EndpointChecker($httpClient, $store, $this->domainRepository(array_keys($origins))),
             $systemConfig,
             new NullLogger(),
         );

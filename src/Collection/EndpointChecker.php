@@ -2,10 +2,14 @@
 
 namespace Fastmon\Collector\Collection;
 
-use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Shopware\Core\Defaults;
-use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
+use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainEntity;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -69,11 +73,18 @@ final class EndpointChecker
      */
     private const TIMEOUT_SECONDS = 5;
 
+    /**
+     * @param EntityRepository<SalesChannelDomainCollection> $domains
+     */
     public function __construct(
         #[Autowire(service: 'fastmon_collector.http_client')]
         private readonly HttpClientInterface $httpClient,
         private readonly ConnectionStore $store,
-        private readonly DbalConnection $database,
+        // The DAL rather than a join of our own: `sales_channel_domain` is core's table,
+        // its entity is core's API, and this read is not hot enough to buy anything by
+        // going around it.
+        #[Autowire(service: 'sales_channel_domain.repository')]
+        private readonly EntityRepository $domains,
     ) {
     }
 
@@ -122,19 +133,22 @@ final class EndpointChecker
      */
     public function storefrontOrigins(): array
     {
-        /** @var list<string> $urls */
-        $urls = $this->database->fetchFirstColumn(
-            'SELECT scd.url
-             FROM sales_channel_domain scd
-             INNER JOIN sales_channel sc ON sc.id = scd.sales_channel_id
-             WHERE sc.active = 1 AND sc.type_id = :storefront',
-            ['storefront' => Uuid::fromHexToBytes(Defaults::SALES_CHANNEL_TYPE_STOREFRONT)]
-        );
+        $criteria = new Criteria();
+        // Storefronts only, and only the ones that are switched on. A headless channel
+        // serves no pages, so nothing there could load the tracker.
+        $criteria->addFilter(new EqualsFilter('salesChannel.typeId', Defaults::SALES_CHANNEL_TYPE_STOREFRONT));
+        $criteria->addFilter(new EqualsFilter('salesChannel.active', true));
 
         $origins = [];
 
-        foreach ($urls as $url) {
-            $origin = $this->normaliseOrigin($url);
+        foreach ($this->domains->search($criteria, Context::createDefaultContext()) as $domain) {
+            if (!$domain instanceof SalesChannelDomainEntity) {
+                continue;
+            }
+
+            // Several channels can differ only by path, and two domains on one host are
+            // one origin to probe: keyed rather than appended.
+            $origin = $this->normaliseOrigin($domain->getUrl());
 
             if ($origin !== '') {
                 $origins[$origin] = true;
