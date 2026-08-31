@@ -10,19 +10,19 @@ Every change passes `composer ci` before it is committed. No exceptions, no `--n
 | Command | What it runs | When |
 |---|---|---|
 | `composer ci` | `cs-check`, `phpstan` (level max), `phpmd`, `test` | before every commit |
-| `composer test` | unit suite — no shop, no database | while working |
-| `composer test-integration` | integration suite — boots Shopware, needs a project (see README, *Tests*) | before opening a PR that touches anything Shopware-facing |
+| `composer test` | unit suite, no shop, no database | while working |
+| `composer test-integration` | integration suite, boots Shopware, needs a project (see README, *Tests*) | before opening a PR that touches anything Shopware-facing |
 | `composer cs-fix` | apply the style fixes `cs-check` reported | as needed |
 | `shopware-cli extension validate --full .` | the store validator | before a release |
 
-CI (`.github/workflows/ci.yml`) runs the same gates on PHP 8.2–8.5 against Shopware 6.6 and 6.7. A
+CI (`.github/workflows/ci.yml`) runs the same gates on PHP 8.2 to 8.5 against Shopware 6.6 and 6.7. A
 red leg is a bug in the change, not in the matrix.
 
 ## Rules
 
 1. **`final` by default, `readonly` for values, attributes for wiring.** Every class is `final` unless
    it is a documented extension point (`LayerMetricsProviderInterface`); value objects are
-   `final readonly class`; DI is autowired — new services need no YAML, only a constructor with
+   `final readonly class`; DI is autowired, so new services need no YAML, only a constructor with
    typed parameters and, where a type cannot say it, an attribute (`#[Autowire]`, `#[AutowireIterator]`,
    `#[WithMonologChannel]`).
 2. **Nothing on the storefront path talks to fastmon.** `StorefrontPathIsIsolatedTest` enforces it
@@ -35,11 +35,11 @@ red leg is a bug in the change, not in the matrix.
    those two.
 5. **Prove before you switch.** A collection mode that depends on the merchant's server is applied only
    after the probe passed on every origin. Do not add a way around that.
-6. **Comments say why.** The code says what. A rule that looks odd carries its reason where it lives —
+6. **Comments say why.** The code says what. A rule that looks odd carries its reason where it lives,
    including every `@SuppressWarnings` and every rule turned off in `phpmd.xml`.
 7. **Snippets follow the code.** Reason codes (`DomainCheckResult::REASON_*`) and provider states are
    asserted against both snippet files; add the text in `de-DE` and `en-GB` with the constant.
-8. **Administration uses Meteor (`mt-*`) components.** No raw form controls, no hex colours — layout
+8. **Administration uses Meteor (`mt-*`) components.** No raw form controls, no hex colours. Layout
    SCSS only, colours from `~scss/variables`. Error flags from the admin API are mapped in one place,
    the `fastmon-collector-error` mixin.
 9. **Tests are the contract.** Shopware-facing behaviour (queries, ACL, templates, the header on a real
@@ -50,6 +50,9 @@ red leg is a bug in the change, not in the matrix.
 
 ## Conventions
 
+- **Writing rules are in [`CLAUDE.md`](CLAUDE.md)**: no en dash or em dash anywhere, and
+  German that was written rather than translated. They apply to comments, snippets, docs
+  and commit messages alike.
 - Conventional Commits, English, body explains the why.
 - Feature branches, one topic per PR, `composer ci` green and the integration suite run locally
   when the change is Shopware-facing.

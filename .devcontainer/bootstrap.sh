@@ -26,7 +26,7 @@ WS=/workspaces/shopware_plugin
 #    .claude are always named volumes, so their chown still applies.
 sudo chown dev:dev "$WS" "$WS/vendor" /home/dev/.cache/composer /home/dev/.claude || true
 
-# 2. Bootstrap the empty workspace volume (git init + fetch, NOT clone — the
+# 2. Bootstrap the empty workspace volume (git init + fetch, NOT clone, because the
 #    vendor sub-volume is already mounted here so the dir is never empty and
 #    clone would refuse). Skipped once .git exists, so rebuilds keep the
 #    checkout incl. uncommitted work. Auth is the repo-scoped deploy key
@@ -38,7 +38,7 @@ if [ ! -d "$WS/.git" ]; then
   if git fetch --tags origin 2>/dev/null; then
     git checkout -f -B main origin/main
   else
-    echo "!! Could not fetch origin — remote not reachable or repo not created yet."
+    echo "!! Could not fetch origin, remote not reachable or repo not created yet."
     echo "   Workspace left as an empty git repo; add your files and push when ready."
   fi
 fi

@@ -6,7 +6,7 @@ A self-contained development environment for the fastmon Shopware 6 plugin,
 | Service    | Container                 | What it is                                                                                                                                                          |
 |------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `plugin`   | `fastmon-shopware-plugin` | The dev container you attach to. PHP 8.3 CLI (with Shopware's required extensions), Composer 2, Node 22, `shopware-cli` 0.18.3, Claude Code. Runs the plugin's own toolchain. |
-| `shopware` | `fastmon-shopware`        | `dockware/shopware:6.7.13.1` — complete Shopware 6.7.13.1 (Apache, MySQL, Mailcatcher, SSH) with this repo mounted as `custom/plugins/<PluginName>`. Reachable at http://localhost. |
+| `shopware` | `fastmon-shopware`        | `dockware/shopware:6.7.13.1`: complete Shopware 6.7.13.1 (Apache, MySQL, Mailcatcher, SSH) with this repo mounted as `custom/plugins/<PluginName>`. Reachable at http://localhost. |
 
 The dev container has **no docker socket**; it talks to the shop over dockware's
 built-in SSH via the `fastmon-sw` helper (`fastmon-sw cache:clear` ≙
@@ -14,10 +14,10 @@ built-in SSH via the `fastmon-sw` helper (`fastmon-sw cache:clear` ≙
 
 ## Architecture
 
-- **Compose-based** (`docker-compose.yml` + `devcontainer.json`) — the monorepo
+- **Compose-based** (`docker-compose.yml` + `devcontainer.json`): the monorepo
   standard, matching `backend/` and `frontend/`.
-- **Workspace mode — one knob** in `devcontainer.json`'s `dockerComposeFile`:
-  - **Mount mode (default)** — add `docker-compose.mount.yml` to bind your host
+- **Workspace mode, one knob** in `devcontainer.json`'s `dockerComposeFile`:
+  - **Mount mode (default)**: add `docker-compose.mount.yml` to bind your host
     checkout into **both** containers: as the workspace here and as the plugin
     directory in the shop. One edit, live in both, no sync step. The OrbStack
     virtiofs rename race is defused by `core.checkStat=minimal` (system-wide in
@@ -26,7 +26,7 @@ built-in SSH via the `fastmon-sw` helper (`fastmon-sw cache:clear` ≙
     ```jsonc
     "dockerComposeFile": ["docker-compose.yml", "docker-compose.mount.yml"]
     ```
-  - **Clone mode (fallback)** — drop the overlay; workspace lives on a named
+  - **Clone mode (fallback)**: drop the overlay; workspace lives on a named
     volume (`fastmon-shopware-plugin-src`) that is likewise mounted into the
     shop, bootstrapped via `git init`+`fetch`.
 
@@ -36,7 +36,7 @@ built-in SSH via the `fastmon-sw` helper (`fastmon-sw cache:clear` ≙
 - **`vendor/`** lives on its own named volume in the dev container (a
   `composer install` here pulls `shopware/core` + `storefront` as dev deps so
   phpunit/phpstan see the real classes, like `shopware-sctracking` does). Inside
-  the **shop** the same path is **shadowed by an empty volume** — the shop must
+  the **shop** the same path is **shadowed by an empty volume**: the shop must
   never see a second copy of Shopware's classes. `.git` is hidden from the shop
   too (dockware's recommendation).
 - **Plugin directory name** = the plugin's technical name (class name from
@@ -65,13 +65,13 @@ Run the init script **on your Mac** (not in the container). Idempotent:
 
 It checks / sets up:
 
-1. **Dedicated Claude store** — `~/.devcontainer/fastmon-shopware-plugin/.claude{,.json}`,
+1. **Dedicated Claude store**: `~/.devcontainer/fastmon-shopware-plugin/.claude{,.json}`,
    separate from the global `~/.claude`. The script creates it.
-2. **Deploy key** — `~/.ssh/id_fastmon_shopware_plugin`, a deploy key on
-   `fastmon-dev/shopware-plugin` (assumed repo name — adjust `bootstrap.sh` if
+2. **Deploy key**: `~/.ssh/id_fastmon_shopware_plugin`, a deploy key on
+   `fastmon-dev/shopware-plugin` (assumed repo name, adjust `bootstrap.sh` if
    the repo ends up elsewhere).
-3. **Signing key** — `~/.ssh/id_fastmon_signing` (+ `.pub`).
-4. **Git identity** — host `~/.gitconfig` `user.name`, plus `FASTMON_GIT_EMAIL`
+3. **Signing key**: `~/.ssh/id_fastmon_signing` (+ `.pub`).
+4. **Git identity**: host `~/.gitconfig` `user.name`, plus `FASTMON_GIT_EMAIL`
    exported in your host shell.
 5. **Sibling checkouts** next to `shopware_plugin/`.
 6. **Host port 80** free for the shop (see *Ports* below if it isn't).
@@ -106,7 +106,7 @@ fastmon-sw cache:clear
 Then in your browser:
 
 - Storefront: http://localhost
-- Admin: http://localhost/admin — `admin` / `shopware`
+- Admin: http://localhost/admin: `admin` / `shopware`
   (plugin config under *Extensions → My extensions → … → Configure*, per sales channel)
 - Mailcatcher (every mail the shop sends): http://localhost:1080
 
@@ -118,7 +118,7 @@ drops you into `/var/www/html` inside the shop for anything else
 ### Wiring the storefront to a local fastmon backend
 
 The snippets the plugin injects load the tracker/pixel from a **script base
-URL** that the *browser* must reach — so for a local backend it's the URL the
+URL** that the *browser* must reach, so for a local backend it's the URL the
 backend is published on for your Mac (e.g. `http://localhost:8000`), not a
 Compose service name. Set that in the plugin config; the backend's `/c/` and
 `/s/` routes allow any origin, so no CORS work is needed.
@@ -160,34 +160,34 @@ export FASTMON_SHOPWARE_IMAGE=dockware/shopware:6.6.10.23
 docker compose -f .devcontainer/docker-compose.yml up -d shopware
 ```
 
-Shop data lives in the `fastmon-shopware-mysql` volume — switching major
+Shop data lives in the `fastmon-shopware-mysql` volume: switching major
 versions on the same volume is not supported by the image; remove the volume
 first (see below). For Shopware < 6.7 dockware only publishes the legacy
 `dockware/dev` image.
 
 ## Troubleshooting
 
-- **`address already in use` on `docker compose up`** — port 80 (or 1080) is
+- **`address already in use` on `docker compose up`**: port 80 (or 1080) is
   taken on the host. Set `FASTMON_SHOP_PORT` / `FASTMON_SHOP_MAIL_PORT` and
   update the sales-channel domain (see *Ports*).
-- **`fastmon-sw` hangs / "Connection refused"** — the shop hasn't finished
+- **`fastmon-sw` hangs / "Connection refused"**: the shop hasn't finished
   booting; `fastmon-sw --wait`. Check `docker logs -f fastmon-shopware` on the
   host.
-- **Plugin not listed after `plugin:refresh`** — the directory name under
+- **Plugin not listed after `plugin:refresh`**: the directory name under
   `custom/plugins/` must equal the plugin class name; check
   `FASTMON_PLUGIN_NAME` and that `composer.json` has
   `"type": "shopware-platform-plugin"` + `extra.shopware-plugin-class`.
-- **Class redeclared / autoload errors in the shop** — the vendor shadow volume
+- **Class redeclared / autoload errors in the shop**: the vendor shadow volume
   is missing; make sure the `…/vendor` line is present for the `shopware`
   service in *both* compose files.
-- **Workspace empty except `vendor`** — the bootstrap didn't run; run
+- **Workspace empty except `vendor`**: the bootstrap didn't run; run
   `fastmon-shopware-plugin-bootstrap`.
-- **`git@github.com: Permission denied (publickey)`** — the deploy key isn't
+- **`git@github.com: Permission denied (publickey)`**: the deploy key isn't
   mounted or isn't on the repo. Verify with
   `ssh -i ~/.ssh/id_fastmon_shopware_plugin -o IdentitiesOnly=yes -T git@github.com`.
-- **Config change not picked up (Zed)** — Zed doesn't rebuild automatically.
+- **Config change not picked up (Zed)**: Zed doesn't rebuild automatically.
   `docker compose -f .devcontainer/docker-compose.yml down`, then reopen.
-- **Clean rebuild** — a plain rebuild keeps the volumes. Factory-fresh shop
+- **Clean rebuild**: a plain rebuild keeps the volumes. Factory-fresh shop
   (drops the shop DB) and/or fresh plugin deps:
 
   ```sh
@@ -195,5 +195,5 @@ first (see below). For Shopware < 6.7 dockware only publishes the legacy
   docker volume rm fastmon-shopware-mysql                 # fresh shop
   docker volume rm fastmon-shopware-plugin-vendor \
                    fastmon-shopware-plugin-composer-cache # fresh composer deps
-  docker volume rm fastmon-shopware-plugin-src            # clone-mode workspace — discards uncommitted work!
+  docker volume rm fastmon-shopware-plugin-src            # clone-mode workspace, discards uncommitted work!
   ```

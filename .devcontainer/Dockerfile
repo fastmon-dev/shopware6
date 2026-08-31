@@ -1,4 +1,4 @@
-# Upstream Node 22 — copied in below so we don't pull Microsoft images. Needed
+# Upstream Node 22: copied in below so we don't pull Microsoft images. Needed
 # by shopware-cli for `extension build` (admin / storefront JS) and for Claude
 # Code. Digest-pinned to defend against tag hijacking; bump deliberately via
 # `docker pull node:22-bookworm-slim` + inspect.
@@ -11,7 +11,7 @@ FROM composer:2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd
 # the official php image without hand-rolling apt + docker-php-ext-install.
 FROM mlocati/php-extension-installer:latest@sha256:b6d3fa381b9ba5cf051117c1c601d6a523b590e534bf3d56eb4fbe352949c138 AS phpext
 
-# Upstream PHP 8.3 CLI on bookworm — same Debian base as the node stage so the
+# Upstream PHP 8.3 CLI on bookworm: same Debian base as the node stage so the
 # binaries we copy in are ABI-compatible. 8.3 sits inside Shopware 6.6/6.7's
 # supported PHP range (>= 8.2) and matches what the shop container runs.
 FROM php:8.3-cli-bookworm@sha256:177529735599a8244b2c903522f029839dce1c2ac4be122fdc00ada4b45a20e4
@@ -24,7 +24,7 @@ RUN install-php-extensions intl zip gd bcmath pdo_mysql sodium opcache pcov \
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 
-# Node 22 — binaries + bundled npm from the official node image.
+# Node 22: binaries + bundled npm from the official node image.
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
@@ -33,7 +33,7 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 # git + ca-certificates for tooling; sudo so the dev user can chown mounted
 # volumes during postCreateCommand; sshpass + openssh-client because the dev
 # container drives the shop container's bin/console over dockware's built-in
-# SSH (password auth, see sw.sh) — the alternative would be a docker socket
+# SSH (password auth, see sw.sh): the alternative would be a docker socket
 # mount, which this stack deliberately avoids. unzip for composer dist installs.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -74,7 +74,7 @@ RUN set -eu; \
     shopware-cli --version
 
 # Non-root dev user. Sudo is scoped to the single chown invocation needed by
-# the postCreateCommand to take ownership of named-volume mount points — Docker
+# the postCreateCommand to take ownership of named-volume mount points, because Docker
 # creates these as root, so the dev user can't write to them without help. Any
 # other root operation requires rebuilding the image.
 RUN useradd -m -u 1000 -s /usr/bin/fish dev \
@@ -89,7 +89,7 @@ RUN npm install -g @anthropic-ai/claude-code
 
 # SSH config: container-local (not mounted from host) so we explicitly limit
 # which identities ssh offers. `IdentitiesOnly yes` + only the deploy key
-# means git push/pull can't accidentally pick up another mounted key — the
+# means git push/pull can't accidentally pick up another mounted key: the
 # signing key is invisible to the ssh auth flow.
 #
 # `StrictHostKeyChecking accept-new` silently trusts the github.com host key on
@@ -118,7 +118,7 @@ RUN mkdir -p /workspaces/shopware_plugin && chown dev:dev /workspaces/shopware_p
 
 # Git change detection: compare only mtime+size (core.checkStat=minimal). The
 # default also compares ctime/ino/dev/uid/gid, which are unstable across the
-# OrbStack/virtiofs mount (MOUNT mode) — git then reports the whole tree as
+# OrbStack/virtiofs mount (MOUNT mode): git then reports the whole tree as
 # modified on every stat. System scope so it applies to every checkout.
 RUN git config --system core.checkStat minimal
 
