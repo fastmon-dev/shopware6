@@ -54,6 +54,12 @@ has no redirect URI anyone could register centrally. Both follow from that:
   verifier is generated on your server, never reaches the browser, and never leaves the
   shop. An intercepted authorization code is worthless without it.
 
+A weekly scheduled task (`fastmon_collector.renew_connection`) spends the refresh token to
+buy the next one, which is all it takes to keep a connection alive on a shop nobody
+administers: a refresh token expires sixty days after it was issued, and every use resets
+that. It needs a running Messenger worker or the scheduled-task cron, like every other
+Shopware task.
+
 What the shop ends up holding is a pair: an **access token** valid for fifteen minutes and
 a **refresh token that rotates on every use**. The plugin refreshes a minute before expiry
 and retries a rejected call once, so neither is visible to anyone. A refresh token works

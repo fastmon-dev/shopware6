@@ -200,6 +200,7 @@ class StorefrontPathIsIsolatedTest extends TestCase
         // the ids to resolve, not the objects.
         $container->register(SystemConfigService::class, SystemConfigService::class)->setSynthetic(true);
         $container->register('sales_channel_domain.repository', EntityRepository::class)->setSynthetic(true);
+        $container->register('scheduled_task.repository', EntityRepository::class)->setSynthetic(true);
         $container->register(CacheInvalidator::class, CacheInvalidator::class)->setSynthetic(true);
         $container->register('lock.factory', LockFactory::class)->setSynthetic(true);
         $container->register('logger', NullLogger::class);

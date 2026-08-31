@@ -127,6 +127,33 @@ final class AccessTokenProvider
     }
 
     /**
+     * Spend the refresh token to buy the next one, for no other reason than to keep the
+     * grant alive.
+     *
+     * A refresh token expires sixty days after it was issued and every use resets that,
+     * so a shop nobody administers would otherwise lose its connection to a calendar.
+     * Called weekly by `RenewConnectionTask` and by nothing else.
+     *
+     * A pasted API key needs none of this: it does not expire, and there is nothing to
+     * rotate.
+     */
+    public function renew(): void
+    {
+        $credentials = $this->store->credentials();
+
+        if (!$credentials->isAppConnection()) {
+            return;
+        }
+
+        // The access token we hold is named as the stale one on purpose. Anything else
+        // and a task that happens to run minutes after somebody used the panel would find
+        // a fresh access token, skip, and leave the sixty-day clock running from whenever
+        // the last real rotation was. Renewing is the whole job here.
+        $this->refresh($credentials->accessToken);
+        $this->logger->info('fastmon: the connection was renewed on schedule');
+    }
+
+    /**
      * Rotate the refresh token and return the new access token.
      *
      * `$stale` is the access token that just failed, or an empty string when the caller

@@ -60,11 +60,13 @@ These are not documentation; they were read out of `app/api/v1/auth_app.py` and
    a conditional `UPDATE`, and the loser of a race is reported as reuse, which revokes the
    grant. Two concurrent refreshes from one shop would therefore disconnect it. Hence the
    lock in `AccessTokenProvider`, and hence the write order in `ConnectionStore::saveTokens()`.
-3. **A refresh token lives 60 days** from issue, and every rotation resets that. A shop
-   whose administration nobody opens for two months needs one pass through consent again.
-   There is deliberately no scheduled task keeping it warm: the storefront does not need the
-   connection - it only needs `trackerId`, which is stored - so an expired connection costs
-   a click in the panel and nothing else.
+3. **A refresh token lives 60 days** from issue, and every rotation resets that. Until
+   `RenewConnectionTask` there was nothing to reset it except somebody opening the plugin's
+   configuration page, so a shop that ran quietly for two months lost its connection to a
+   calendar rather than to anything that happened. The task runs weekly, eight times more
+   often than the window it protects, so a worker that was down for a month costs nothing.
+   It does not replace the refresh in the admin: an access token lives fifteen minutes, and
+   every panel call needs a live one.
 
 ## Redirect URI
 
