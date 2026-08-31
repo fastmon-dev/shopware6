@@ -10,11 +10,7 @@
         "disconnectHintToken": "Trennen entfernt den Key nur aus diesem Shop. Damit er ungültig wird, widerrufe ihn im fastmon-Dashboard.",
         "cache": {
             "stale": "Die Storefront liefert noch Seiten aus dem Cache mit den alten Werten aus. Bis der Cache geleert ist, ändert sich für Besucher nichts.",
-            "clear": "Cache leeren",
-            "title": "Storefront-Cache leeren?",
-            "explain": "Alle gecachten Seiten werden verworfen und beim nächsten Aufruf neu gebaut. Auf einem großen Shop dauert das und kostet Rechenzeit, deshalb entscheidest du, wann. Du kannst es auch später hier oder unter Einstellungen, Caches erledigen.",
-            "later": "Später",
-            "confirm": "Jetzt leeren"
+            "clear": "Cache leeren"
         },
         "connect": {
             "intro": "Verbinde diesen Shop mit einem fastmon-Konto, um Core Web Vitals und JavaScript-Fehler echter Besucher zu erfassen.",

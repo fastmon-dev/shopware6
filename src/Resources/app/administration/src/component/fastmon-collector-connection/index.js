@@ -35,7 +35,6 @@ Component.register('fastmon-collector-connection', {
             isBusy: false,
             status: null,
             sites: [],
-            showCacheModal: false,
         };
     },
 
@@ -118,17 +117,8 @@ Component.register('fastmon-collector-connection', {
                     // waiting for the merchant to reload the page.
                     const linkChanged = this.status !== null && this.status.trackerId !== status.trackerId;
 
-                    // Ask the moment it goes out of date, once. Opening the dialog on
-                    // every panel load with a flag still raised would be nagging; the
-                    // banner is what carries it from then on.
-                    const wentStale = this.status !== null && !this.cacheStale && status.cacheStale === true;
-
                     this.status = status;
                     this.error = status.error || null;
-
-                    if (wentStale) {
-                        this.showCacheModal = true;
-                    }
 
                     if (linkChanged) {
                         connectionChanged();
@@ -173,17 +163,9 @@ Component.register('fastmon-collector-connection', {
             return this.load(false);
         },
 
-        askToClearCache() {
-            this.showCacheModal = true;
-        },
-
         clearCache() {
             this.busy(() => this.fastmonCollectorService.clearStorefrontCache()
-                .then(() => {
-                    this.showCacheModal = false;
-
-                    return this.load(false);
-                }));
+                .then(() => this.load(false)));
         },
 
         disconnect() {

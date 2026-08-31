@@ -94,7 +94,8 @@
                             variant="secondary"
                             size="small"
                             :disabled="isBusy"
-                            @click="askToClearCache"
+                            :is-loading="isBusy"
+                            @click="clearCache"
                         >
                             {{ $t('fastmon-collector.cache.clear') }}
                         </mt-button>
@@ -165,32 +166,6 @@
             <p class="fastmon-collector-connection__hint">
                 {{ $t(status.connectionKind === 'app' ? 'fastmon-collector.disconnectHint' : 'fastmon-collector.disconnectHintToken') }}
             </p>
-
-            <mt-modal-root :is-open="showCacheModal" @change="showCacheModal = $event">
-                <mt-modal
-                    width="s"
-                    :title="$t('fastmon-collector.cache.title')"
-                >
-                    <template #default>
-                        <p>{{ $t('fastmon-collector.cache.explain') }}</p>
-                    </template>
-
-                    <template #footer>
-                        <mt-modal-close as="mt-button" variant="secondary">
-                            {{ $t('fastmon-collector.cache.later') }}
-                        </mt-modal-close>
-
-                        <mt-button
-                            variant="primary"
-                            :disabled="isBusy"
-                            :is-loading="isBusy"
-                            @click="clearCache"
-                        >
-                            {{ $t('fastmon-collector.cache.confirm') }}
-                        </mt-button>
-                    </template>
-                </mt-modal>
-            </mt-modal-root>
         </template>
     </template>
 </div>
