@@ -4,3 +4,18 @@ parameters:
         - src
         - tests
     treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # The extra argument on SystemConfigService::set() and delete() is the
+        # `silent` flag that keeps internal writes from dropping the page cache.
+        # 6.7 reads it via func_get_args() until 6.8 puts it in the signature, and
+        # phpstan accepts extra arguments for a method that reads func_get_args().
+        # 6.6 has no such parameter and ignores the argument at runtime, but there
+        # phpstan counts the declared parameters and refuses the call. So the error
+        # exists only on the 6.6 leg of the matrix, hence reportUnmatched: false.
+        -
+            message: '#^Method Shopware\\Core\\System\\SystemConfig\\SystemConfigService::(set|delete)\(\) invoked with \d parameters, \d-\d required\.$#'
+            identifier: arguments.count
+            paths:
+                - src/Connection/ConnectionStore.php
+                - src/Connection/OAuthSession.php
+            reportUnmatched: false
