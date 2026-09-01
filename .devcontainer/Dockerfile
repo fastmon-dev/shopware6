@@ -73,6 +73,28 @@ RUN set -eu; \
     cd /; rm -rf "$tmp"; \
     shopware-cli --version
 
+# GitHub CLI (gh): always the latest release at build time (resolved via the
+# /releases/latest redirect, no API call, no rate limit), verified against the
+# release's checksums file. A rebuild picks up whatever is current. Auth comes
+# from the GH_TOKEN environment variable (see docker-compose.yml).
+RUN set -eu; \
+    case "$TARGETARCH" in \
+      amd64) arch=amd64 ;; \
+      arm64) arch=arm64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    ver="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest)"; \
+    ver="${ver##*/v}"; \
+    base="https://github.com/cli/cli/releases/download/v${ver}"; \
+    tmp="$(mktemp -d)"; cd "$tmp"; \
+    curl -fsSLO "${base}/gh_${ver}_linux_${arch}.tar.gz"; \
+    curl -fsSLO "${base}/gh_${ver}_checksums.txt"; \
+    sha256sum --check --ignore-missing "gh_${ver}_checksums.txt"; \
+    tar -xzf "gh_${ver}_linux_${arch}.tar.gz"; \
+    install -m 0755 "gh_${ver}_linux_${arch}/bin/gh" /usr/local/bin/gh; \
+    cd /; rm -rf "$tmp"; \
+    gh --version
+
 # Non-root dev user. Sudo is scoped to the single chown invocation needed by
 # the postCreateCommand to take ownership of named-volume mount points, because Docker
 # creates these as root, so the dev user can't write to them without help. Any

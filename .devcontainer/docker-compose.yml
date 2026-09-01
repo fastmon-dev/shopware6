@@ -53,6 +53,12 @@ services:
       GIT_CONFIG_VALUE_2: ${FASTMON_GIT_EMAIL:-}
       GIT_CONFIG_KEY_3: commit.gpgsign
       GIT_CONFIG_VALUE_3: "true"
+      # GitHub token for the gh CLI (issues, PRs). gh reads GH_TOKEN directly,
+      # no `gh auth login` needed. Per-developer: export FASTMON_GH_TOKEN in
+      # your host shell (fine-grained PAT scoped to this repo with Issues,
+      # Pull requests and Contents read/write). Empty fallback is intentional:
+      # unset surfaces as a gh auth error instead of a compose warning.
+      GH_TOKEN: ${FASTMON_GH_TOKEN:-}
     volumes:
       # Workspace on a named volume: the CLONE MODE fallback, overridden by the
       # docker-compose.mount.yml bind mount in the default MOUNT mode. The SAME
