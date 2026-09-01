@@ -72,8 +72,9 @@ final class OAuthSession
         $state = bin2hex(random_bytes(self::STATE_BYTES));
         $verifier = Pkce::verifier();
 
-        // Silent: an authorization in flight is internal state, and writing it loudly
-        // would drop the shop's page cache every time someone presses Connect.
+        // Silent, the fourth argument: an authorization in flight is internal state, and
+        // writing it loudly would drop the shop's page cache every time someone presses
+        // Connect. See `ConnectionStore::set()` for how the flag behaves on 6.6 and 6.7.
         $this->systemConfigService->set(self::KEY, json_encode([
             'state' => $state,
             'verifier' => $verifier,

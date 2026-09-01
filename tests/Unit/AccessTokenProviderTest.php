@@ -45,6 +45,21 @@ class AccessTokenProviderTest extends TestCase
         self::assertSame('fmt_new', $this->stored[ConfigResolver::DOMAIN . 'oauthAccessToken']);
     }
 
+    public function testARotationIsWrittenWithoutDroppingThePageCache(): void
+    {
+        // A rotated token changes nothing a visitor can see, and it happens whenever
+        // somebody works in the administration while the stored access token has aged
+        // out. Written loudly, every rotation would rebuild the shop's full page cache;
+        // written silently, it costs nobody anything. See `ConnectionStore::set()`.
+        $this->connected('fmt_old', expiresIn: 30);
+
+        $this->provider([$this->discovery(), $this->tokenResponse('fmt_new', 'fmr_new')])->token();
+
+        foreach (['oauthRefreshToken', 'oauthScopes', 'oauthExpiresAt', 'oauthAccessToken'] as $key) {
+            self::assertTrue($this->silent[ConfigResolver::DOMAIN . $key], $key . ' must be written silently');
+        }
+    }
+
     public function testARefreshIsDueBeforeTheTokenActuallyExpires(): void
     {
         // Removes the case where a token is checked, found valid, and has expired by the
@@ -277,7 +292,7 @@ class AccessTokenProviderTest extends TestCase
 
         return new AccessTokenProvider(
             new FastmonOAuthClient(new MockHttpClient($responses)),
-            new ConnectionStore($systemConfig),
+            new ConnectionStore($systemConfig, $this->database()),
             new ConfigResolver($systemConfig),
             new LockFactory(new InMemoryStore()),
             new NullLogger(),

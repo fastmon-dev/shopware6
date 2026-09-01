@@ -15,7 +15,6 @@ use Fastmon\Collector\Connection\ConnectionStatus;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Provisioning\ApplicationProvisioner;
 use Fastmon\Collector\ServerTiming\ServerTimingStatus;
-use Fastmon\Collector\Storefront\StorefrontCache;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
 use Shopware\Core\PlatformRequest;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -60,7 +59,6 @@ final class AdminApiController extends AbstractController
         private readonly ConnectionStatus $status,
         private readonly ApplicationProvisioner $provisioner,
         private readonly CollectionModeService $collection,
-        private readonly StorefrontCache $storefrontCache,
         private readonly ServerTimingStatus $serverTimingStatus,
     ) {
     }
@@ -263,22 +261,6 @@ final class AdminApiController extends AbstractController
         // fastmon returns the secret exactly once, here. It goes straight to the screen
         // for the merchant to paste into their proxy configuration and is not stored.
         return $this->guard(fn (): array => ['proxySecret' => $this->collection->generateProxySecret()]);
-    }
-
-    #[Route(
-        path: '/api/_action/fastmon-collector/storefront-cache',
-        name: 'api.action.fastmon_collector.storefront_cache',
-        defaults: self::WRITE,
-        methods: [Request::METHOD_POST]
-    )]
-    public function clearStorefrontCache(): JsonResponse
-    {
-        // Only ever from here. Nothing in this plugin invalidates a page on its own, and
-        // this route exists so the merchant does not have to go looking for the cache
-        // screen to finish what they started in this one.
-        $this->storefrontCache->clear();
-
-        return $this->ok([]);
     }
 
     #[Route(

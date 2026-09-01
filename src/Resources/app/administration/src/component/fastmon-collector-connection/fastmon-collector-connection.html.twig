@@ -81,27 +81,8 @@
             </mt-banner>
 
             <template v-else>
-                {# These two are notices, not states. They stack above whatever the panel
-                   is showing rather than taking its place. #}
-                {# The button goes in the default slot: mt-banner has exactly two, this
-                   one and `customIcon`, and anything sent to a slot it does not have is
-                   dropped without a word. #}
-                <mt-banner v-if="cacheStale" variant="attention">
-                    {{ $t('fastmon-collector.cache.stale') }}
-
-                    <div class="fastmon-collector-connection__banner-action">
-                        <mt-button
-                            variant="secondary"
-                            size="small"
-                            :disabled="isBusy"
-                            :is-loading="isBusy"
-                            @click="clearCache"
-                        >
-                            {{ $t('fastmon-collector.cache.clear') }}
-                        </mt-button>
-                    </div>
-                </mt-banner>
-
+                {# A notice, not a state: it stacks above whatever the panel is showing
+                   rather than taking its place. #}
                 <mt-banner v-if="missingScopes.length" variant="attention">
                     {{ $t('fastmon-collector.connect.missingScopes', { scopes: missingScopes.join(', ') }) }}
                 </mt-banner>

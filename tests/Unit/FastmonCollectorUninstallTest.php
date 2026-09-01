@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use Doctrine\DBAL\Connection as Database;
 use Fastmon\Collector\FastmonCollector;
 use Fastmon\Collector\Service\ConfigResolver;
 use PHPUnit\Framework\TestCase;
@@ -51,6 +52,7 @@ final class FastmonCollectorUninstallTest extends TestCase
 
         $container = new ContainerBuilder();
         $container->set(SystemConfigService::class, $systemConfig);
+        $container->set(Database::class, $this->createMock(Database::class));
 
         $plugin = new FastmonCollector(true, \dirname(__DIR__, 2) . '/src');
         $plugin->setContainer($container);

@@ -36,7 +36,7 @@ final class EndpointCheckerStorefrontOriginsTest extends TestCase
         self::assertInstanceOf(SystemConfigService::class, $systemConfig);
 
         $this->database = $database;
-        $this->checker = new EndpointChecker(new MockHttpClient(), new ConnectionStore($systemConfig), $database);
+        $this->checker = new EndpointChecker(new MockHttpClient(), new ConnectionStore($systemConfig, $database), $database);
     }
 
     public function testTheStorefrontDomainIsAnOrigin(): void

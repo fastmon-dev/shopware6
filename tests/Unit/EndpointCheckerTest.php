@@ -211,6 +211,6 @@ class EndpointCheckerTest extends TestCase
         $database = $this->createMock(DbalConnection::class);
         $database->method('fetchFirstColumn')->willReturn($origins);
 
-        return new EndpointChecker($client, new ConnectionStore($systemConfig), $database);
+        return new EndpointChecker($client, new ConnectionStore($systemConfig, $database), $database);
     }
 }

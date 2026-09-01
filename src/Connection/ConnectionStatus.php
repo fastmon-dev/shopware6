@@ -43,16 +43,6 @@ final class ConnectionStatus
     }
 
     /**
-     * Whether this request adopted a value the storefront renders.
-     *
-     * Not stored anywhere: the panel is told what just happened, not what is outstanding.
-     * A merchant who clears the cache from Settings instead of from here has nothing to
-     * come back and dismiss, and a notice nobody can dismiss is one everybody learns to
-     * ignore.
-     */
-    private bool $adoptedRenderedValue = false;
-
-    /**
      * What the admin module renders. Never returns the credential itself - only whether
      * one is there and what it may do - so a stored token cannot be read back out through
      * the admin API.
@@ -63,8 +53,7 @@ final class ConnectionStatus
      *     accountEmail: string, accountName: string, organizationId: string,
      *     organizationName: string, applicationId: string, trackerId: string, pixelId: string,
      *     apiBaseUrl: string, dashboardUrl: string, applicationsUrl: string,
-     *     tokenValid: bool|null, applicationValid: bool|null, error: string,
-     *     cacheStale: bool
+     *     tokenValid: bool|null, applicationValid: bool|null, error: string
      * }
      */
     public function describe(bool $verify = false): array
@@ -113,8 +102,6 @@ final class ConnectionStatus
             'tokenValid' => $checked['tokenValid'],
             'applicationValid' => $checked['applicationValid'],
             'error' => $checked['error'],
-            // Set only when this very request changed something a cached page carries.
-            'cacheStale' => $this->adoptedRenderedValue,
         ];
     }
 
@@ -199,7 +186,6 @@ final class ConnectionStatus
                     $application['trackerId'],
                     $application['pixelId'],
                 );
-                $this->adoptedRenderedValue = true;
                 $this->logger->info('fastmon: the application hashes changed, the storefront now serves the new ones');
             }
 

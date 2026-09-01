@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector;
 
+use Doctrine\DBAL\Connection as Database;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Connection\OAuthSession;
 use Shopware\Core\Framework\Plugin;
@@ -39,12 +40,13 @@ final class FastmonCollector extends Plugin
         }
 
         $systemConfig = $this->container?->get(SystemConfigService::class);
+        $database = $this->container?->get(Database::class);
 
-        if (!$systemConfig instanceof SystemConfigService) {
+        if (!$systemConfig instanceof SystemConfigService || !$database instanceof Database) {
             return;
         }
 
-        (new ConnectionStore($systemConfig))->clearAll();
+        (new ConnectionStore($systemConfig, $database))->clearAll();
         (new OAuthSession($systemConfig))->abandon();
     }
 }

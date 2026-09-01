@@ -28,6 +28,17 @@ class OAuthSessionTest extends TestCase
         ], $session->resolve($attempt['state']));
     }
 
+    public function testAnAttemptIsWrittenWithoutDroppingThePageCache(): void
+    {
+        // An authorization in flight is internal state. Written loudly, every press of
+        // Connect would rebuild the shop's full page cache.
+        $session = new OAuthSession($this->systemConfig());
+
+        $session->start('dyn_1', 'https://shop.example.com/admin');
+
+        self::assertTrue($this->silent[OAuthSession::KEY]);
+    }
+
     public function testTheVerifierIsAFreshPkceSecretEveryTime(): void
     {
         // It is the only thing authenticating the code exchange - this shop is a public

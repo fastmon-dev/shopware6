@@ -2,6 +2,8 @@
 
 namespace Fastmon\Collector\Tests\Unit\Fake;
 
+use Doctrine\DBAL\Connection as Database;
+use Fastmon\Collector\Service\ConfigResolver;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /**
@@ -66,20 +68,28 @@ trait StoresSystemConfig
             }
         );
 
-        // `getDomain()` queries the database itself, so it sees what is stored rather
-        // than what this request memoised. That is the whole reason the store uses it.
-        $systemConfig->method('getDomain')->willReturnCallback(function (string $domain): array {
+        return $systemConfig;
+    }
+
+    /**
+     * The rows behind `system_config`, as `ConnectionStore::freshCredentials()` reads
+     * them: past every cache, `{"_value": …}` and all.
+     */
+    private function database(): Database
+    {
+        $database = $this->createMock(Database::class);
+        $database->method('fetchAllKeyValue')->willReturnCallback(function (): array {
             $rows = [];
 
             foreach ($this->stored as $key => $value) {
-                if (str_starts_with($key, $domain)) {
-                    $rows[$key] = $value;
+                if (str_starts_with($key, ConfigResolver::DOMAIN)) {
+                    $rows[$key] = json_encode(['_value' => $value], \JSON_THROW_ON_ERROR);
                 }
             }
 
             return $rows;
         });
 
-        return $systemConfig;
+        return $database;
     }
 }

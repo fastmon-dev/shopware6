@@ -2,6 +2,8 @@
 
 namespace Fastmon\Collector\Connection;
 
+use Doctrine\DBAL\ArrayParameterType;
+use Doctrine\DBAL\Connection as Database;
 use Fastmon\Collector\Api\OAuthTokens;
 use Fastmon\Collector\Service\ConfigResolver;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -69,7 +71,24 @@ final class ConnectionStore
     private const TRACKER_ID = 'trackerId';
     private const PIXEL_ID = 'pixelId';
 
-
+    /**
+     * The two values the storefront actually renders.
+     *
+     * Writing a configuration key loudly invalidates cached pages: on 6.7 through the
+     * single `system.config-` tag every page carries, on 6.6 through the per-key tag of
+     * whatever was written. That is right for these two: a new tracker id has to reach
+     * the pages, and a page cached with the old one collects nothing.
+     *
+     * It is wrong for everything else this store owns. A rotated refresh token changes
+     * nothing a visitor can see, and rotation happens whenever somebody works in the
+     * administration while the stored access token has aged past its quarter of an hour,
+     * so writing it loudly would drop the shop's entire page cache for nothing. Those
+     * writes are silent, which is the flag core added for exactly this: "SystemConfig is
+     * often used to store internal values."
+     *
+     * @var string[]
+     */
+    private const RENDERED_KEYS = [self::TRACKER_ID, self::PIXEL_ID];
 
     /** Everything that authenticates. Dropped together, whichever kind is stored. */
     private const CREDENTIAL_KEYS = [
@@ -101,6 +120,7 @@ final class ConnectionStore
 
     public function __construct(
         private readonly SystemConfigService $systemConfigService,
+        private readonly Database $database,
     ) {
     }
 
@@ -138,26 +158,37 @@ final class ConnectionStore
     /**
      * The credential as the database has it **right now**.
      *
-     * `get()` reads through `MemoizedSystemConfigStore`, which loads the whole
-     * configuration once per request and drops it only when *this* process writes. That
-     * is right for configuration and wrong for exactly one value. A second admin API call
-     * that waits for the refresh lock started its request before the winner wrote, so
-     * reading through `get()` hands it back its own snapshot: the refresh token it was
-     * about to present, which the winner has already spent. Presenting a spent one is
-     * what fastmon reads as theft, and it ends the connection.
+     * `SystemConfigService` reads through a loader that memoises the whole configuration
+     * once per request and drops it only when this process writes. That is right for
+     * configuration and wrong for exactly one value. A second admin API call that waits
+     * for the refresh lock started its request before the winner wrote, so reading through
+     * the service hands it back its own snapshot: the refresh token it was about to
+     * present, which the winner has already spent. Presenting a spent one is what fastmon
+     * reads as theft, and it ends the connection.
      *
-     * `getDomain()` is the way out and needs no SQL of ours: it builds its own query
-     * against `system_config`, so it never sees the memo, and it unwraps the stored
-     * values the same way `get()` does.
+     * So these two rows are read straight from the table. `getDomain()` would do the same
+     * job and is marked `@internal`, which makes this the supported way to be sure.
      */
     public function freshCredentials(): Credentials
     {
+        $keys = array_map(
+            static fn (string $key): string => ConfigResolver::DOMAIN . $key,
+            [self::CLIENT_ID, self::REDIRECT_URI, ...self::CREDENTIAL_KEYS]
+        );
+
+        /** @var array<string, mixed> $rows */
+        $rows = $this->database->fetchAllKeyValue(
+            'SELECT configuration_key, configuration_value
+             FROM system_config
+             WHERE sales_channel_id IS NULL AND configuration_key IN (:keys)',
+            ['keys' => $keys],
+            ['keys' => ArrayParameterType::STRING]
+        );
+
         $stored = [];
 
-        foreach ($this->systemConfigService->getDomain(ConfigResolver::DOMAIN) as $key => $value) {
-            $stored[str_replace(ConfigResolver::DOMAIN, '', (string) $key)] = \is_scalar($value)
-                ? trim((string) $value)
-                : '';
+        foreach ($rows as $key => $value) {
+            $stored[str_replace(ConfigResolver::DOMAIN, '', (string) $key)] = $this->unwrap($value);
         }
 
         return new Credentials(
@@ -295,25 +326,42 @@ final class ConnectionStore
     }
 
     /**
-     * Every write is silent: no cache invalidation.
-     *
-     * Writing a configuration key loudly invalidates the HTTP cache tag `system.config-…`,
-     * which every cached page carries because rendering one reads configuration, so a
-     * single write rebuilds the whole page cache of the shop. That is nobody's decision to
-     * make on a merchant's behalf, least of all as a side effect of pressing a button in a
-     * plugin. Whoever changes something the storefront renders says so in its own answer
-     * to the panel, and the panel offers to clear the cache.
-     *
-     * The fourth argument reaches core through `func_get_args()` until 6.8 puts it in the
-     * signature, where it also becomes the default.
+     * Every value in `system_config` is stored as `{"_value": …}`, which is what the
+     * service would unwrap if it could be used for this read.
      */
+    private function unwrap(mixed $value): string
+    {
+        if (!\is_string($value)) {
+            return '';
+        }
+
+        $decoded = json_decode($value, true);
+        $inner = \is_array($decoded) ? ($decoded['_value'] ?? null) : null;
+
+        return \is_scalar($inner) ? trim((string) $inner) : '';
+    }
+
     private function set(string $key, string $value): void
     {
-        $this->systemConfigService->set(ConfigResolver::DOMAIN . $key, $value, null, true);
+        // The fourth argument is `silent`. On 6.7 it reaches core through
+        // `func_get_args()` until 6.8 puts it in the signature, where it also becomes
+        // the default. 6.6 has no such flag and ignores the extra argument; it
+        // invalidates per key there, and no cached page carries the key of an internal
+        // value, so the writes are quiet on both branches.
+        $this->systemConfigService->set(
+            ConfigResolver::DOMAIN . $key,
+            $value,
+            null,
+            !\in_array($key, self::RENDERED_KEYS, true)
+        );
     }
 
     private function forget(string $key): void
     {
-        $this->systemConfigService->delete(ConfigResolver::DOMAIN . $key, null, true);
+        $this->systemConfigService->delete(
+            ConfigResolver::DOMAIN . $key,
+            null,
+            !\in_array($key, self::RENDERED_KEYS, true)
+        );
     }
 }

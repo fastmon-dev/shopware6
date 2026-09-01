@@ -132,7 +132,7 @@ class RenewConnectionTaskTest extends TestCase
     private function handler(array $responses): RenewConnectionTaskHandler
     {
         $systemConfig = $this->systemConfig();
-        $store = new ConnectionStore($systemConfig);
+        $store = new ConnectionStore($systemConfig, $this->database());
         $config = new ConfigResolver($systemConfig);
 
         return new RenewConnectionTaskHandler(

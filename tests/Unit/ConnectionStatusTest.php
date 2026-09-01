@@ -151,41 +151,6 @@ class ConnectionStatusTest extends TestCase
         self::assertStringContainsString('could not be found', $status['error']);
     }
 
-    public function testAChangedTrackerIdTellsThePanelTheStorefrontIsStale(): void
-    {
-        // Nothing invalidates a cached page here, and nothing is remembered either: the
-        // answer says what this request changed, and the panel offers the button while it
-        // is on screen.
-        $this->connected(applicationId: 'app-1');
-
-        $status = $this->reporter(api: [
-            $this->organizations([['id' => 'org-7', 'name' => 'Acme']]),
-            new MockResponse(json_encode([
-                'id' => 'app-1', 'name' => 'Shopware',
-                'source_hash' => 'newhash', 'collector_hash' => 'newpixel',
-            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-        ])->describe(verify: true);
-
-        self::assertTrue($status['cacheStale']);
-    }
-
-    public function testReadingTheSameHashesBackDoesNotCryStale(): void
-    {
-        // The panel re-reads the application every time it opens. A notice that appears
-        // when nothing moved is one nobody reads.
-        $this->connected(applicationId: 'app-1');
-
-        $status = $this->reporter(api: [
-            $this->organizations([['id' => 'org-7', 'name' => 'Acme']]),
-            new MockResponse(json_encode([
-                'id' => 'app-1', 'name' => 'Shopware',
-                'source_hash' => 'src123', 'collector_hash' => '',
-            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-        ])->describe(verify: true);
-
-        self::assertFalse($status['cacheStale']);
-    }
-
     public function testARotatedTrackerIdIsAdoptedRatherThanReported(): void
     {
         // Rotating in the dashboard invalidates the embed everywhere it is deployed, so a
@@ -205,13 +170,14 @@ class ConnectionStatusTest extends TestCase
         self::assertTrue($status['applicationValid']);
         self::assertSame('', $status['error']);
 
-        // And the storefront is emitting the new ones from here on. Written silently,
-        // like every other write here: what the cached pages still carry is reported to
-        // the panel rather than thrown away behind the merchant's back.
+        // And the storefront is emitting the new ones from here on. These two are the
+        // values the pages render, so they are the two keys written loudly: Shopware
+        // dropping the pages that still carry the old id is the point, not a side
+        // effect. Everything else the store writes stays silent.
         self::assertSame('newhash', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertTrue($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertTrue($status['cacheStale']);
+        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
         self::assertSame('newpixel', $this->stored[ConfigResolver::DOMAIN . 'pixelId']);
+        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'pixelId']);
         self::assertSame('newhash', $status['trackerId']);
     }
 
@@ -261,7 +227,7 @@ class ConnectionStatusTest extends TestCase
     private function reporter(array $api = [], array $oauth = []): ConnectionStatus
     {
         $systemConfig = $this->systemConfig();
-        $store = new ConnectionStore($systemConfig);
+        $store = new ConnectionStore($systemConfig, $this->database());
         $config = new ConfigResolver($systemConfig);
         $oauthClient = new FastmonOAuthClient(new MockHttpClient($oauth));
 

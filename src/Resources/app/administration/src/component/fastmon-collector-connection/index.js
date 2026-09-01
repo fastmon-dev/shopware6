@@ -1,6 +1,6 @@
 import template from './fastmon-collector-connection.html.twig';
 import './fastmon-collector-connection.scss';
-import { connectionChanged, onStorefrontChanged } from '../../util/panel-bus';
+import { connectionChanged } from '../../util/panel-bus';
 
 const { Component, Mixin } = Shopware;
 
@@ -35,12 +35,6 @@ Component.register('fastmon-collector-connection', {
             isBusy: false,
             status: null,
             sites: [],
-
-            // Set by whatever just changed something the storefront renders: this panel
-            // linking an application, the card below applying a mode, or the status call
-            // reporting that it adopted new hashes from fastmon. Deliberately not stored
-            // anywhere: it says what happened, and a reload is a fresh start.
-            cacheStale: false,
         };
     },
 
@@ -94,18 +88,6 @@ Component.register('fastmon-collector-connection', {
 
     created() {
         this.load(true);
-
-        // The collection card below changes what the storefront renders as well, and the
-        // notice for it lives up here.
-        this.stopListening = onStorefrontChanged(() => {
-            this.cacheStale = true;
-
-            return this.load(false);
-        });
-    },
-
-    beforeUnmount() {
-        this.stopListening();
     },
 
     methods: {
@@ -121,10 +103,6 @@ Component.register('fastmon-collector-connection', {
 
                     this.status = status;
                     this.error = status.error || null;
-
-                    if (status.cacheStale === true) {
-                        this.cacheStale = true;
-                    }
 
                     if (linkChanged) {
                         connectionChanged();
@@ -165,20 +143,8 @@ Component.register('fastmon-collector-connection', {
 
         onLinked() {
             this.resetError();
-            // The storefront renders the tracker id, and the pages in the cache do not
-            // carry it yet.
-            this.cacheStale = true;
 
             return this.load(false);
-        },
-
-        clearCache() {
-            this.busy(() => this.fastmonCollectorService.clearStorefrontCache()
-                .then(() => {
-                    this.cacheStale = false;
-
-                    return this.load(false);
-                }));
         },
 
         disconnect() {

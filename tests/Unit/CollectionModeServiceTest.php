@@ -169,23 +169,6 @@ class CollectionModeServiceTest extends TestCase
         self::assertSame('relative', $this->storedValue('collectionMode'));
     }
 
-    public function testAdoptingAModeSaysTheCachedPagesAreBehind(): void
-    {
-        // The pages in the cache still load the tracker from the previous host. Nothing
-        // is invalidated for them here; the answer says so and the panel offers.
-        $service = $this->service(['https://shop.example' => true], collectorMode: 'relative');
-
-        self::assertTrue($service->describe()['cacheStale']);
-    }
-
-    public function testAModeThatDidNotMoveSaysNothing(): void
-    {
-        $this->stored[ConfigResolver::DOMAIN . 'collectionMode'] = 'default';
-        $service = $this->service(['https://shop.example' => true], collectorMode: 'default');
-
-        self::assertFalse($service->describe()['cacheStale']);
-    }
-
     public function testACustomEndpointComesAcrossWithTheMode(): void
     {
         // The pair is one decision. A mode adopted without its endpoint would point every
@@ -280,7 +263,7 @@ class CollectionModeServiceTest extends TestCase
         );
 
         $client = new FastmonClient($httpClient);
-        $store = new ConnectionStore($systemConfig);
+        $store = new ConnectionStore($systemConfig, $database);
         $config = new ConfigResolver($systemConfig);
 
         return new CollectionModeService(

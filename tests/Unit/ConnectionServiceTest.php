@@ -182,6 +182,12 @@ class ConnectionServiceTest extends TestCase
         self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->stored);
         self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'trackerId', $this->stored);
 
+        // The credential goes silently, nothing a visitor sees depends on it. The
+        // tracker id goes loudly: the cached pages still carry the snippet, and a
+        // disconnected shop must stop serving it.
+        self::assertTrue($this->silent[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
+
         // Not a credential, and re-using it keeps this shop one entry in that list rather
         // than a new one per reconnect.
         self::assertSame('dyn_1', $this->stored[ConfigResolver::DOMAIN . 'oauthClientId']);
@@ -306,7 +312,7 @@ class ConnectionServiceTest extends TestCase
     {
         $this->oauthCalls = $oauth;
         $systemConfig = $this->systemConfig();
-        $store = new ConnectionStore($systemConfig);
+        $store = new ConnectionStore($systemConfig, $this->database());
         $config = new ConfigResolver($systemConfig);
         $this->oauthHttp = new MockHttpClient($oauth);
         $oauthClient = new FastmonOAuthClient($this->oauthHttp);
