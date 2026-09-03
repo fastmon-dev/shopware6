@@ -344,10 +344,14 @@ final class ConnectionStore
     private function set(string $key, string $value): void
     {
         // The fourth argument is `silent`. On 6.7 it reaches core through
-        // `func_get_args()` until 6.8 puts it in the signature, where it also becomes
-        // the default. 6.6 has no such flag and ignores the extra argument; it
-        // invalidates per key there, and no cached page carries the key of an internal
-        // value, so the writes are quiet on both branches.
+        // `func_get_args()` from 6.7.9.0 on, until 6.8 puts it in the signature, where
+        // it also becomes the default. 6.7.0 to 6.7.8 do not read it, and a loud write
+        // there drops the whole page cache, so composer.json starts the 6.7 range at
+        // 6.7.9. 6.6 has no such flag and ignores the extra argument; with the default
+        // `shopware.cache.tagging.each_config: true` it tags pages per key read, and no
+        // storefront page reads an internal value, so the writes are quiet on both
+        // supported branches. (A 6.6 shop with `each_config: false` tags every page
+        // globally and is loud on every write, ours included; nothing here can help it.)
         $this->systemConfigService->set(
             ConfigResolver::DOMAIN . $key,
             $value,

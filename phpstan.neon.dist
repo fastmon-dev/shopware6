@@ -7,11 +7,16 @@ parameters:
     ignoreErrors:
         # The extra argument on SystemConfigService::set() and delete() is the
         # `silent` flag that keeps internal writes from dropping the page cache.
-        # 6.7 reads it via func_get_args() until 6.8 puts it in the signature, and
-        # phpstan accepts extra arguments for a method that reads func_get_args().
-        # 6.6 has no such parameter and ignores the argument at runtime, but there
-        # phpstan counts the declared parameters and refuses the call. So the error
-        # exists only on the 6.6 leg of the matrix, hence reportUnmatched: false.
+        # 6.7 reads it via func_get_args() from 6.7.9.0 on, until 6.8 puts it in the
+        # signature, and phpstan accepts extra arguments for a method that reads
+        # func_get_args(). 6.6 has no such parameter and ignores the argument at
+        # runtime, but there phpstan counts the declared parameters and refuses the
+        # call. So the error exists only on the 6.6 leg of the matrix, hence
+        # reportUnmatched: false.
+        #
+        # 6.7.0 to 6.7.8 would pass this rule too and drop the argument at runtime,
+        # which is why composer.json does not allow them: below 6.7.9 every write is
+        # loud, and phpstan cannot tell the difference.
         -
             message: '#^Method Shopware\\Core\\System\\SystemConfig\\SystemConfigService::(set|delete)\(\) invoked with \d parameters, \d-\d required\.$#'
             identifier: arguments.count

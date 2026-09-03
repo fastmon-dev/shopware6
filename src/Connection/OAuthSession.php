@@ -74,7 +74,8 @@ final class OAuthSession
 
         // Silent, the fourth argument: an authorization in flight is internal state, and
         // writing it loudly would drop the shop's page cache every time someone presses
-        // Connect. See `ConnectionStore::set()` for how the flag behaves on 6.6 and 6.7.
+        // Connect. See `ConnectionStore::set()` for how the flag behaves on 6.6 and 6.7,
+        // and why 6.7.9 is the floor.
         $this->systemConfigService->set(self::KEY, json_encode([
             'state' => $state,
             'verifier' => $verifier,
