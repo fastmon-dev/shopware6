@@ -48,11 +48,27 @@ class ServerTimingSubscriberTest extends TestCase
         self::assertStringContainsString('fm-loggedin;desc=yes', $header);
     }
 
-    public function testTheLoginFlagIsReportedForBothStates(): void
+    public function testTheLoginFlagIsOffByDefault(): void
     {
-        // Always on, and both values are emitted: a header that only appeared for
-        // logged-in visitors would make "no entry" ambiguous between "logged out" and
-        // "the plugin did not look".
+        // A visitor attribute in a header that is collected in every privacy mode: the
+        // merchant switches it on, the plugin does not decide it for them.
+        $this->insights->beginPage('product', true);
+
+        $request = $this->request();
+        $request->attributes->set(CacheStatusResolver::STORED_ATTRIBUTE, true);
+        $response = $this->html();
+
+        $this->subscriber([], available: false)
+            ->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
+
+        self::assertStringNotContainsString('fm-loggedin', (string) $response->headers->get('Server-Timing'));
+    }
+
+    public function testTheLoginFlagIsReportedForBothStatesOnceSwitchedOn(): void
+    {
+        // Both values are emitted: a header that only appeared for logged-in visitors
+        // would make "no entry" ambiguous between "logged out" and "the plugin did not
+        // look".
         foreach ([true => 'yes', false => 'no'] as $loggedIn => $expected) {
             $this->insights = new RequestInsights();
             $this->insights->beginPage('product', (bool) $loggedIn);
@@ -61,7 +77,7 @@ class ServerTimingSubscriberTest extends TestCase
             $request = $this->request();
             $request->attributes->set(CacheStatusResolver::STORED_ATTRIBUTE, true);
 
-            $this->subscriber([], available: false)
+            $this->subscriber([], available: false, config: ['serverTimingLoggedIn' => true])
                 ->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
             self::assertStringContainsString(
@@ -159,7 +175,8 @@ class ServerTimingSubscriberTest extends TestCase
     public function testReportsTheCacheVerdictEvenWithoutAProfiler(): void
     {
         // Needs no extension and is the single most useful entry in the header, so a
-        // plain host still gets something worth reading.
+        // plain host still gets something worth reading. No node name: that one is an
+        // opt-in, and a single server has no reason to publish its own.
         $subscriber = $this->subscriber([], available: false);
         $request = $this->request();
         $request->attributes->set(CacheStatusResolver::STORED_ATTRIBUTE, true);
@@ -167,8 +184,20 @@ class ServerTimingSubscriberTest extends TestCase
 
         $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
+        self::assertSame('fm-fpc;desc=miss, fm-backend;dur=0.0', $this->normalise($response));
+    }
+
+    public function testTheNodeNameIsReportedOnceSwitchedOn(): void
+    {
+        $subscriber = $this->subscriber([], available: false, config: ['serverTimingHost' => true]);
+        $request = $this->request();
+        $request->attributes->set(CacheStatusResolver::STORED_ATTRIBUTE, true);
+        $response = $this->html();
+
+        $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
+
         // The node name comes from the machine, so it is normalised away with the
-        // duration - what matters here is that the entries are emitted at all.
+        // duration; what matters here is where in the header it lands.
         self::assertSame(
             'fm-fpc;desc=miss, fm-host;desc=node, fm-backend;dur=0.0',
             $this->normalise($response)
@@ -199,14 +228,13 @@ class ServerTimingSubscriberTest extends TestCase
         self::assertFalse($response->headers->has('Server-Timing'));
     }
 
-    public function testTheSwitchIsTheOnlyWayToSilenceIt(): void
+    public function testTheSwitchSilencesEverythingTheLoginFlagIncluded(): void
     {
-        // One switch, and it is absolute. Everything the plugin emits is either free or
-        // measured anyway, so a knob per entry offered a choice nobody has a reason to
-        // make - and each was another way to report less than the shop thinks.
+        // One switch for the header, and it is absolute: the opt-in for the login flag
+        // adds an entry to a header that goes out, it cannot bring one back that does not.
         $this->insights->beginPage('product', true);
 
-        $subscriber = $this->subscriber(['rdbms' => 42.5], config: ['serverTiming' => false]);
+        $subscriber = $this->subscriber(['rdbms' => 42.5], config: ['serverTiming' => false, 'serverTimingLoggedIn' => true]);
         $response = $this->html();
 
         $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($this->request(), $response));
@@ -217,8 +245,8 @@ class ServerTimingSubscriberTest extends TestCase
     public function testCategoricalEntriesStayOffSubResources(): void
     {
         // A stylesheet carries no navigation entry, so a page type or a node name on it
-        // is read by nobody - it would only add bytes to every response on the page.
-        $subscriber = $this->subscriber(['rdbms' => 42.5]);
+        // is read by nobody: it would only add bytes to every response on the page.
+        $subscriber = $this->subscriber(['rdbms' => 42.5], config: ['serverTimingHost' => true]);
         $response = new Response('', 200, ['Content-Type' => 'text/css']);
 
         $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($this->request(), $response));
@@ -260,7 +288,8 @@ class ServerTimingSubscriberTest extends TestCase
      */
     private function subscriber(array $metrics, bool $available = true, array $config = []): ServerTimingSubscriber
     {
-        // One switch decides the whole header now, so there is nothing else to seed.
+        // The header switch and the two opt-ins; all read through ConfigResolver, so
+        // an unset key means what config.xml promises.
         $config += ['serverTiming' => true];
 
         $systemConfig = $this->createMock(SystemConfigService::class);

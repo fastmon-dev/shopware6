@@ -11,9 +11,10 @@ use Shopware\Core\DevOps\Environment\EnvironmentHelper;
  * node slower than the others", and that is invisible unless the response says which node
  * it came from.
  *
- * ## Why this is not a setting
+ * ## Why the name is not a setting
  *
- * Because a setting could not work. Plugin configuration lives in `system_config`, in the
+ * Whether it is sent is one (`serverTimingHost`, off by default). What it says cannot
+ * be, because a setting could not work. Plugin configuration lives in `system_config`, in the
  * database every node of the cluster shares - so a configured name would be the *same* on
  * all of them, which is precisely the opposite of what this is for. The value has to come
  * from the machine that answered.

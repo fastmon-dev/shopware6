@@ -65,9 +65,27 @@
             <name>serverTiming</name>
             <label>Publish a Server-Timing header</label>
             <label lang="de-DE">Server-Timing-Header ausliefern</label>
-            <helpText>Reports the full-page-cache verdict and age, total time, render time, page type, login state and which machine answered, so fastmon can correlate backend phases with the Web Vitals of the same pageview. With the Tideways extension it adds the per-layer breakdown. Costs nothing on a host without a profiler.</helpText>
-            <helpText lang="de-DE">Meldet Full-Page-Cache-Ergebnis und -Alter, Gesamtzeit, Renderzeit, Seitentyp, Login-Status und welche Maschine geantwortet hat, damit fastmon Backend-Phasen mit den Web Vitals desselben Seitenaufrufs korrelieren kann. Mit der Tideways-Extension kommt die Layer-Aufschlüsselung dazu. Kostet auf einem Host ohne Profiler nichts.</helpText>
+            <helpText>Reports the full-page-cache verdict and age, total time, render time and page type, so fastmon can correlate backend phases with the Web Vitals of the same pageview. With the Tideways extension it adds the per-layer breakdown. Costs nothing on a host without a profiler.</helpText>
+            <helpText lang="de-DE">Meldet Full-Page-Cache-Ergebnis und -Alter, Gesamtzeit, Renderzeit und Seitentyp, damit fastmon Backend-Phasen mit den Web Vitals desselben Seitenaufrufs korrelieren kann. Mit der Tideways-Extension kommt die Layer-Aufschlüsselung dazu. Kostet auf einem Host ohne Profiler nichts.</helpText>
             <defaultValue>true</defaultValue>
+        </input-field>
+
+        <input-field type="bool">
+            <name>serverTimingHost</name>
+            <label>Report which host answered</label>
+            <label lang="de-DE">Melden, welcher Host geantwortet hat</label>
+            <helpText>Off by default. Adds fm-host with the first label of the hostname (web-01, never the full domain), or FASTMON_SERVER_NAME if set. Useful on a cluster to see which host is slow; a single host has no reason to publish its name.</helpText>
+            <helpText lang="de-DE">Standardmäßig aus. Ergänzt fm-host mit dem ersten Teil des Hostnamens (web-01, nie die volle Domain) oder mit FASTMON_SERVER_NAME, falls gesetzt. Im Cluster zeigt das, welcher Host langsam ist. Ein einzelner Host hat keinen Grund, seinen Namen zu veröffentlichen.</helpText>
+            <defaultValue>false</defaultValue>
+        </input-field>
+
+        <input-field type="bool">
+            <name>serverTimingLoggedIn</name>
+            <label>Report whether a customer was logged in</label>
+            <label lang="de-DE">Melden, ob ein Kunde eingeloggt war</label>
+            <helpText>Off by default. Adds fm-loggedin (yes/no) to the header. This is a visitor attribute in a header fastmon treats as server self-measurement and collects in every privacy mode, including the cookieless one, so decide deliberately.</helpText>
+            <helpText lang="de-DE">Standardmäßig aus. Ergänzt den Header um fm-loggedin (yes/no). Das ist ein Besucherattribut in einem Header, den fastmon als Server-Selbstmessung behandelt und in jedem Datenschutzmodus erfasst, auch im cookiefreien. Entscheide das bewusst.</helpText>
+            <defaultValue>false</defaultValue>
         </input-field>
     </card>
 </config>

@@ -3,11 +3,13 @@
 namespace Fastmon\Collector\Dto;
 
 /**
- * The Server-Timing setting in force for one request.
+ * The Server-Timing settings in force for one request.
  *
- * One switch: every entry is either free (cache verdict, total, node) or measured anyway
- * (render time, page type), so a knob per entry offered a choice nobody has a reason to
- * make - and each was another way for a shop to report less than it thinks.
+ * One switch for the header, and two opt-ins for single entries. Everything else is
+ * either free (cache verdict, total) or measured anyway (render time, page type), so a
+ * knob per entry offered a choice nobody has a reason to make, and each was another way
+ * for a shop to report less than it thinks. The two that stayed are the two that say
+ * something about the merchant or the visitor rather than about the request.
  *
  * @internal resolved by ConfigResolver; nothing else constructs this
  */
@@ -15,6 +17,19 @@ final readonly class ServerTimingConfig
 {
     public function __construct(
         public bool $enabled,
+        /**
+         * Off by default. The node name is a fact about the merchant's infrastructure,
+         * and only a cluster has a use for it: one server learns nothing from its own
+         * name in every response.
+         */
+        public bool $reportHost,
+        /**
+         * Off by default. A login flag is a visitor attribute in a header fastmon
+         * classifies as server self-measurement and collects in every privacy mode,
+         * the cookieless one included. Sending it is a decision about that
+         * classification.
+         */
+        public bool $reportLoggedIn,
     ) {
     }
 }

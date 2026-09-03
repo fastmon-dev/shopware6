@@ -97,6 +97,8 @@ final class ConfigResolver
     {
         return new ServerTimingConfig(
             enabled: $this->bool('serverTiming', $salesChannelId, true),
+            reportHost: $this->bool('serverTimingHost', $salesChannelId, false),
+            reportLoggedIn: $this->bool('serverTimingLoggedIn', $salesChannelId, false),
         );
     }
 

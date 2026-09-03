@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector\Subscriber;
 
+use Fastmon\Collector\Dto\ServerTimingConfig;
 use Fastmon\Collector\ServerTiming\CacheStatusResolver;
 use Fastmon\Collector\ServerTiming\LayerMetricsProviderInterface;
 use Fastmon\Collector\ServerTiming\RequestInsights;
@@ -111,7 +112,7 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            $own = $this->ownEntries($request, $response);
+            $own = $this->ownEntries($request, $response, $config);
 
             // Checked after the config but before any measurement: on a host with no
             // profiler this is the whole cost of having the feature installed. What we
@@ -146,12 +147,13 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
      * clear of the collector's budget for names it does not recognise.
      *
      * @return list<array{0: string, 1: float|null, 2: string|null}>
- *
- * One guarded entry per setting - a table, not a tangle. Splitting it would spread the rules for one header over six methods.
- * @SuppressWarnings("PHPMD.CyclomaticComplexity")
- * @SuppressWarnings("PHPMD.NPathComplexity")
- */
-    private function ownEntries(Request $request, Response $response): array
+     *
+     * One guarded entry per value, a table rather than a tangle. Splitting it would
+     * spread the rules for one header over six methods.
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     */
+    private function ownEntries(Request $request, Response $response, ServerTimingConfig $config): array
     {
         $own = [];
 
@@ -175,7 +177,9 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
                 $own[] = ['fm-cacheage', (float) $age, null];
             }
 
-            $server = $this->serverIdentity->name();
+            // Opt-in: which machine answered is a fact about the merchant's
+            // infrastructure, and only a cluster has a use for it.
+            $server = $config->reportHost ? $this->serverIdentity->name() : '';
 
             if ($server !== '') {
                 $own[] = ['fm-host', null, $server];
@@ -202,7 +206,9 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
                 $own[] = ['fm-pagetype', null, $pageType];
             }
 
-            $loggedIn = $this->insights->loggedIn();
+            // Opt-in, unlike everything else here: a visitor attribute in a header that
+            // is collected in every privacy mode is the merchant's decision to make.
+            $loggedIn = $config->reportLoggedIn ? $this->insights->loggedIn() : null;
 
             if ($loggedIn !== null) {
                 $own[] = ['fm-loggedin', null, $loggedIn ? 'yes' : 'no'];
