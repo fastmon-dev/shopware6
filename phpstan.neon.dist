@@ -5,22 +5,16 @@ parameters:
         - tests
     treatPhpDocTypesAsCertain: false
     ignoreErrors:
-        # The extra argument on SystemConfigService::set() and delete() is the
-        # `silent` flag that keeps internal writes from dropping the page cache.
-        # 6.7 reads it via func_get_args() from 6.7.9.0 on, until 6.8 puts it in the
-        # signature, and phpstan accepts extra arguments for a method that reads
-        # func_get_args(). 6.6 has no such parameter and ignores the argument at
-        # runtime, but there phpstan counts the declared parameters and refuses the
-        # call. So the error exists only on the 6.6 leg of the matrix, hence
-        # reportUnmatched: false.
-        #
-        # 6.7.0 to 6.7.8 would pass this rule too and drop the argument at runtime,
-        # which is why composer.json does not allow them: below 6.7.9 every write is
-        # loud, and phpstan cannot tell the difference.
+        # `EntitySearchResult` is annotated deprecated for one reason: on 6.8 it stops
+        # extending EntityCollection and keeps extending Struct. That makes every call on
+        # it, `getEntities()` included, a deprecated-class call, and `search()` has no
+        # other return type - so this fires for any DAL read in any plugin. The method
+        # itself survives the change. Reported by `shopware-cli extension validate
+        # --check-against highest`, not by this configuration, hence reportUnmatched.
         -
-            message: '#^Method Shopware\\Core\\System\\SystemConfig\\SystemConfigService::(set|delete)\(\) invoked with \d parameters, \d-\d required\.$#'
-            identifier: arguments.count
+            identifier: method.deprecatedClass
+            message: '#Shopware\\Core\\Framework\\DataAbstractionLayer\\Search\\EntitySearchResult#'
             paths:
                 - src/Connection/ConnectionStore.php
-                - src/Connection/OAuthSession.php
+                - tests
             reportUnmatched: false

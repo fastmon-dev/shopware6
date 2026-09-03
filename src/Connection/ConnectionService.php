@@ -115,10 +115,10 @@ final class ConnectionService
         try {
             $tokens = $this->oauth->exchangeCode(
                 $this->config->apiBaseUrl(),
-                $attempt['clientId'],
+                $attempt->clientId,
                 $code,
-                $attempt['redirectUri'],
-                $attempt['verifier'],
+                $attempt->redirectUri,
+                $attempt->verifier,
             );
         } finally {
             // The code is single-use whatever happened to it, so the attempt is over

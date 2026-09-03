@@ -28,9 +28,9 @@ use Symfony\Component\Lock\LockFactory;
  *   refresh token twice - disconnecting a shop that did nothing wrong. A lock serialises
  *   them, and the one that waited re-reads what the winner stored instead of refreshing
  *   again.
- * - **Stored before used.** The successor is written to `system_config` before the new
- *   access token leaves this class (see `ConnectionStore::saveTokens()`), so a request
- *   that dies mid-flight loses an access token rather than the connection.
+ * - **Stored before used.** The pair is written in one statement before the new access
+ *   token leaves this class (see `ConnectionStore::saveTokens()`), so a request that dies
+ *   mid-flight loses an access token rather than the connection.
  * - **`invalid_grant` is final.** Spent, expired, revoked in the dashboard, or reuse
  *   already detected - fastmon does not say which, and none of them can be retried. The
  *   credential is dropped and the merchant reconnects; retrying would be the second
@@ -170,10 +170,11 @@ final class AccessTokenProvider
         $lock->acquire(true);
 
         try {
-            // Read past the per-request memo: whoever held the lock before us wrote in a
-            // different process, and our own snapshot predates it. See
-            // `ConnectionStore::freshCredentials()`.
-            $credentials = $this->store->freshCredentials();
+            // Re-read inside the lock: whoever held it before us wrote in a different
+            // process, and anything this one read earlier predates that write. The store
+            // reads the row itself, with no memo in front of it, so what comes back here
+            // is what the winner left behind.
+            $credentials = $this->store->credentials();
 
             if ($credentials->accessToken !== $stale && $credentials->hasFreshAccessToken(self::EXPIRY_SKEW_SECONDS)) {
                 return $credentials->accessToken;

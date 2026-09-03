@@ -28,7 +28,12 @@ services:
             - '../../Api/{OAuthMetadata,OAuthTokens,Pkce,ReadsJsonResponses}.php'
             - '../../Api/*Exception.php'
             - '../../Collection/{CollectionMode,CollectionNotReadyException,DomainCheckResult}.php'
-            - '../../Connection/{Connection,ConnectionKind,Credentials}.php'
+            - '../../Connection/{Authorization,Connection,ConnectionKind,Credentials}.php'
+            # The entity and its collection are hydrated by the DAL, not constructed by
+            # the container. ConnectionDefinition stays: autoconfigure tags it, and that
+            # tag is what produces `fastmon_collector_connection.repository`.
+            - '../../Connection/Storage/{ConnectionCollection,ConnectionEntity}.php'
+            # Migrations are found on the filesystem by Shopware, never in the container.
             - '../../Migration/'
 
     # Built from the factory rather than injected as `http_client`, so the plugin does

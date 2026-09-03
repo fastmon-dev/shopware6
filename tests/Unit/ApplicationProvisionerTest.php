@@ -9,7 +9,7 @@ use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Provisioning\ApplicationProvisioner;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -20,7 +20,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 final class ApplicationProvisionerTest extends TestCase
 {
-    use StoresSystemConfig;
+    use StoresConnection;
 
     /** @var list<MockResponse> */
     private array $sent = [];
@@ -29,7 +29,7 @@ final class ApplicationProvisionerTest extends TestCase
     {
         // A pasted key: it passes straight through the token provider, so what these
         // tests exercise is the provisioner and nothing about refreshing.
-        $this->stored = [ConfigResolver::DOMAIN . 'apiToken' => 'fmk_live'];
+        $this->row = ['manualToken' => 'fmk_live'];
     }
 
     public function testCreatingFillsTheDefaultsAndPointsTheStorefrontAtTheResult(): void
@@ -54,12 +54,12 @@ final class ApplicationProvisionerTest extends TestCase
         self::assertSame('shopware6', $body['pagetype_ruleset']);
 
         // And what the storefront renders from here on.
-        self::assertSame('src1', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertSame('pix1', $this->stored[ConfigResolver::DOMAIN . 'pixelId']);
-        self::assertSame('app-1', $this->stored[ConfigResolver::DOMAIN . 'applicationId']);
-        self::assertSame('org-7', $this->stored[ConfigResolver::DOMAIN . 'organizationId']);
+        self::assertSame('src1', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertSame('pix1', $this->config[ConfigResolver::DOMAIN . 'pixelId']);
+        self::assertSame('app-1', $this->row['applicationId']);
+        self::assertSame('org-7', $this->row['organizationId']);
         // Resolved from fastmon, not taken from the browser.
-        self::assertSame('Acme', $this->stored[ConfigResolver::DOMAIN . 'organizationName']);
+        self::assertSame('Acme', $this->row['organizationName']);
     }
 
     public function testTheMerchantsChoicesAreSentAsGiven(): void
@@ -91,9 +91,9 @@ final class ApplicationProvisionerTest extends TestCase
 
         self::assertStringEndsWith('/v1/applications/app-9', $this->sent[0]->getRequestUrl());
         self::assertSame('fresh', $application['trackerId']);
-        self::assertSame('fresh', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertSame('pixfresh', $this->stored[ConfigResolver::DOMAIN . 'pixelId']);
-        self::assertSame('app-9', $this->stored[ConfigResolver::DOMAIN . 'applicationId']);
+        self::assertSame('fresh', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertSame('pixfresh', $this->config[ConfigResolver::DOMAIN . 'pixelId']);
+        self::assertSame('app-9', $this->row['applicationId']);
     }
 
     public function testAnApplicationWithoutATrackerIdIsRefusedBeforeAnythingIsWritten(): void
@@ -108,8 +108,8 @@ final class ApplicationProvisionerTest extends TestCase
             $provisioner->attach('org-7', 'app-9');
             self::fail('an application without a tracker id must be refused');
         } catch (FastmonCollectorException) {
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'applicationId', $this->stored);
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'trackerId', $this->stored);
+            self::assertNull($this->row['applicationId'] ?? null);
+            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'trackerId', $this->config);
         }
     }
 
@@ -124,8 +124,8 @@ final class ApplicationProvisionerTest extends TestCase
 
         $provisioner->create('org-7', '', '', '');
 
-        self::assertSame('src1', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertSame('', $this->stored[ConfigResolver::DOMAIN . 'organizationName']);
+        self::assertSame('src1', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertSame('', $this->row['organizationName']);
     }
 
     public function testTheTrackerIdIsWrittenLast(): void
@@ -134,12 +134,12 @@ final class ApplicationProvisionerTest extends TestCase
         // which only holds if the value that turns the snippets on is the last one in.
         $order = [];
         $systemConfig = $this->createMock(SystemConfigService::class);
-        $systemConfig->method('get')->willReturnCallback(fn (string $key): mixed => $this->stored[$key] ?? null);
+        $systemConfig->method('get')->willReturnCallback(fn (string $key): mixed => $this->config[$key] ?? null);
         $systemConfig->method('set')->willReturnCallback(static function (string $key) use (&$order): void {
             $order[] = str_replace(ConfigResolver::DOMAIN, '', $key);
         });
 
-        $store = new ConnectionStore($systemConfig, $this->database());
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
         $provisioner = new ApplicationProvisioner(
             new FastmonClient(new MockHttpClient([
@@ -166,7 +166,7 @@ final class ApplicationProvisionerTest extends TestCase
 
     public function testSitesAreTheDomainsFastmonHasSeen(): void
     {
-        $this->stored[ConfigResolver::DOMAIN . 'applicationId'] = 'app-1';
+        $this->row['applicationId'] = 'app-1';
 
         $sites = $this->provisioner([new MockResponse(json_encode(['data' => [
             ['id' => 's1', 'domain' => 'shop.example', 'name' => 'Shop'],
@@ -216,7 +216,7 @@ final class ApplicationProvisionerTest extends TestCase
     {
         $this->sent = $api;
         $systemConfig = $this->systemConfig();
-        $store = new ConnectionStore($systemConfig, $this->database());
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
 
         return new ApplicationProvisioner(

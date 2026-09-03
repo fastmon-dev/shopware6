@@ -2,6 +2,7 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use DateTimeImmutable;
 use Fastmon\Collector\Api\FastmonApiException;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonOAuthClient;
@@ -10,7 +11,7 @@ use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Connection\OAuthSession;
 use Fastmon\Collector\Connection\RedirectUri;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -18,7 +19,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 class ConnectionServiceTest extends TestCase
 {
-    use StoresSystemConfig;
+    use StoresConnection;
 
     private const BASE = 'https://api.fastmon.eu';
     private const ADMIN = 'https://shop.example.com/admin';
@@ -68,7 +69,7 @@ class ConnectionServiceTest extends TestCase
         self::assertStringNotContainsString($this->attempt()['verifier'], $started['authorizeUrl']);
         self::assertSame(['authorizeUrl'], array_keys($started));
 
-        self::assertSame('dyn_1', $this->stored[ConfigResolver::DOMAIN . 'oauthClientId']);
+        self::assertSame('dyn_1', $this->row['clientId']);
     }
 
     public function testTheRegistrationIsReusedRatherThanRepeated(): void
@@ -89,16 +90,17 @@ class ConnectionServiceTest extends TestCase
     {
         // The redirect URI is the one field a registration cannot be corrected in, so a
         // shop that moved domain needs a new client rather than a broken one.
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'oauthClientId' => 'dyn_old',
-            ConfigResolver::DOMAIN . 'oauthRedirectUri' => 'https://old.example.com/admin',
+        $this->row = [
+            'clientId' => 'dyn_old',
+            'redirectUri' => 'https://old.example.com/admin',
         ];
+        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'src123';
 
         $service = $this->service(oauth: [$this->discovery(), $this->registration('dyn_new')]);
         $service->beginAuthorization(self::ADMIN);
 
-        self::assertSame('dyn_new', $this->stored[ConfigResolver::DOMAIN . 'oauthClientId']);
-        self::assertSame(self::ADMIN, $this->stored[ConfigResolver::DOMAIN . 'oauthRedirectUri']);
+        self::assertSame('dyn_new', $this->row['clientId']);
+        self::assertSame(self::ADMIN, $this->row['redirectUri']);
     }
 
     public function testTheCodeIsRedeemedWithTheStoredVerifierAndTheAttemptIsClosed(): void
@@ -122,16 +124,16 @@ class ConnectionServiceTest extends TestCase
         $connected = $service->completeAuthorization('the-code', $attempt['state']);
 
         self::assertSame('merchant@example.com', $connected['accountEmail']);
-        self::assertSame('fmr_new', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+        self::assertSame('fmr_new', $this->row['refreshToken']);
 
         // Settled on fastmon's consent screen, so the shop never asks again - and can
         // never end up reporting to a different organization than the one approved.
-        self::assertSame('org-7', $this->stored[ConfigResolver::DOMAIN . 'organizationId']);
-        self::assertSame('Acme', $this->stored[ConfigResolver::DOMAIN . 'organizationName']);
+        self::assertSame('org-7', $this->row['organizationId']);
+        self::assertSame('Acme', $this->row['organizationName']);
 
         // The code is single-use, so an attempt left open is one an intercepted code
         // could still be redeemed against.
-        self::assertArrayNotHasKey(OAuthSession::KEY, $this->stored);
+        self::assertNull($this->row['authorizationVerifier']);
 
         $body = $this->form($this->oauthCalls[2]);
         self::assertSame($attempt['verifier'], $body['code_verifier']);
@@ -150,7 +152,7 @@ class ConnectionServiceTest extends TestCase
         try {
             $service->completeAuthorization('the-code', str_repeat('a', 32));
         } finally {
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->stored);
+            self::assertNull($this->row['refreshToken'] ?? null);
         }
     }
 
@@ -164,7 +166,7 @@ class ConnectionServiceTest extends TestCase
         try {
             $service->declineAuthorization($this->attempt()['state'], 'access_denied');
         } finally {
-            self::assertArrayNotHasKey(OAuthSession::KEY, $this->stored);
+            self::assertNull($this->row['authorizationVerifier']);
         }
     }
 
@@ -179,18 +181,17 @@ class ConnectionServiceTest extends TestCase
 
         $body = $this->form($this->oauthCalls[1]);
         self::assertSame('fmr_live', $body['token']);
-        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->stored);
-        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'trackerId', $this->stored);
+        self::assertNull($this->row['refreshToken'] ?? null);
 
-        // The credential goes silently, nothing a visitor sees depends on it. The
-        // tracker id goes loudly: the cached pages still carry the snippet, and a
-        // disconnected shop must stop serving it.
-        self::assertTrue($this->silent[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
-        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
+        // The tracker id is the one thing a disconnect has to take out of
+        // `system_config`: the cached pages still carry the snippet, and a disconnected
+        // shop must stop serving it. Everything else was a row, and no page is tagged
+        // with that.
+        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'trackerId', $this->config);
 
         // Not a credential, and re-using it keeps this shop one entry in that list rather
         // than a new one per reconnect.
-        self::assertSame('dyn_1', $this->stored[ConfigResolver::DOMAIN . 'oauthClientId']);
+        self::assertSame('dyn_1', $this->row['clientId']);
     }
 
     public function testAShopThatCannotReachFastmonCanStillDisconnect(): void
@@ -199,7 +200,7 @@ class ConnectionServiceTest extends TestCase
 
         $this->service(oauth: [new MockResponse('', ['http_code' => 500])])->disconnect();
 
-        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->stored);
+        self::assertNull($this->row['refreshToken'] ?? null);
     }
 
     public function testAKeyIsVerifiedBeforeItIsStored(): void
@@ -213,7 +214,7 @@ class ConnectionServiceTest extends TestCase
         } finally {
             // A typo must be reported as a typo, not stored to become a storefront that
             // quietly never provisions.
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'apiToken', $this->stored);
+            self::assertNull($this->row['manualToken'] ?? null);
         }
     }
 
@@ -223,41 +224,39 @@ class ConnectionServiceTest extends TestCase
 
         $service->connectWithToken('fmo_key');
 
-        self::assertSame('fmo_key', $this->stored[ConfigResolver::DOMAIN . 'apiToken']);
-        self::assertSame('org-7', $this->stored[ConfigResolver::DOMAIN . 'organizationId']);
+        self::assertSame('fmo_key', $this->row['manualToken']);
+        self::assertSame('org-7', $this->row['organizationId']);
     }
 
     private function connected(string $applicationId = ''): void
     {
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'oauthClientId' => 'dyn_1',
-            ConfigResolver::DOMAIN . 'oauthRedirectUri' => self::ADMIN,
-            ConfigResolver::DOMAIN . 'oauthRefreshToken' => 'fmr_live',
-            ConfigResolver::DOMAIN . 'oauthScopes' => 'org:read app:read app:write site:read',
-            ConfigResolver::DOMAIN . 'oauthExpiresAt' => (string) (time() + 600),
-            ConfigResolver::DOMAIN . 'oauthAccessToken' => 'fmt_live',
-            ConfigResolver::DOMAIN . 'accountEmail' => 'merchant@example.com',
-            ConfigResolver::DOMAIN . 'organizationId' => 'org-7',
-            ConfigResolver::DOMAIN . 'organizationName' => 'Acme',
-            ConfigResolver::DOMAIN . 'applicationId' => $applicationId,
-            ConfigResolver::DOMAIN . 'trackerId' => 'src123',
+        $this->row = [
+            'clientId' => 'dyn_1',
+            'redirectUri' => self::ADMIN,
+            'refreshToken' => 'fmr_live',
+            'scopes' => 'org:read app:read app:write site:read',
+            'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + 600)),
+            'accessToken' => 'fmt_live',
+            'accountEmail' => 'merchant@example.com',
+            'organizationId' => 'org-7',
+            'organizationName' => 'Acme',
+            'applicationId' => $applicationId,
         ];
     }
 
     /**
-     * The authorization in flight, as it sits in `system_config`.
+     * The authorization in flight, as it sits in the connection row.
      *
      * @return array{state: string, verifier: string}
      */
     private function attempt(): array
     {
-        $raw = $this->stored[OAuthSession::KEY] ?? null;
-        $decoded = json_decode(\is_string($raw) ? $raw : '[]', true);
-        $decoded = \is_array($decoded) ? $decoded : [];
+        $state = $this->row['authorizationState'] ?? null;
+        $verifier = $this->row['authorizationVerifier'] ?? null;
 
         return [
-            'state' => \is_string($decoded['state'] ?? null) ? $decoded['state'] : '',
-            'verifier' => \is_string($decoded['verifier'] ?? null) ? $decoded['verifier'] : '',
+            'state' => \is_string($state) ? $state : '',
+            'verifier' => \is_string($verifier) ? $verifier : '',
         ];
     }
 
@@ -312,7 +311,8 @@ class ConnectionServiceTest extends TestCase
     {
         $this->oauthCalls = $oauth;
         $systemConfig = $this->systemConfig();
-        $store = new ConnectionStore($systemConfig, $this->database());
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
+        $session = new OAuthSession($store);
         $config = new ConfigResolver($systemConfig);
         $this->oauthHttp = new MockHttpClient($oauth);
         $oauthClient = new FastmonOAuthClient($this->oauthHttp);
@@ -321,7 +321,7 @@ class ConnectionServiceTest extends TestCase
             new FastmonClient(new MockHttpClient($api)),
             $oauthClient,
             $store,
-            new OAuthSession($systemConfig),
+            $session,
             new RedirectUri(),
             $config,
             new NullLogger(),

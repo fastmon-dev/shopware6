@@ -3,8 +3,10 @@
 namespace Fastmon\Collector\Tests\Unit;
 
 use Doctrine\DBAL\Connection as Database;
+use Fastmon\Collector\Connection\Storage\ConnectionDefinition;
 use Fastmon\Collector\FastmonCollector;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Migration\MigrationCollection;
@@ -14,30 +16,61 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 final class FastmonCollectorUninstallTest extends TestCase
 {
+    use StoresConnection;
+
     /** @var list<string> */
-    private array $deleted = [];
+    private array $statements = [];
 
     public function testDropsTheWholeConnectionUnlessTheDataIsKept(): void
     {
+        $this->config = [
+            ConfigResolver::DOMAIN . 'trackerId' => 'src123',
+            ConfigResolver::DOMAIN . 'pixelId' => 'pix123',
+        ];
+
         $plugin = $this->plugin();
+        $plugin->uninstall($this->context($plugin, keepUserData: false));
+
+        // The table goes, and with it every credential in it. The two values the
+        // storefront rendered go too: everything the plugin owns, and nothing else.
+        self::assertSame([], $this->config);
+        self::assertSame(
+            ['DROP TABLE IF EXISTS `' . ConnectionDefinition::ENTITY_NAME . '`'],
+            $this->statements
+        );
+    }
+
+    public function testItAsksForNothingThePluginItselfDefines(): void
+    {
+        // The container an uninstall runs in has already lost the plugin's own services:
+        // reaching for the entity's repository here ends the uninstall with a
+        // ServiceNotFoundException, which is a plugin the merchant cannot remove. Found
+        // by running the integration suite, whose bootstrap uninstalls before it installs.
+        $plugin = $this->plugin(withPluginServices: false);
 
         $plugin->uninstall($this->context($plugin, keepUserData: false));
 
-        // Everything the store owns - the registration included, which a disconnect
-        // keeps - plus any authorization in flight. The count is the guard: a key added
-        // to the store must show up here without this test having to know its name.
-        self::assertContains(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->deleted);
-        self::assertContains(ConfigResolver::DOMAIN . 'oauthClientId', $this->deleted);
-        self::assertContains(ConfigResolver::DOMAIN . 'apiToken', $this->deleted);
-        self::assertContains(ConfigResolver::DOMAIN . 'trackerId', $this->deleted);
-        self::assertContains(ConfigResolver::DOMAIN . 'oauthSession', $this->deleted);
-        self::assertCount(15, $this->deleted);
+        self::assertSame(
+            ['DROP TABLE IF EXISTS `' . ConnectionDefinition::ENTITY_NAME . '`'],
+            $this->statements
+        );
     }
 
-    public function testAContainerWithoutTheServicesFailsLoudly(): void
+    public function testKeepsEverythingWhenAskedTo(): void
     {
-        // Rather than returning with the rows still there: a container without
-        // SystemConfigService is a broken shop, not a shop with nothing to clean up.
+        $this->config = [ConfigResolver::DOMAIN . 'trackerId' => 'src123'];
+
+        $plugin = $this->plugin();
+        $plugin->uninstall($this->context($plugin, keepUserData: true));
+
+        self::assertSame([ConfigResolver::DOMAIN . 'trackerId' => 'src123'], $this->config);
+        self::assertSame([], $this->statements);
+    }
+
+    public function testAContainerWithoutTheCoreServicesFailsLoudly(): void
+    {
+        // Rather than returning with the table still there: a container without the
+        // system configuration is a broken shop, not a shop with nothing to clean up.
         $plugin = new FastmonCollector(true, \dirname(__DIR__, 2) . '/src');
         $plugin->setContainer(new ContainerBuilder());
 
@@ -45,25 +78,22 @@ final class FastmonCollectorUninstallTest extends TestCase
         $plugin->uninstall($this->context($plugin, keepUserData: false));
     }
 
-    public function testKeepsEverythingWhenAskedTo(): void
+    private function plugin(bool $withPluginServices = true): FastmonCollector
     {
-        $plugin = $this->plugin();
+        $database = $this->createMock(Database::class);
+        $database->method('executeStatement')->willReturnCallback(function (string $sql): int {
+            $this->statements[] = $sql;
 
-        $plugin->uninstall($this->context($plugin, keepUserData: true));
-
-        self::assertSame([], $this->deleted);
-    }
-
-    private function plugin(): FastmonCollector
-    {
-        $systemConfig = $this->createMock(SystemConfigService::class);
-        $systemConfig->method('delete')->willReturnCallback(function (string $key): void {
-            $this->deleted[] = $key;
+            return 0;
         });
 
         $container = new ContainerBuilder();
-        $container->set(SystemConfigService::class, $systemConfig);
-        $container->set(Database::class, $this->createMock(Database::class));
+        $container->set(SystemConfigService::class, $this->systemConfig());
+        $container->set(Database::class, $database);
+
+        if ($withPluginServices) {
+            $container->set(ConnectionDefinition::ENTITY_NAME . '.repository', $this->connectionRepository());
+        }
 
         $plugin = new FastmonCollector(true, \dirname(__DIR__, 2) . '/src');
         $plugin->setContainer($container);

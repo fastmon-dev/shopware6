@@ -5,7 +5,7 @@ visitors and reports them to [fastmon.eu](https://fastmon.eu). EU-hosted, cookie
 
 | | |
 |---|---|
-| Shopware | 6.6.x, or 6.7.9 and later (see *Where the credentials are stored* for why 6.7 starts there) |
+| Shopware | 6.6.x or 6.7.x |
 | PHP | 8.2+ |
 | Multi-node shops | a shared lock store in `LOCK_DSN` (see *Connecting*) |
 | Server-Timing layer breakdown (optional) | Tideways PHP extension **5.23+**, everything else needs none |
@@ -273,8 +273,7 @@ There used to be a switch per entry (total, cache verdict, page type, render) an
 blocklist. They are gone on purpose: every one of those entries is either free (cache
 verdict and age, total) or measured anyway (render time, page type), so a knob offered a
 choice nobody has a reason to make, and each one was another way for a shop to report less
-than it thinks. A shop upgrading from a release that had them gets the old rows removed by
-a migration.
+than it thinks.
 
 The configuration page reports which sources exist on this host and what each is doing:
 measuring, installed but too old, or not installed.
@@ -390,7 +389,36 @@ pointing at an empty id.
 
 ## Where the credentials are stored
 
-In `system_config`, in plain text, like every other Shopware plugin's API credentials.
+In a table of the plugin's own, `fastmon_collector_connection`: one row, one column per
+field, created by one migration and dropped again when the plugin is uninstalled without
+*keep user data*. It holds the registration, the token pair with its expiry, the pasted
+key, who approved the connection, what it points at, and the authorization in flight while
+the merchant is away at the consent screen.
+
+**Not in `system_config`, and that is the whole point.** That store is built for
+configuration: it is memoised once per request, it is tagged into the page cache, it keeps
+every value as a JSON-wrapped string, and it is readable through Shopware's generic
+system-config endpoint by anyone holding `system_config:read`. Each of those is right for
+a setting and wrong for a token, and together they were the reason this plugin needed a
+raw SQL read to get an uncached refresh token, a flag to keep writes out of the page
+cache, and a JSON blob for the authorization. A row has none of them:
+
+- **Nothing memoises it.** The request that waited for the refresh lock reads what the
+  winner stored, which is the difference between a rotated token and a connection fastmon
+  ends for reuse.
+- **No cached page is tagged with it.** A rotation invalidates nothing, on every supported
+  Shopware release, with no flag and no version floor.
+- **It is not reachable through the API.** The entity admits the system scope only, so
+  `GET /api/fastmon-collector-connection` answers `403 Forbidden` whatever privileges the
+  user holds. The plugin's own routes report whether a credential exists and what it may
+  do, never what it is.
+
+Two values stay in `system_config` on purpose: `trackerId` and `pixelId`, the pair the
+storefront templates render. Those are configuration in the full sense, they are read on
+every page, and Shopware dropping the cached pages that carry the old id when they change
+is the point rather than a side effect to avoid.
+
+The tokens are in plain text, like every other Shopware plugin's API credentials.
 Encrypting them would mean keeping a key in `.env`, next to the database credentials that
 already grant access to the same table: it would change who can read them from "anyone
 with the database" to "anyone with the database and the application directory", which is
@@ -401,24 +429,8 @@ expires in minutes and the refresh token rotates on every use, so a copy taken f
 backup stops working the moment the shop refreshes, and using it announces the theft,
 because fastmon ends a connection whose refresh token is presented twice.
 
-None of it is a form field: the panel writes it through the plugin's own admin API, and
-that API reports only *whether* a credential exists and what it may do, never its value.
-The fallback key is typed once, behind the *Connect with an API key instead* link on the
-connect panel, and is not shown again. Shopware's own system-config endpoint is a
-different matter: like every plugin that keeps credentials in `system_config`, the values
-are readable there by an administration user with `system_config:read`.
-
-**Why 6.7 starts at 6.7.9.** Every write to `system_config` invalidates cached pages, and
-on 6.7 one write drops the page cache of the whole shop. A rotated refresh token changes
-nothing a visitor can see, so the plugin writes its internal values *silently*, through
-the flag `SystemConfigService::set()` reads from its fourth argument. That flag exists
-from 6.7.9.0 on; 6.7.0 to 6.7.8 drop the argument and make every rotation, including the
-weekly one, a full page-cache flush. Rather than ship that, the plugin does not install
-there. 6.6 has no flag and needs none: with the default `shopware.cache.tagging.each_config:
-true` a cached page carries a tag per configuration key it read, and no storefront page
-reads a token, so writing one invalidates nothing. A 6.6 shop that turned `each_config` off
-tags every page with one global config tag instead, and there every write is loud, the
-plugin's included.
+None of it is a form field. The fallback key is typed once, behind the *Connect with an
+API key instead* link on the connect panel, and is not shown again.
 
 ## API paths
 

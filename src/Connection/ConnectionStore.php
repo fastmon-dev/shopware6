@@ -2,233 +2,177 @@
 
 namespace Fastmon\Collector\Connection;
 
-use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\DBAL\Connection as Database;
+use DateTimeImmutable;
+use DateTimeInterface;
 use Fastmon\Collector\Api\OAuthTokens;
+use Fastmon\Collector\Connection\Storage\ConnectionCollection;
+use Fastmon\Collector\Connection\Storage\ConnectionDefinition;
+use Fastmon\Collector\Connection\Storage\ConnectionEntity;
 use Fastmon\Collector\Service\ConfigResolver;
+use Shopware\Core\Framework\Api\Context\SystemSource;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
- * Reads and writes the fastmon connection in `system_config`.
+ * Reads and writes the fastmon connection.
  *
- * ## On storing tokens here
+ * ## Where it lives
  *
- * `system_config` keeps its values in plain text in the shop database. That is where
- * every Shopware plugin keeps its API credentials - payment providers included - and it
- * is the right place for these too: encrypting the value would mean keeping a key in
- * `.env`, next to the database credentials that already grant access to the same table.
- * It would change who can read the token from "anyone with the database" to "anyone with
- * the database and the application directory", which is the same person on every shop
- * this plugin will ever run on.
+ * In `fastmon_collector_connection`, one row, one column per field. It used to live in
+ * `system_config`, and everything that was awkward about this class followed from that:
+ * a store built for configuration memoises the whole of it once per request, tags it into
+ * the page cache, keeps every value as a JSON-wrapped string, and hands the lot to anyone
+ * who may read the system-config endpoint. None of that is wrong for a setting and all of
+ * it is wrong for a token, so the connection has a table of its own and the fields are
+ * typed. `ConnectionDefinition` carries the rest of that reasoning.
+ *
+ * Two values stay in `system_config` on purpose: `trackerId` and `pixelId`, the pair the
+ * storefront templates render. Those are configuration in the full sense, they are read
+ * on every page, and Shopware dropping the cached pages that carry the old id when they
+ * change is the point rather than a side effect to avoid.
+ *
+ * ## On storing tokens in the shop database
+ *
+ * In plain text, which is where every Shopware plugin keeps its API credentials, payment
+ * providers included. Encrypting them would mean keeping a key in `.env`, next to the
+ * database credentials that already grant access to the same rows: it would change who
+ * can read a token from "anyone with the database" to "anyone with the database and the
+ * application directory", which is the same person on every shop this plugin will run on.
  *
  * What did change with app connections is how much a stolen row is worth. The access
- * token expires in minutes, and the refresh token rotates on every use - so a copy taken
+ * token expires in minutes and the refresh token rotates on every use, so a copy taken
  * from a backup stops working the moment the shop refreshes, and using it announces the
  * theft, because fastmon ends a connection whose refresh token is presented twice.
  *
- * None of it is a form field. There is no `password` input in config.xml to mask, because
- * nothing here is meant to be typed or read by a person - the panel writes it through the
- * plugin's own admin API, and that API reports whether a connection exists and what it may
- * do, never what it is.
+ * None of it is a form field, and none of it is reachable through the API: the entity
+ * admits the system scope only, and the plugin's own admin routes report whether a
+ * connection exists and what it may do, never what it is.
  *
- * Everything is stored globally (`null` sales channel). The per-channel switches live in
- * config.xml and are read by ConfigResolver; nothing here is per channel.
+ * ## One method per group of fields
  *
- * One method per group of fields that is written together, and that is the design: the
- * order inside `saveTokens()` is load-bearing, and a caller assembling the writes itself
- * is exactly the coupling this class exists to remove.
+ * That is the design rather than an accident: the fields written together are written in
+ * one statement, and a caller assembling the writes itself is exactly the coupling this
+ * class exists to remove.
+ *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 final class ConnectionStore
 {
-    /**
-     * The registration, which is not a credential.
-     *
-     * Kept across a disconnect on purpose: a `client_id` is public by design, it is how
-     * this shop appears in fastmon's connection list, and registering again on every
-     * reconnect would leave a trail of clients nobody can tell apart - and would run into
-     * the registration rate limit on a shop that reconnects a few times in a row.
-     */
-    private const CLIENT_ID = 'oauthClientId';
-    private const REDIRECT_URI = 'oauthRedirectUri';
-
-    private const ACCESS_TOKEN = 'oauthAccessToken';
-    private const EXPIRES_AT = 'oauthExpiresAt';
-    private const REFRESH_TOKEN = 'oauthRefreshToken';
-    private const SCOPES = 'oauthScopes';
-
-    /**
-     * The pasted-key fallback. Keeps its original name: a shop that connected this way
-     * before app connections existed must keep working across the update.
-     */
-    private const MANUAL_TOKEN = 'apiToken';
-
-    private const ACCOUNT_EMAIL = 'accountEmail';
-    private const ACCOUNT_NAME = 'accountName';
-    private const ORGANIZATION_ID = 'organizationId';
-    private const ORGANIZATION_NAME = 'organizationName';
-    private const APPLICATION_ID = 'applicationId';
+    /** The two values the storefront actually renders, and the only two left in `system_config`. */
     private const TRACKER_ID = 'trackerId';
     private const PIXEL_ID = 'pixelId';
 
     /**
-     * The two values the storefront actually renders.
-     *
-     * Writing a configuration key loudly invalidates cached pages: on 6.7 through the
-     * single `system.config-` tag every page carries, on 6.6 through the per-key tag of
-     * whatever was written. That is right for these two: a new tracker id has to reach
-     * the pages, and a page cached with the old one collects nothing.
-     *
-     * It is wrong for everything else this store owns. A rotated refresh token changes
-     * nothing a visitor can see, and rotation happens whenever somebody works in the
-     * administration while the stored access token has aged past its quarter of an hour,
-     * so writing it loudly would drop the shop's entire page cache for nothing. Those
-     * writes are silent, which is the flag core added for exactly this: "SystemConfig is
-     * often used to store internal values."
+     * The same two, for the one caller that cannot hold a store: an uninstall runs in a
+     * container the plugin's own services have already left, so `FastmonCollector` reads
+     * the names from here rather than keeping a second list of its own.
      *
      * @var string[]
      */
-    private const RENDERED_KEYS = [self::TRACKER_ID, self::PIXEL_ID];
+    public const RENDERED_KEYS = [self::TRACKER_ID, self::PIXEL_ID];
 
-    /** Everything that authenticates. Dropped together, whichever kind is stored. */
-    private const CREDENTIAL_KEYS = [
-        self::ACCESS_TOKEN,
-        self::EXPIRES_AT,
-        self::REFRESH_TOKEN,
-        self::SCOPES,
-        self::MANUAL_TOKEN,
+    /**
+     * Everything that authenticates. Dropped together, whichever kind is stored.
+     *
+     * @var array<string, null>
+     */
+    private const NO_CREDENTIALS = [
+        'accessToken' => null,
+        'accessTokenExpiresAt' => null,
+        'refreshToken' => null,
+        'scopes' => null,
+        'manualToken' => null,
     ];
 
-    /** Who and what the credential pointed at. */
-    private const IDENTITY_KEYS = [
-        self::ACCOUNT_EMAIL,
-        self::ACCOUNT_NAME,
-        self::ORGANIZATION_ID,
-        self::ORGANIZATION_NAME,
-        self::APPLICATION_ID,
-        self::TRACKER_ID,
-        self::PIXEL_ID,
+    /**
+     * Who and what the credential pointed at.
+     *
+     * @var array<string, null>
+     */
+    private const NO_IDENTITY = [
+        'accountEmail' => null,
+        'accountName' => null,
+        'organizationId' => null,
+        'organizationName' => null,
+        'applicationId' => null,
     ];
 
-    /** Everything this store owns, so an uninstall cannot forget a field. */
-    private const KEYS = [
-        self::CLIENT_ID,
-        self::REDIRECT_URI,
-        ...self::CREDENTIAL_KEYS,
-        ...self::IDENTITY_KEYS,
-    ];
+    private readonly Context $context;
 
+    /**
+     * @param EntityRepository<ConnectionCollection> $repository
+     */
     public function __construct(
+        #[Autowire(service: 'fastmon_collector_connection.repository')]
+        private readonly EntityRepository $repository,
         private readonly SystemConfigService $systemConfigService,
-        private readonly Database $database,
     ) {
+        // The system scope, which is the only one the entity admits: this row is written
+        // on the shop's behalf and never on a user's, and nobody is meant to reach it
+        // through the API. `new Context(new SystemSource())` rather than
+        // `Context::createDefaultContext()`, which core marks `@internal`.
+        $this->context = new Context(new SystemSource());
     }
 
     public function load(): Connection
     {
+        $row = $this->row();
+
         return new Connection(
-            credentials: $this->credentials(),
-            accountEmail: $this->get(self::ACCOUNT_EMAIL),
-            accountName: $this->get(self::ACCOUNT_NAME),
-            organizationId: $this->get(self::ORGANIZATION_ID),
-            organizationName: $this->get(self::ORGANIZATION_NAME),
-            applicationId: $this->get(self::APPLICATION_ID),
-            trackerId: $this->get(self::TRACKER_ID),
-            pixelId: $this->get(self::PIXEL_ID),
+            credentials: $this->credentialsOf($row),
+            accountEmail: $this->str($row?->accountEmail),
+            accountName: $this->str($row?->accountName),
+            organizationId: $this->str($row?->organizationId),
+            organizationName: $this->str($row?->organizationName),
+            applicationId: $this->str($row?->applicationId),
+            trackerId: $this->rendered(self::TRACKER_ID),
+            pixelId: $this->rendered(self::PIXEL_ID),
         );
     }
 
     /**
      * Just the credential, for the hot path: every API call reads this and almost none of
      * them care who approved the connection.
+     *
+     * Always the row as the database has it. There is no per-request memo in front of the
+     * DAL, which is what the refresh path depends on: the request that waited for the
+     * lock has to see the token the winner stored, not the one it read before waiting.
      */
     public function credentials(): Credentials
     {
-        return new Credentials(
-            clientId: $this->get(self::CLIENT_ID),
-            redirectUri: $this->get(self::REDIRECT_URI),
-            accessToken: $this->get(self::ACCESS_TOKEN),
-            expiresAt: (int) $this->get(self::EXPIRES_AT),
-            refreshToken: $this->get(self::REFRESH_TOKEN),
-            scopes: $this->get(self::SCOPES),
-            manualToken: $this->get(self::MANUAL_TOKEN),
-        );
-    }
-
-    /**
-     * The credential as the database has it **right now**.
-     *
-     * `SystemConfigService` reads through a loader that memoises the whole configuration
-     * once per request and drops it only when this process writes. That is right for
-     * configuration and wrong for exactly one value. A second admin API call that waits
-     * for the refresh lock started its request before the winner wrote, so reading through
-     * the service hands it back its own snapshot: the refresh token it was about to
-     * present, which the winner has already spent. Presenting a spent one is what fastmon
-     * reads as theft, and it ends the connection.
-     *
-     * So these two rows are read straight from the table. `getDomain()` would do the same
-     * job and is marked `@internal`, which makes this the supported way to be sure.
-     */
-    public function freshCredentials(): Credentials
-    {
-        $keys = array_map(
-            static fn (string $key): string => ConfigResolver::DOMAIN . $key,
-            [self::CLIENT_ID, self::REDIRECT_URI, ...self::CREDENTIAL_KEYS]
-        );
-
-        /** @var array<string, mixed> $rows */
-        $rows = $this->database->fetchAllKeyValue(
-            'SELECT configuration_key, configuration_value
-             FROM system_config
-             WHERE sales_channel_id IS NULL AND configuration_key IN (:keys)',
-            ['keys' => $keys],
-            ['keys' => ArrayParameterType::STRING]
-        );
-
-        $stored = [];
-
-        foreach ($rows as $key => $value) {
-            $stored[str_replace(ConfigResolver::DOMAIN, '', (string) $key)] = $this->unwrap($value);
-        }
-
-        return new Credentials(
-            clientId: $stored[self::CLIENT_ID] ?? '',
-            redirectUri: $stored[self::REDIRECT_URI] ?? '',
-            accessToken: $stored[self::ACCESS_TOKEN] ?? '',
-            expiresAt: (int) ($stored[self::EXPIRES_AT] ?? '0'),
-            refreshToken: $stored[self::REFRESH_TOKEN] ?? '',
-            scopes: $stored[self::SCOPES] ?? '',
-            manualToken: $stored[self::MANUAL_TOKEN] ?? '',
-        );
+        return $this->credentialsOf($this->row());
     }
 
     /** Remember the registration, and the redirect URI it is only valid for. */
     public function saveClient(string $clientId, string $redirectUri): void
     {
-        $this->set(self::CLIENT_ID, $clientId);
-        $this->set(self::REDIRECT_URI, $redirectUri);
+        $this->write(['clientId' => $clientId, 'redirectUri' => $redirectUri]);
     }
 
     /**
      * Store a freshly issued pair.
      *
-     * **The refresh token is written first, and that order is the whole point.** Each one
-     * works exactly once: if the process died between the two writes, losing the
-     * successor would leave the shop holding a spent token, and presenting a spent token
-     * is what fastmon reads as theft - it would end the connection. Written in this
-     * order, the worst case is an access token the shop forgot it had, which the next
-     * refresh replaces.
+     * One row and one statement, so the pair cannot be half-written. That matters here
+     * more than anywhere else: each refresh token works exactly once, and a shop left
+     * holding a spent one would present it and be read as a thief. While these fields
+     * were separate configuration keys, the order of the writes was what stood in for
+     * this, and losing the successor between two of them was a real failure mode.
      *
      * Any pasted key goes at the same time: an app connection supersedes it, and leaving
      * one behind would mean a fallback quietly taking over the moment the grant ends.
      */
     public function saveTokens(OAuthTokens $tokens): void
     {
-        $this->set(self::REFRESH_TOKEN, $tokens->refreshToken);
-        $this->set(self::SCOPES, $tokens->scope);
-        $this->set(self::EXPIRES_AT, (string) (time() + $tokens->expiresIn));
-        $this->set(self::ACCESS_TOKEN, $tokens->accessToken);
-        $this->forget(self::MANUAL_TOKEN);
+        $this->write([
+            'refreshToken' => $tokens->refreshToken,
+            'scopes' => $tokens->scope,
+            'accessToken' => $tokens->accessToken,
+            'accessTokenExpiresAt' => $this->at(time() + $tokens->expiresIn),
+            'manualToken' => null,
+        ]);
     }
 
     /**
@@ -239,18 +183,15 @@ final class ConnectionStore
      */
     public function saveManualToken(string $token): void
     {
-        foreach (self::CREDENTIAL_KEYS as $key) {
-            $this->forget($key);
-        }
-
-        $this->set(self::MANUAL_TOKEN, $token);
+        // The key on the left: a union keeps the first occurrence of a key, and the
+        // list of nulls carries one for `manualToken` too.
+        $this->write(['manualToken' => $token] + self::NO_CREDENTIALS);
     }
 
     /** Who approved the connection. fastmon reports this once, at consent. */
     public function saveAccount(string $accountEmail, string $accountName): void
     {
-        $this->set(self::ACCOUNT_EMAIL, $accountEmail);
-        $this->set(self::ACCOUNT_NAME, $accountName);
+        $this->write(['accountEmail' => $accountEmail, 'accountName' => $accountName]);
     }
 
     /**
@@ -263,21 +204,67 @@ final class ConnectionStore
      */
     public function saveOrganization(string $organizationId, string $organizationName): void
     {
-        $this->set(self::ORGANIZATION_ID, $organizationId);
-        $this->set(self::ORGANIZATION_NAME, $organizationName);
+        $this->write(['organizationId' => $organizationId, 'organizationName' => $organizationName]);
     }
 
     /**
      * Point the storefront at an application. `trackerId` is what actually turns the
-     * snippets on, so it is written last - a half-written link renders nothing rather
-     * than a script tag with an empty id.
+     * snippets on, so it is written last: a half-written link renders nothing rather than
+     * a script tag with an empty id.
      */
     public function saveApplication(string $organizationId, string $applicationId, string $trackerId, string $pixelId): void
     {
-        $this->set(self::ORGANIZATION_ID, $organizationId);
-        $this->set(self::APPLICATION_ID, $applicationId);
-        $this->set(self::PIXEL_ID, $pixelId);
-        $this->set(self::TRACKER_ID, $trackerId);
+        $this->write(['organizationId' => $organizationId, 'applicationId' => $applicationId]);
+        $this->saveRendered(self::PIXEL_ID, $pixelId);
+        $this->saveRendered(self::TRACKER_ID, $trackerId);
+    }
+
+    /**
+     * The authorization in flight, while the merchant is away at fastmon's consent
+     * screen. One at a time, which is what a shop connecting to one account needs:
+     * starting a second replaces the first, so an abandoned attempt cannot linger.
+     */
+    public function saveAuthorization(Authorization $authorization): void
+    {
+        $this->write([
+            'authorizationState' => $authorization->state,
+            'authorizationVerifier' => $authorization->verifier,
+            'authorizationClientId' => $authorization->clientId,
+            'authorizationRedirectUri' => $authorization->redirectUri,
+            'authorizationExpiresAt' => $this->at($authorization->expiresAt),
+        ]);
+    }
+
+    /** The attempt in flight, or null when this shop has none. */
+    public function authorization(): ?Authorization
+    {
+        $row = $this->row();
+        $state = $this->str($row?->authorizationState);
+        $verifier = $this->str($row?->authorizationVerifier);
+
+        if ($state === '' || $verifier === '') {
+            return null;
+        }
+
+        return new Authorization(
+            state: $state,
+            verifier: $verifier,
+            clientId: $this->str($row?->authorizationClientId),
+            redirectUri: $this->str($row?->authorizationRedirectUri),
+            expiresAt: $row?->authorizationExpiresAt?->getTimestamp() ?? 0,
+        );
+    }
+
+    /** Called once the authorization ended, successfully or not. */
+    public function clearAuthorization(): void
+    {
+        $this->write([
+            'authorizationState' => null,
+            'authorizationVerifier' => null,
+            'authorizationClientId' => null,
+            'authorizationRedirectUri' => null,
+            'authorizationExpiresAt' => null,
+        ]);
     }
 
     /**
@@ -289,9 +276,7 @@ final class ConnectionStore
      */
     public function clearCredentials(): void
     {
-        foreach (self::CREDENTIAL_KEYS as $key) {
-            $this->forget($key);
-        }
+        $this->write(self::NO_CREDENTIALS);
     }
 
     /**
@@ -303,69 +288,86 @@ final class ConnectionStore
      */
     public function clear(): void
     {
-        $this->clearCredentials();
-
-        foreach (self::IDENTITY_KEYS as $key) {
-            $this->forget($key);
-        }
+        $this->write(self::NO_CREDENTIALS + self::NO_IDENTITY);
+        $this->forgetRendered();
     }
 
     /** Uninstall: everything this store owns, registration included. */
     public function clearAll(): void
     {
-        foreach (self::KEYS as $key) {
-            $this->forget($key);
-        }
+        $this->repository->delete([['id' => ConnectionDefinition::ROW_ID]], $this->context);
+        $this->forgetRendered();
     }
 
-    private function get(string $key): string
+    private function row(): ?ConnectionEntity
+    {
+        // Through `getEntities()` rather than the result's own `first()`: on 6.8 the
+        // search result stops extending the collection, and that call goes with it.
+        $row = $this->repository
+            ->search(new Criteria([ConnectionDefinition::ROW_ID]), $this->context)
+            ->getEntities()
+            ->first();
+
+        return $row instanceof ConnectionEntity ? $row : null;
+    }
+
+    /**
+     * @param array<string, string|DateTimeInterface|null> $data
+     */
+    private function write(array $data): void
+    {
+        // Upsert against the one fixed id: a shop has one connection, so there is no
+        // row to look up before writing and no second row this could ever create.
+        $this->repository->upsert([['id' => ConnectionDefinition::ROW_ID] + $data], $this->context);
+    }
+
+    private function credentialsOf(?ConnectionEntity $row): Credentials
+    {
+        return new Credentials(
+            clientId: $this->str($row?->clientId),
+            redirectUri: $this->str($row?->redirectUri),
+            accessToken: $this->str($row?->accessToken),
+            expiresAt: $row?->accessTokenExpiresAt?->getTimestamp() ?? 0,
+            refreshToken: $this->str($row?->refreshToken),
+            scopes: $this->str($row?->scopes),
+            manualToken: $this->str($row?->manualToken),
+        );
+    }
+
+    private function str(?string $value): string
+    {
+        return $value === null ? '' : trim($value);
+    }
+
+    private function at(int $timestamp): DateTimeImmutable
+    {
+        return new DateTimeImmutable('@' . $timestamp);
+    }
+
+    /**
+     * One of the two rendered values, from `system_config`.
+     *
+     * Written loudly, which is what invalidates the cached pages still carrying the old
+     * id. On 6.8 that becomes the wrong default and these two writes will have to say
+     * `silent: false` out loud; the plugin does not claim 6.8 yet, and by then the flag
+     * is a real parameter rather than something read out of `func_get_args()`.
+     */
+    private function rendered(string $key): string
     {
         $value = $this->systemConfigService->get(ConfigResolver::DOMAIN . $key);
 
         return \is_scalar($value) ? trim((string) $value) : '';
     }
 
-    /**
-     * Every value in `system_config` is stored as `{"_value": …}`, which is what the
-     * service would unwrap if it could be used for this read.
-     */
-    private function unwrap(mixed $value): string
+    private function saveRendered(string $key, string $value): void
     {
-        if (!\is_string($value)) {
-            return '';
+        $this->systemConfigService->set(ConfigResolver::DOMAIN . $key, $value);
+    }
+
+    private function forgetRendered(): void
+    {
+        foreach (self::RENDERED_KEYS as $key) {
+            $this->systemConfigService->delete(ConfigResolver::DOMAIN . $key);
         }
-
-        $decoded = json_decode($value, true);
-        $inner = \is_array($decoded) ? ($decoded['_value'] ?? null) : null;
-
-        return \is_scalar($inner) ? trim((string) $inner) : '';
-    }
-
-    private function set(string $key, string $value): void
-    {
-        // The fourth argument is `silent`. On 6.7 it reaches core through
-        // `func_get_args()` from 6.7.9.0 on, until 6.8 puts it in the signature, where
-        // it also becomes the default. 6.7.0 to 6.7.8 do not read it, and a loud write
-        // there drops the whole page cache, so composer.json starts the 6.7 range at
-        // 6.7.9. 6.6 has no such flag and ignores the extra argument; with the default
-        // `shopware.cache.tagging.each_config: true` it tags pages per key read, and no
-        // storefront page reads an internal value, so the writes are quiet on both
-        // supported branches. (A 6.6 shop with `each_config: false` tags every page
-        // globally and is loud on every write, ours included; nothing here can help it.)
-        $this->systemConfigService->set(
-            ConfigResolver::DOMAIN . $key,
-            $value,
-            null,
-            !\in_array($key, self::RENDERED_KEYS, true)
-        );
-    }
-
-    private function forget(string $key): void
-    {
-        $this->systemConfigService->delete(
-            ConfigResolver::DOMAIN . $key,
-            null,
-            !\in_array($key, self::RENDERED_KEYS, true)
-        );
     }
 }

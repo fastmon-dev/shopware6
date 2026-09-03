@@ -2,13 +2,14 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use DateTimeImmutable;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStatus;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -21,7 +22,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
  */
 class ConnectionStatusTest extends TestCase
 {
-    use StoresSystemConfig;
+    use StoresConnection;
 
     private const BASE = 'https://api.fastmon.eu';
     private const ADMIN = 'https://shop.example.com/admin';
@@ -57,7 +58,7 @@ class ConnectionStatusTest extends TestCase
     public function testWithoutAnOrganizationThereIsNoLinkToOffer(): void
     {
         // Both pages live under an organization. A link to nothing is worse than none.
-        $this->stored = [ConfigResolver::DOMAIN . 'apiToken' => 'fmo_key'];
+        $this->row = ['manualToken' => 'fmo_key'];
 
         $status = $this->reporter()->describe();
 
@@ -71,7 +72,7 @@ class ConnectionStatusTest extends TestCase
         // again. Without this the merchant meets it as an API error on whichever button
         // needed the permission.
         $this->connected();
-        $this->stored[ConfigResolver::DOMAIN . 'oauthScopes'] = 'org:read app:write site:read';
+        $this->row['scopes'] = 'org:read app:write site:read';
 
         self::assertSame(['app:read'], $this->reporter()->describe()['missingScopes']);
     }
@@ -80,7 +81,7 @@ class ConnectionStatusTest extends TestCase
     {
         // A key carries its permissions on fastmon's side and never tells the shop what
         // they are, so an empty scope list is "unknown", not "none".
-        $this->stored = [ConfigResolver::DOMAIN . 'apiToken' => 'fmo_key'];
+        $this->row = ['manualToken' => 'fmo_key'];
 
         $status = $this->reporter()->describe();
 
@@ -171,31 +172,29 @@ class ConnectionStatusTest extends TestCase
         self::assertSame('', $status['error']);
 
         // And the storefront is emitting the new ones from here on. These two are the
-        // values the pages render, so they are the two keys written loudly: Shopware
-        // dropping the pages that still carry the old id is the point, not a side
-        // effect. Everything else the store writes stays silent.
-        self::assertSame('newhash', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertSame('newpixel', $this->stored[ConfigResolver::DOMAIN . 'pixelId']);
-        self::assertFalse($this->silent[ConfigResolver::DOMAIN . 'pixelId']);
+        // values the pages render, which is why they are the pair that stayed in
+        // `system_config`: Shopware dropping the cached pages that still carry the old
+        // id is the point rather than a side effect to avoid.
+        self::assertSame('newhash', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertSame('newpixel', $this->config[ConfigResolver::DOMAIN . 'pixelId']);
         self::assertSame('newhash', $status['trackerId']);
     }
 
     private function connected(string $applicationId = ''): void
     {
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'oauthClientId' => 'dyn_1',
-            ConfigResolver::DOMAIN . 'oauthRedirectUri' => self::ADMIN,
-            ConfigResolver::DOMAIN . 'oauthRefreshToken' => 'fmr_live',
-            ConfigResolver::DOMAIN . 'oauthScopes' => 'org:read app:read app:write site:read',
-            ConfigResolver::DOMAIN . 'oauthExpiresAt' => (string) (time() + 600),
-            ConfigResolver::DOMAIN . 'oauthAccessToken' => 'fmt_live',
-            ConfigResolver::DOMAIN . 'accountEmail' => 'merchant@example.com',
-            ConfigResolver::DOMAIN . 'organizationId' => 'org-7',
-            ConfigResolver::DOMAIN . 'organizationName' => 'Acme',
-            ConfigResolver::DOMAIN . 'applicationId' => $applicationId,
-            ConfigResolver::DOMAIN . 'trackerId' => 'src123',
+        $this->row = [
+            'clientId' => 'dyn_1',
+            'redirectUri' => self::ADMIN,
+            'refreshToken' => 'fmr_live',
+            'scopes' => 'org:read app:read app:write site:read',
+            'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + 600)),
+            'accessToken' => 'fmt_live',
+            'accountEmail' => 'merchant@example.com',
+            'organizationId' => 'org-7',
+            'organizationName' => 'Acme',
+            'applicationId' => $applicationId,
         ];
+        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'src123';
     }
 
     private function discovery(): MockResponse
@@ -227,7 +226,7 @@ class ConnectionStatusTest extends TestCase
     private function reporter(array $api = [], array $oauth = []): ConnectionStatus
     {
         $systemConfig = $this->systemConfig();
-        $store = new ConnectionStore($systemConfig, $this->database());
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
         $oauthClient = new FastmonOAuthClient(new MockHttpClient($oauth));
 

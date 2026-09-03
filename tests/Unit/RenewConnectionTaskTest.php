@@ -2,13 +2,14 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use DateTimeImmutable;
 use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\ScheduledTask\RenewConnectionTask;
 use Fastmon\Collector\ScheduledTask\RenewConnectionTaskHandler;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -19,7 +20,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 class RenewConnectionTaskTest extends TestCase
 {
-    use StoresSystemConfig;
+    use StoresConnection;
 
     private const BASE = 'https://api.fastmon.eu';
 
@@ -37,7 +38,7 @@ class RenewConnectionTaskTest extends TestCase
 
         $this->handler([$this->discovery(), $this->tokenResponse('fmt_new', 'fmr_new')])->run();
 
-        self::assertSame('fmr_new', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+        self::assertSame('fmr_new', $this->row['refreshToken']);
     }
 
     public function testItRenewsEvenWhenTheAccessTokenIsStillFresh(): void
@@ -46,29 +47,29 @@ class RenewConnectionTaskTest extends TestCase
         // because the access token happens to be young would leave that clock running
         // from whenever somebody last opened the panel.
         $this->connected();
-        $this->stored[ConfigResolver::DOMAIN . 'oauthExpiresAt'] = (string) (time() + 900);
+        $this->row['accessTokenExpiresAt'] = new DateTimeImmutable('@' . (time() + 900));
 
         $this->handler([$this->discovery(), $this->tokenResponse('fmt_new', 'fmr_new')])->run();
 
-        self::assertSame('fmr_new', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+        self::assertSame('fmr_new', $this->row['refreshToken']);
     }
 
     public function testAPastedKeyHasNothingToRenew(): void
     {
         // It does not expire and there is nothing to rotate. No HTTP response is queued,
         // so a request going out would fail the test.
-        $this->stored = [ConfigResolver::DOMAIN . 'apiToken' => 'fmo_key'];
+        $this->row = ['manualToken' => 'fmo_key'];
 
         $this->handler([])->run();
 
-        self::assertSame('fmo_key', $this->stored[ConfigResolver::DOMAIN . 'apiToken']);
+        self::assertSame('fmo_key', $this->row['manualToken']);
     }
 
     public function testAShopWithNoConnectionIsLeftAlone(): void
     {
         $this->handler([])->run();
 
-        self::assertSame([], $this->stored);
+        self::assertSame([], $this->row);
     }
 
     public function testAFailureIsLoggedRatherThanFailingTheTask(): void
@@ -80,7 +81,7 @@ class RenewConnectionTaskTest extends TestCase
 
         $this->handler([new MockResponse('', ['http_code' => 503])])->run();
 
-        self::assertSame('fmr_live', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+        self::assertSame('fmr_live', $this->row['refreshToken']);
     }
 
     public function testAConnectionFastmonEndedIsDroppedRatherThanRetriedForever(): void
@@ -92,17 +93,17 @@ class RenewConnectionTaskTest extends TestCase
             new MockResponse(json_encode(['error' => 'invalid_grant'], \JSON_THROW_ON_ERROR), ['http_code' => 400]),
         ])->run();
 
-        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->stored);
+        self::assertNull($this->row['refreshToken'] ?? null);
     }
 
     private function connected(): void
     {
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'oauthClientId' => 'dyn_1',
-            ConfigResolver::DOMAIN . 'oauthRefreshToken' => 'fmr_live',
-            ConfigResolver::DOMAIN . 'oauthScopes' => 'org:read app:read app:write site:read',
-            ConfigResolver::DOMAIN . 'oauthExpiresAt' => (string) (time() - 60),
-            ConfigResolver::DOMAIN . 'oauthAccessToken' => 'fmt_old',
+        $this->row = [
+            'clientId' => 'dyn_1',
+            'refreshToken' => 'fmr_live',
+            'scopes' => 'org:read app:read app:write site:read',
+            'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() - 60)),
+            'accessToken' => 'fmt_old',
         ];
     }
 
@@ -132,7 +133,7 @@ class RenewConnectionTaskTest extends TestCase
     private function handler(array $responses): RenewConnectionTaskHandler
     {
         $systemConfig = $this->systemConfig();
-        $store = new ConnectionStore($systemConfig, $this->database());
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
 
         return new RenewConnectionTaskHandler(

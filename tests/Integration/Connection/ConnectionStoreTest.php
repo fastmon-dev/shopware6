@@ -2,96 +2,176 @@
 
 namespace Fastmon\Collector\Tests\Integration\Connection;
 
-use Doctrine\DBAL\Connection;
 use Fastmon\Collector\Api\OAuthTokens;
+use Fastmon\Collector\Connection\Authorization;
 use Fastmon\Collector\Connection\ConnectionStore;
+use Fastmon\Collector\Connection\Storage\ConnectionCollection;
+use Fastmon\Collector\Connection\Storage\ConnectionDefinition;
 use Fastmon\Collector\Service\ConfigResolver;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Framework\Api\Context\AdminApiSource;
+use Shopware\Core\Framework\Api\Context\SystemSource;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
-use Shopware\Core\Test\TestDefaults;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
- * `freshCredentials()` reads `system_config` with SQL of its own, past the service and
- * its per-request memo. The unit tests drive it through a fake that ignores the
- * statement, so this is where the query, the `sales_channel_id IS NULL` filter and the
- * `{"_value": …}` unwrapping meet the real table.
+ * The connection against its own table, through the real DAL.
+ *
+ * The unit tests drive the store through a repository that is an array, so this is where
+ * the definition, the migration and the entity meet: that every field survives a write
+ * and a read, that a write by another process is visible at once (which the refresh path
+ * depends on), and that nothing here can be read through the API.
  */
 final class ConnectionStoreTest extends TestCase
 {
     use IntegrationTestBehaviour;
 
-    private const REFRESH_TOKEN_KEY = ConfigResolver::DOMAIN . 'oauthRefreshToken';
+    private ConnectionStore $store;
 
-    private Connection $database;
+    /** @var EntityRepository<ConnectionCollection> */
+    private EntityRepository $repository;
 
     private SystemConfigService $systemConfig;
 
-    private ConnectionStore $store;
-
     protected function setUp(): void
     {
-        $database = static::getContainer()->get(Connection::class);
+        $repository = static::getContainer()->get(ConnectionDefinition::ENTITY_NAME . '.repository');
         $systemConfig = static::getContainer()->get(SystemConfigService::class);
-        self::assertInstanceOf(Connection::class, $database);
+        self::assertInstanceOf(EntityRepository::class, $repository);
         self::assertInstanceOf(SystemConfigService::class, $systemConfig);
 
-        $this->database = $database;
+        /** @var EntityRepository<ConnectionCollection> $repository */
+        $this->repository = $repository;
         $this->systemConfig = $systemConfig;
-        $this->store = new ConnectionStore($systemConfig, $database);
+        $this->store = new ConnectionStore($repository, $systemConfig);
     }
 
     protected function tearDown(): void
     {
-        // The transaction takes the rows back; this takes them out of the memo the
-        // shared test kernel would otherwise carry into the next test.
+        // The transaction takes the row back; this takes the two configuration values
+        // out of the memo the shared test kernel would otherwise carry into the next test.
         $this->store->clearAll();
     }
 
-    public function testReadsBackWhatTheServiceWroteUnwrapped(): void
+    public function testEveryFieldSurvivesAWriteAndARead(): void
     {
         $this->store->saveClient('dyn_1', 'https://shop.example/admin');
         $this->store->saveTokens($this->tokens('fmt_1', 'fmr_1'));
+        $this->store->saveAccount('merchant@example.com', 'Merchant');
 
-        $fresh = $this->store->freshCredentials();
+        $connection = $this->store->load();
+        $credentials = $connection->credentials;
 
-        self::assertSame('dyn_1', $fresh->clientId);
-        self::assertSame('https://shop.example/admin', $fresh->redirectUri);
-        self::assertSame('fmt_1', $fresh->accessToken);
-        self::assertSame('fmr_1', $fresh->refreshToken);
-        self::assertSame('org:read app:read', $fresh->scopes);
-        self::assertGreaterThan(time(), $fresh->expiresAt);
-        self::assertSame('', $fresh->manualToken);
-        self::assertTrue($fresh->isAppConnection());
+        self::assertSame('dyn_1', $credentials->clientId);
+        self::assertSame('https://shop.example/admin', $credentials->redirectUri);
+        self::assertSame('fmt_1', $credentials->accessToken);
+        self::assertSame('fmr_1', $credentials->refreshToken);
+        self::assertSame('org:read app:read', $credentials->scopes);
+        self::assertSame('', $credentials->manualToken);
+        self::assertTrue($credentials->isAppConnection());
+        // A datetime column read back as the unix seconds the value objects work in.
+        self::assertGreaterThan(time(), $credentials->expiresAt);
+        self::assertLessThanOrEqual(time() + 900, $credentials->expiresAt);
+        self::assertSame('merchant@example.com', $connection->accountEmail);
     }
 
-    public function testReadsPastThePerRequestMemo(): void
+    public function testAWriteByAnotherProcessIsVisibleAtOnce(): void
     {
-        // The bug that cost a connection in production. A request that waited for the
-        // refresh lock had read the configuration before the winner wrote; the service
-        // hands it that snapshot, and the snapshot holds a refresh token that is spent.
+        // The bug that cost a connection in production: the old storage answered from a
+        // snapshot taken once per request, so the request that waited for the refresh
+        // lock got back the refresh token it was about to present, presented it, and
+        // fastmon ended the grant. Nothing memoises the row.
         $this->store->saveTokens($this->tokens('fmt_1', 'fmr_1'));
         self::assertSame('fmr_1', $this->store->credentials()->refreshToken);
 
-        // Another process rotates the token: the row changes, this process's memo does not.
-        $this->database->executeStatement(
-            'UPDATE system_config SET configuration_value = :value
-             WHERE configuration_key = :key AND sales_channel_id IS NULL',
-            ['value' => json_encode(['_value' => 'fmr_2'], \JSON_THROW_ON_ERROR), 'key' => self::REFRESH_TOKEN_KEY]
-        );
+        // A second store on the same repository stands in for the other process.
+        (new ConnectionStore($this->repository, $this->systemConfig))->saveTokens($this->tokens('fmt_2', 'fmr_2'));
 
-        self::assertSame('fmr_1', $this->store->credentials()->refreshToken, 'the service memoises per request');
-        self::assertSame('fmr_2', $this->store->freshCredentials()->refreshToken);
+        self::assertSame('fmr_2', $this->store->credentials()->refreshToken);
+        self::assertSame('fmt_2', $this->store->credentials()->accessToken);
     }
 
-    public function testAPerChannelRowIsNotTheGlobalCredential(): void
+    public function testTheAuthorizationInFlightIsFiveColumnsAndIsCleared(): void
     {
-        // The connection is stored globally. A row for a sales channel under the same
-        // key is not one this plugin wrote, and must not be read as the credential.
-        $this->systemConfig->set(self::REFRESH_TOKEN_KEY, 'not-ours', TestDefaults::SALES_CHANNEL);
+        $this->store->saveAuthorization(new Authorization(
+            state: str_repeat('a', 32),
+            verifier: 'the-verifier',
+            clientId: 'dyn_1',
+            redirectUri: 'https://shop.example/admin',
+            expiresAt: time() + 1800,
+        ));
 
-        self::assertSame('', $this->store->freshCredentials()->refreshToken);
-        self::assertFalse($this->store->freshCredentials()->isAppConnection());
+        $attempt = $this->store->authorization();
+
+        self::assertNotNull($attempt);
+        self::assertSame(str_repeat('a', 32), $attempt->state);
+        self::assertSame('the-verifier', $attempt->verifier);
+        self::assertSame('dyn_1', $attempt->clientId);
+        self::assertSame('https://shop.example/admin', $attempt->redirectUri);
+        self::assertFalse($attempt->isExpired());
+
+        $this->store->clearAuthorization();
+
+        self::assertNull($this->store->authorization());
+    }
+
+    public function testTheTwoRenderedIdsAreTheOnlyThingLeftInSystemConfig(): void
+    {
+        $this->store->saveApplication('org-7', 'app-1', 'src123', 'pix123');
+
+        // The pair the storefront templates read, where a write invalidates the pages
+        // that carry the old id. Everything else about the link is a column.
+        self::assertSame('src123', $this->systemConfig->get(ConfigResolver::DOMAIN . 'trackerId'));
+        self::assertSame('pix123', $this->systemConfig->get(ConfigResolver::DOMAIN . 'pixelId'));
+        self::assertNull($this->systemConfig->get(ConfigResolver::DOMAIN . 'applicationId'));
+        self::assertNull($this->systemConfig->get(ConfigResolver::DOMAIN . 'oauthRefreshToken'));
+
+        $connection = $this->store->load();
+        self::assertSame('app-1', $connection->applicationId);
+        self::assertSame('org-7', $connection->organizationId);
+        self::assertSame('src123', $connection->trackerId);
+    }
+
+    public function testADisconnectKeepsTheRegistrationAndAnUninstallDoesNot(): void
+    {
+        $this->store->saveClient('dyn_1', 'https://shop.example/admin');
+        $this->store->saveTokens($this->tokens('fmt_1', 'fmr_1'));
+        $this->store->saveApplication('org-7', 'app-1', 'src123', 'pix123');
+
+        $this->store->clear();
+
+        // Not a credential, and re-using it keeps this shop one entry in fastmon's
+        // connection list rather than a new one per reconnect.
+        self::assertSame('dyn_1', $this->store->credentials()->clientId);
+        self::assertSame('', $this->store->credentials()->refreshToken);
+        self::assertFalse($this->store->load()->isConnected());
+        self::assertSame('', $this->store->load()->trackerId);
+
+        $this->store->clearAll();
+
+        self::assertSame('', $this->store->credentials()->clientId);
+        self::assertSame(0, $this->rowCount());
+    }
+
+    public function testTheCredentialCannotBeReadThroughTheApi(): void
+    {
+        $this->store->saveTokens($this->tokens('fmt_1', 'fmr_1'));
+
+        // What an administration user with `system_config:read` could do to the old
+        // storage: read the domain and get the tokens with it. The entity admits the
+        // system scope only, so the generic entity API refuses before any row is loaded.
+        $this->expectException(AccessDeniedHttpException::class);
+
+        $this->repository->search(new Criteria(), new Context(new AdminApiSource(null)));
+    }
+
+    private function rowCount(): int
+    {
+        return $this->repository->search(new Criteria(), new Context(new SystemSource()))->getTotal();
     }
 
     private function tokens(string $accessToken, string $refreshToken): OAuthTokens

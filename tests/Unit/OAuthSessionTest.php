@@ -2,41 +2,49 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use DateTimeImmutable;
+use DateTimeInterface;
 use Fastmon\Collector\Connection\OAuthSession;
-use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 
 class OAuthSessionTest extends TestCase
 {
-    use StoresSystemConfig;
+    use StoresConnection;
 
     public function testAStateResolvesBackToWhatTheCodeHasToBeRedeemedWith(): void
     {
-        // The whole point of the store: `start()` and `resolve()` happen in two separate
-        // HTTP requests, with a visit to fastmon in between. The object cache was the
-        // first choice and failed exactly there - a shop may back it with an array
-        // adapter, or with APCu, which is per PHP-FPM worker.
-        $session = new OAuthSession($this->systemConfig());
+        // The whole point of storing this: `start()` and `resolve()` happen in two
+        // separate HTTP requests, with a visit to fastmon in between. The object cache
+        // was the first choice and failed exactly there - a shop may back it with an
+        // array adapter, or with APCu, which is per PHP-FPM worker.
+        $session = $this->session();
+
+        $attempt = $session->start('dyn_1', 'https://shop.example.com/admin');
+        $resolved = $session->resolve($attempt['state']);
+
+        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $attempt['state']);
+        self::assertNotNull($resolved);
+        self::assertSame($attempt['verifier'], $resolved->verifier);
+        self::assertSame('dyn_1', $resolved->clientId);
+        self::assertSame('https://shop.example.com/admin', $resolved->redirectUri);
+    }
+
+    public function testAnAttemptIsTypedColumnsInTheConnectionRow(): void
+    {
+        // Not a JSON blob in a configuration value, and not in `system_config` at all:
+        // an authorization in flight is internal state, and writing it there would drop
+        // the shop's page cache every time somebody presses Connect.
+        $session = $this->session();
 
         $attempt = $session->start('dyn_1', 'https://shop.example.com/admin');
 
-        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $attempt['state']);
-        self::assertSame([
-            'verifier' => $attempt['verifier'],
-            'clientId' => 'dyn_1',
-            'redirectUri' => 'https://shop.example.com/admin',
-        ], $session->resolve($attempt['state']));
-    }
-
-    public function testAnAttemptIsWrittenWithoutDroppingThePageCache(): void
-    {
-        // An authorization in flight is internal state. Written loudly, every press of
-        // Connect would rebuild the shop's full page cache.
-        $session = new OAuthSession($this->systemConfig());
-
-        $session->start('dyn_1', 'https://shop.example.com/admin');
-
-        self::assertTrue($this->silent[OAuthSession::KEY]);
+        self::assertSame($attempt['state'], $this->row['authorizationState']);
+        self::assertSame($attempt['verifier'], $this->row['authorizationVerifier']);
+        self::assertSame('dyn_1', $this->row['authorizationClientId']);
+        self::assertSame('https://shop.example.com/admin', $this->row['authorizationRedirectUri']);
+        self::assertInstanceOf(DateTimeInterface::class, $this->row['authorizationExpiresAt']);
+        self::assertSame([], $this->config, 'an attempt in flight has no business in system_config');
     }
 
     public function testTheVerifierIsAFreshPkceSecretEveryTime(): void
@@ -44,7 +52,7 @@ class OAuthSessionTest extends TestCase
         // It is the only thing authenticating the code exchange - this shop is a public
         // client with no secret - so a reused or short verifier would be the whole
         // protection gone.
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
 
         $first = $session->start('dyn_1', 'https://shop.example.com/admin')['verifier'];
         $second = $session->start('dyn_1', 'https://shop.example.com/admin')['verifier'];
@@ -58,18 +66,15 @@ class OAuthSessionTest extends TestCase
         // fastmon binds the code to exactly what the authorization request carried. If
         // the shop's address changed in between, recomputing it at exchange time would
         // produce a mismatch nobody could read.
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
         $attempt = $session->start('dyn_1', 'https://old.example.com/backend');
 
-        self::assertSame(
-            'https://old.example.com/backend',
-            ($session->resolve($attempt['state']) ?? [])['redirectUri'] ?? null
-        );
+        self::assertSame('https://old.example.com/backend', $session->resolve($attempt['state'])?->redirectUri);
     }
 
     public function testAForeignStateResolvesToNothing(): void
     {
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
         $session->start('dyn_1', 'https://shop.example.com/admin');
 
         self::assertNull($session->resolve(str_repeat('a', 32)));
@@ -77,7 +82,7 @@ class OAuthSessionTest extends TestCase
 
     public function testAMalformedStateIsRejectedWithoutALookup(): void
     {
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
         $session->start('dyn_1', 'https://shop.example.com/admin');
 
         self::assertNull($session->resolve('../../etc/passwd'));
@@ -88,36 +93,38 @@ class OAuthSessionTest extends TestCase
     {
         // Seeded directly, because `start()` deliberately cannot produce this state.
         $state = str_repeat('b', 32);
-        $this->stored[OAuthSession::KEY] = json_encode([
-            'state' => $state,
-            'verifier' => 'v',
-            'clientId' => 'dyn_1',
-            'redirectUri' => 'https://shop.example.com/admin',
-            'expiresAt' => time() - 1,
-        ], \JSON_THROW_ON_ERROR);
+        $this->row = [
+            'authorizationState' => $state,
+            'authorizationVerifier' => 'v',
+            'authorizationClientId' => 'dyn_1',
+            'authorizationRedirectUri' => 'https://shop.example.com/admin',
+            'authorizationExpiresAt' => new DateTimeImmutable('@' . (time() - 1)),
+        ];
 
-        self::assertNull((new OAuthSession($this->systemConfig()))->resolve($state));
-        self::assertSame([], $this->stored, 'an expired attempt must not linger in system_config');
+        $store = $this->connectionStore();
+
+        self::assertNull((new OAuthSession($store))->resolve($state));
+        self::assertNull($store->authorization(), 'an expired attempt must not linger');
     }
 
     public function testFinishingRemovesTheAttempt(): void
     {
         // The code is single-use, so an attempt left open is one an intercepted code
         // could still be redeemed against.
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
         $attempt = $session->start('dyn_1', 'https://shop.example.com/admin');
 
         $session->finish($attempt['state']);
 
         self::assertNull($session->resolve($attempt['state']));
-        self::assertSame([], $this->stored);
+        self::assertNull($this->row['authorizationVerifier']);
     }
 
     public function testALateCallbackCannotWipeANewerAttempt(): void
     {
         // Someone abandons a connect, starts another, and the first tab comes back. That
         // must not take the live attempt with it.
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
         $old = $session->start('dyn_1', 'https://shop.example.com/admin');
         $new = $session->start('dyn_1', 'https://shop.example.com/admin');
 
@@ -128,7 +135,7 @@ class OAuthSessionTest extends TestCase
 
     public function testStartingAgainReplacesTheAbandonedAttempt(): void
     {
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
         $first = $session->start('dyn_1', 'https://shop.example.com/admin');
         $session->start('dyn_1', 'https://shop.example.com/admin');
 
@@ -137,11 +144,16 @@ class OAuthSessionTest extends TestCase
 
     public function testAbandonDropsWhateverIsInFlight(): void
     {
-        $session = new OAuthSession($this->systemConfig());
+        $session = $this->session();
         $attempt = $session->start('dyn_1', 'https://shop.example.com/admin');
 
         $session->abandon();
 
         self::assertNull($session->resolve($attempt['state']));
+    }
+
+    private function session(): OAuthSession
+    {
+        return new OAuthSession($this->connectionStore());
     }
 }

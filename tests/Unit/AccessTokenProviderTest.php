@@ -2,13 +2,14 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use DateTimeImmutable;
 use Fastmon\Collector\Api\FastmonCredentialExpiredException;
 use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
 use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Service\ConfigResolver;
-use Fastmon\Collector\Tests\Unit\Fake\StoresSystemConfig;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -18,7 +19,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 class AccessTokenProviderTest extends TestCase
 {
-    use StoresSystemConfig;
+    use StoresConnection;
 
     private const BASE = 'https://api.fastmon.eu';
 
@@ -41,23 +42,25 @@ class AccessTokenProviderTest extends TestCase
         ])->token();
 
         self::assertSame('fmt_new', $token);
-        self::assertSame('fmr_new', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
-        self::assertSame('fmt_new', $this->stored[ConfigResolver::DOMAIN . 'oauthAccessToken']);
+        self::assertSame('fmr_new', $this->row['refreshToken']);
+        self::assertSame('fmt_new', $this->row['accessToken']);
     }
 
-    public function testARotationIsWrittenWithoutDroppingThePageCache(): void
+    public function testARotationTouchesNothingThePageCacheDependsOn(): void
     {
         // A rotated token changes nothing a visitor can see, and it happens whenever
         // somebody works in the administration while the stored access token has aged
-        // out. Written loudly, every rotation would rebuild the shop's full page cache;
-        // written silently, it costs nobody anything. See `ConnectionStore::set()`.
+        // out. It lands in the connection row, which no cached page is tagged with.
+        // While these fields were configuration keys, every rotation risked rebuilding
+        // the shop's entire page cache.
         $this->connected('fmt_old', expiresIn: 30);
+
+        $untouched = $this->config;
 
         $this->provider([$this->discovery(), $this->tokenResponse('fmt_new', 'fmr_new')])->token();
 
-        foreach (['oauthRefreshToken', 'oauthScopes', 'oauthExpiresAt', 'oauthAccessToken'] as $key) {
-            self::assertTrue($this->silent[ConfigResolver::DOMAIN . $key], $key . ' must be written silently');
-        }
+        self::assertSame('fmr_new', $this->row['refreshToken']);
+        self::assertSame($untouched, $this->config, 'a token rotation must not write system_config at all');
     }
 
     public function testARefreshIsDueBeforeTheTokenActuallyExpires(): void
@@ -73,21 +76,25 @@ class AccessTokenProviderTest extends TestCase
         );
     }
 
-    public function testTheSuccessorIsWrittenBeforeTheAccessTokenItComesWith(): void
+    public function testThePairArrivesInOneStatement(): void
     {
-        // The order is the whole point: a process that died between the two writes must
-        // lose an access token, never the refresh token. Presenting a spent one is what
-        // fastmon reads as theft, and it ends the connection.
+        // A process that dies mid-write must never leave the shop holding a spent
+        // refresh token: presenting one is what fastmon reads as theft, and it ends the
+        // connection. One row and one upsert means there is no window between the two
+        // halves at all. While these were separate configuration keys, writing the
+        // successor first was what stood in for this.
         $this->connected('fmt_old', expiresIn: 0);
 
         $this->provider([$this->discovery(), $this->tokenResponse('fmt_new', 'fmr_new')])->token();
 
-        $written = array_keys($this->stored);
+        $carryingTheRefreshToken = array_values(array_filter(
+            $this->writes,
+            static fn (array $payload): bool => \array_key_exists('refreshToken', $payload)
+        ));
 
-        self::assertLessThan(
-            array_search(ConfigResolver::DOMAIN . 'oauthAccessToken', $written, true),
-            array_search(ConfigResolver::DOMAIN . 'oauthRefreshToken', $written, true)
-        );
+        self::assertCount(1, $carryingTheRefreshToken);
+        self::assertSame('fmr_new', $carryingTheRefreshToken[0]['refreshToken']);
+        self::assertSame('fmt_new', $carryingTheRefreshToken[0]['accessToken'], 'both halves in one statement');
     }
 
     public function testAnInvalidGrantEndsTheConnectionInsteadOfBeingRetried(): void
@@ -111,11 +118,11 @@ class AccessTokenProviderTest extends TestCase
         try {
             $provider->token();
         } finally {
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'oauthRefreshToken', $this->stored);
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'oauthAccessToken', $this->stored);
+            self::assertNull($this->row['refreshToken'] ?? null);
+            self::assertNull($this->row['accessToken'] ?? null);
             // The application stays linked: reconnecting for the same organization must
             // not cost the merchant the storefront snippets.
-            self::assertSame('src123', $this->stored[ConfigResolver::DOMAIN . 'trackerId']);
+            self::assertSame('src123', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
         }
     }
 
@@ -138,8 +145,8 @@ class AccessTokenProviderTest extends TestCase
 
             if (\count($seen) === 1) {
                 // What the winner leaves behind while this call is in flight.
-                $this->stored[ConfigResolver::DOMAIN . 'oauthAccessToken'] = 'fmt_from_the_winner';
-                $this->stored[ConfigResolver::DOMAIN . 'oauthExpiresAt'] = (string) (time() + 900);
+                $this->row['accessToken'] = 'fmt_from_the_winner';
+                $this->row['accessTokenExpiresAt'] = new DateTimeImmutable('@' . (time() + 900));
 
                 throw new FastmonUnauthorizedException('rejected');
             }
@@ -149,29 +156,29 @@ class AccessTokenProviderTest extends TestCase
 
         self::assertSame('done', $result);
         self::assertSame(['fmt_stale', 'fmt_from_the_winner'], $seen);
-        self::assertSame('fmr_old', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+        self::assertSame('fmr_old', $this->row['refreshToken']);
     }
 
-    public function testTheWaiterReadsPastItsOwnRequestSnapshot(): void
+    public function testTheWaiterReadsWhatTheWinnerStored(): void
     {
         // The failure this guards against, seen in production: two admin API calls, one
-        // lock, and a SystemConfigService that memoises the whole configuration per
-        // request. The waiter re-read its own snapshot, found the refresh token it was
-        // about to present, and presented it - which fastmon reads as two parties holding
-        // one token, so it ended the connection.
+        // lock, and a store that answered from a snapshot taken before the winner wrote.
+        // The waiter found the refresh token it was about to present, presented it, and
+        // fastmon read that as two parties holding one token and ended the connection.
+        // The row is re-read inside the lock, and nothing memoises it in front.
         //
         // No HTTP response is queued on purpose: a refresh going out here is the bug.
         $this->connected('fmt_stale', expiresIn: 0);
 
-        $provider = $this->provider([], memoized: true);
+        $provider = $this->provider([]);
 
         // What the winner wrote in its own process while this one waited for the lock.
-        $this->stored[ConfigResolver::DOMAIN . 'oauthAccessToken'] = 'fmt_from_the_winner';
-        $this->stored[ConfigResolver::DOMAIN . 'oauthExpiresAt'] = (string) (time() + 900);
-        $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken'] = 'fmr_successor';
+        $this->row['accessToken'] = 'fmt_from_the_winner';
+        $this->row['accessTokenExpiresAt'] = new DateTimeImmutable('@' . (time() + 900));
+        $this->row['refreshToken'] = 'fmr_successor';
 
         self::assertSame('fmt_from_the_winner', $provider->token());
-        self::assertSame('fmr_successor', $this->stored[ConfigResolver::DOMAIN . 'oauthRefreshToken']);
+        self::assertSame('fmr_successor', $this->row['refreshToken']);
     }
 
     public function testARejectedTokenIsRefreshedAndTheCallRetriedOnce(): void
@@ -222,7 +229,7 @@ class AccessTokenProviderTest extends TestCase
     {
         // It does not expire and there is nothing to rotate, which is exactly why that
         // fallback still exists. A retry would only be a second failure.
-        $this->stored = [ConfigResolver::DOMAIN . 'apiToken' => 'fmo_key'];
+        $this->row = ['manualToken' => 'fmo_key'];
 
         $provider = $this->provider([]);
         $seen = [];
@@ -250,15 +257,15 @@ class AccessTokenProviderTest extends TestCase
 
     private function connected(string $accessToken, int $expiresIn): void
     {
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'oauthClientId' => 'dyn_1',
-            ConfigResolver::DOMAIN . 'oauthRedirectUri' => 'https://shop.example.com/admin',
-            ConfigResolver::DOMAIN . 'oauthRefreshToken' => 'fmr_old',
-            ConfigResolver::DOMAIN . 'oauthScopes' => 'org:read app:read app:write site:read',
-            ConfigResolver::DOMAIN . 'oauthExpiresAt' => (string) (time() + $expiresIn),
-            ConfigResolver::DOMAIN . 'oauthAccessToken' => $accessToken,
-            ConfigResolver::DOMAIN . 'trackerId' => 'src123',
+        $this->row = [
+            'clientId' => 'dyn_1',
+            'redirectUri' => 'https://shop.example.com/admin',
+            'refreshToken' => 'fmr_old',
+            'scopes' => 'org:read app:read app:write site:read',
+            'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + $expiresIn)),
+            'accessToken' => $accessToken,
         ];
+        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'src123';
     }
 
     private function discovery(): MockResponse
@@ -286,13 +293,13 @@ class AccessTokenProviderTest extends TestCase
     /**
      * @param list<MockResponse> $responses
      */
-    private function provider(array $responses, bool $memoized = false): AccessTokenProvider
+    private function provider(array $responses): AccessTokenProvider
     {
-        $systemConfig = $this->systemConfig($memoized);
+        $systemConfig = $this->systemConfig();
 
         return new AccessTokenProvider(
             new FastmonOAuthClient(new MockHttpClient($responses)),
-            new ConnectionStore($systemConfig, $this->database()),
+            new ConnectionStore($this->connectionRepository(), $systemConfig),
             new ConfigResolver($systemConfig),
             new LockFactory(new InMemoryStore()),
             new NullLogger(),

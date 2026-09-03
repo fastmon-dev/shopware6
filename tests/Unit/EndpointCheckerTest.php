@@ -8,13 +8,15 @@ use Fastmon\Collector\Collection\DomainCheckResult;
 use Fastmon\Collector\Collection\EndpointChecker;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
-use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 class EndpointCheckerTest extends TestCase
 {
+    use StoresConnection;
+
     private const BUNDLE = 'var e="/c/colhash";!function(){}();';
     private const GIF = "GIF89a\x01\x00\x01\x00";
 
@@ -196,21 +198,16 @@ class EndpointCheckerTest extends TestCase
             return array_shift($responses) ?? new MockResponse('', ['http_code' => 500]);
         });
 
-        $stored = $provisioned
-            ? [
-                ConfigResolver::DOMAIN . 'trackerId' => 'srchash',
-                ConfigResolver::DOMAIN . 'pixelId' => 'colhash',
-            ]
-            : [];
+        if ($provisioned) {
+            $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'srchash';
+            $this->config[ConfigResolver::DOMAIN . 'pixelId'] = 'colhash';
+        }
 
-        $systemConfig = $this->createMock(SystemConfigService::class);
-        $systemConfig->method('get')->willReturnCallback(
-            static fn (string $key): mixed => $stored[$key] ?? null
-        );
+        $systemConfig = $this->systemConfig();
 
         $database = $this->createMock(DbalConnection::class);
         $database->method('fetchFirstColumn')->willReturn($origins);
 
-        return new EndpointChecker($client, new ConnectionStore($systemConfig, $database), $database);
+        return new EndpointChecker($client, new ConnectionStore($this->connectionRepository(), $systemConfig), $database);
     }
 }

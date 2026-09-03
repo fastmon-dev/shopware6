@@ -14,9 +14,9 @@ use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
@@ -24,8 +24,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 class CollectionModeServiceTest extends TestCase
 {
-    /** @var array<string, mixed> */
-    private array $stored = [];
+    use StoresConnection;
+
 
     /** @var list<string> */
     private array $calls = [];
@@ -103,8 +103,8 @@ class CollectionModeServiceTest extends TestCase
         // Without an application there are no hashes to probe for. The checker would
         // answer with an empty list, and that would surface as "not ready" naming no
         // origin at all - so the clear message has to come first.
-        $this->stored[ConfigResolver::DOMAIN . 'applicationId'] = '';
-        $this->stored[ConfigResolver::DOMAIN . 'trackerId'] = '';
+        $this->row['applicationId'] = '';
+        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = '';
         $service = $this->service(['https://shop.example' => true]);
 
         try {
@@ -187,7 +187,7 @@ class CollectionModeServiceTest extends TestCase
     {
         // Guessing would be worse than staying: what is stored is what the storefront is
         // already emitting, and it works.
-        $this->stored[ConfigResolver::DOMAIN . 'collectionMode'] = 'default';
+        $this->config[ConfigResolver::DOMAIN . 'collectionMode'] = 'default';
         $service = $this->service(['https://shop.example' => true], collectorMode: 'something-new');
 
         self::assertSame('default', $service->describe()['mode']);
@@ -196,7 +196,7 @@ class CollectionModeServiceTest extends TestCase
 
     private function storedValue(string $key): mixed
     {
-        return $this->stored[ConfigResolver::DOMAIN . $key] ?? null;
+        return $this->config[ConfigResolver::DOMAIN . $key] ?? null;
     }
 
     /**
@@ -210,21 +210,14 @@ class CollectionModeServiceTest extends TestCase
      */
     private function service(array $origins, string $collectorMode = 'default', ?string $collectorEndpoint = null): CollectionModeService
     {
-        $this->stored += [
-            ConfigResolver::DOMAIN . 'apiToken' => 'fm_token',
-            ConfigResolver::DOMAIN . 'applicationId' => 'app-1',
-            ConfigResolver::DOMAIN . 'trackerId' => 'srchash',
-            ConfigResolver::DOMAIN . 'pixelId' => 'colhash',
-        ];
+        $this->row += ['manualToken' => 'fm_token', 'applicationId' => 'app-1'];
+        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'srchash';
+        $this->config[ConfigResolver::DOMAIN . 'pixelId'] = 'colhash';
 
         $database = $this->createMock(DbalConnection::class);
         $database->method('fetchFirstColumn')->willReturn(array_keys($origins));
 
-        $systemConfig = $this->createMock(SystemConfigService::class);
-        $systemConfig->method('get')->willReturnCallback(fn (string $k): mixed => $this->stored[$k] ?? null);
-        $systemConfig->method('set')->willReturnCallback(function (string $k, mixed $v): void {
-            $this->stored[$k] = $v;
-        });
+        $systemConfig = $this->systemConfig();
 
         // One client serves both fastmon's API and the probed origins, told apart by path:
         // `/v1/…` is fastmon, `/s/…` and `/c/…` are the proxy paths on a storefront.
@@ -263,7 +256,7 @@ class CollectionModeServiceTest extends TestCase
         );
 
         $client = new FastmonClient($httpClient);
-        $store = new ConnectionStore($systemConfig, $database);
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
 
         return new CollectionModeService(
