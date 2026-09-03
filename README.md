@@ -491,9 +491,12 @@ vendor/bin/phpunit -c custom/plugins/fastmon-collector/phpunit.xml.dist --testsu
 active in it. The same bootstrap serves `shopware/github-actions` in CI. Inside a project,
 `FASTMON_TEST_MODE=unit` runs the unit suite without booting the kernel.
 
-`shopware-cli extension validate --full` reports one warning on the no-JS pixel's empty
-`alt`. That is correct markup for a 1×1 beacon carrying no content: the rule cannot tell
-a decorative image from an undescribed one, and giving it a description would be wrong.
+`shopware-cli extension validate --full` is expected to report nothing at all. It has one
+ignore entry, in `.shopware-extension.yml`: `twig-linter/image-empty-alt` on the no-JS
+pixel in `base.html.twig`, where an empty `alt` is the correct markup for a 1×1 beacon
+carrying no content. The rule cannot tell a decorative image from an undescribed one, and
+describing a tracking pixel to a screen reader would be the worse markup. The entry names
+that one file, so an empty `alt` anywhere else is still reported.
 
 ### PHP version
 

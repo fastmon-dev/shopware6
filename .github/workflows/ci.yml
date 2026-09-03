@@ -61,8 +61,9 @@ jobs:
       phpVersion: ${{ matrix.php }}
       filterName: integration
 
-  # The store validator. It reports one warning on the no-JS pixel's empty alt, which is
-  # correct markup for a 1x1 beacon (see README, Development); anything else is news.
+  # The store validator. Expected to be silent: the one finding it has, the no-JS pixel's
+  # empty alt, is ignored by name and path in .shopware-extension.yml, so anything this
+  # step prints is news.
   validate:
     name: shopware-cli extension validate
     runs-on: ubuntu-latest
