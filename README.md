@@ -5,8 +5,9 @@ visitors and reports them to [fastmon.eu](https://fastmon.eu). EU-hosted, cookie
 
 | | |
 |---|---|
-| Shopware | 6.6.x or 6.7.x |
+| Shopware | 6.6.x, or 6.7.9 and later (see *Where the credentials are stored* for why 6.7 starts there) |
 | PHP | 8.2+ |
+| Multi-node shops | a shared lock store in `LOCK_DSN` (see *Connecting*) |
 | Server-Timing layer breakdown (optional) | Tideways PHP extension **5.23+**, everything else needs none |
 
 ## What it does
@@ -67,6 +68,13 @@ exactly once: presenting a spent one is how fastmon detects a stolen credential,
 ends the connection, so the successor is stored before the new access token is used, and
 concurrent admin requests are serialised through a lock rather than racing each other into
 a false theft signal.
+
+**The lock is Shopware's `lock.factory`, and it is only as shared as `LOCK_DSN` makes
+it.** Shopware's default is `flock`, a lock on the local filesystem, which is enough for
+one machine and nothing for two. On a multi-node shop set `LOCK_DSN` to a store every node
+reaches (Redis, or the database); otherwise two nodes can refresh at the same moment, each
+presenting the same refresh token, and fastmon ends the connection because that is what a
+stolen token looks like.
 
 The connection belongs to the **organisation**, not to the person who approved it: it
 keeps working after they leave, which is what a shop needs. fastmon asks the approver for
@@ -213,8 +221,8 @@ for every page the cache is actually working on, and `miss` never appears at all
 
 ### What the plugin measures itself
 
-Six entries need no profiler at all, which is what a shop without Tideways gets instead of
-nothing:
+Seven entries need no profiler at all, which is what a shop without Tideways gets instead
+of nothing:
 
 | Entry | What it is |
 |---|---|
@@ -235,29 +243,38 @@ produces, so the two cannot disagree, which matters because only the ruleset wor
 cache hit, where no controller ran. The route is the more reliable half of that pair: a
 theme can change body classes, and search plugins routinely take over the search page.
 
-**`fm-host`** carries only the first label of `gethostname()`: an FQDN would disclose
+**`fm-host`** is off by default (`serverTimingHost`, per sales channel): which machine
+answered is a fact about the merchant's infrastructure, and only a cluster has a use for
+it. Switched on, it carries only the first label of `gethostname()`: an FQDN would disclose
 domain structure and internal naming, while `web-01` discloses that the servers are called
-`web-01`. `FASTMON_SERVER_NAME` overrides it. It is deliberately **not** a plugin setting:
-settings live in `system_config`,
-the database every node of the cluster shares, so a configured name would be identical on
-all of them, the exact opposite of what the dimension is for. On orchestrated setups set
+`web-01`. `FASTMON_SERVER_NAME` overrides it. The *name* is deliberately **not** a plugin
+setting: settings live in `system_config`, the database every node of the cluster shares,
+so a configured name would be identical on all of them, the exact opposite of what the
+dimension is for. On orchestrated setups set
 the environment variable to something short and stable (`web-01`): a pod name changes on
 every deploy and is long and random enough that fastmon discards it as an identifier.
 
 **`fm-loggedin`** is off by default and reports `yes`/`no`. The bit itself is harmless,
 but the header it rides in is classified as server self-measurement carrying no visitor
 entropy, and on that basis it is collected in **every** privacy mode, including the
-cookieless one, without consent. Switching it on is a decision about that classification.
+cookieless one, without consent. Switching it on (`serverTimingLoggedIn`, per sales
+channel) is a decision about that classification, which is why it is the one entry that
+kept its own switch.
 
 ### Configuration
 
-One switch: **`serverTiming`**, on by default, per sales channel.
+One switch: **`serverTiming`**, on by default, per sales channel. And two opt-ins, both off
+by default and per sales channel: **`serverTimingHost`** for `fm-host` and
+**`serverTimingLoggedIn`** for `fm-loggedin`. Those two are the entries that say something
+about the merchant's infrastructure or the visitor rather than about the request, which
+makes sending them a decision rather than a measurement.
 
-There used to be one per entry (total, cache verdict, page type, render, host, login) and
-a layer blocklist. They are gone on purpose: every entry is either free (cache verdict and
-age, total, host) or measured anyway (render time, page type), so a knob offered a choice
-nobody has a reason to make, and each one was another way for a shop to report less than it
-thinks.
+There used to be a switch per entry (total, cache verdict, page type, render) and a layer
+blocklist. They are gone on purpose: every one of those entries is either free (cache
+verdict and age, total) or measured anyway (render time, page type), so a knob offered a
+choice nobody has a reason to make, and each one was another way for a shop to report less
+than it thinks. A shop upgrading from a release that had them gets the old rows removed by
+a migration.
 
 The configuration page reports which sources exist on this host and what each is doing:
 measuring, installed but too old, or not installed.
@@ -289,7 +306,7 @@ only one of its kind:
   `Kernel::boot()` via `MySQLFactory::create()` with no middlewares, long before the
   container exists, so a plugin cannot register a DBAL middleware.
 
-Without Tideways the plugin still reports the five entries above: they need no extension.
+Without Tideways the plugin still reports the entries above: they need no extension.
 The configuration page says which state the source is in: measuring, installed but too old
 (pre-5.23), or not installed. A boolean cannot tell the last two apart, and they are
 different afternoons.
@@ -386,8 +403,22 @@ because fastmon ends a connection whose refresh token is presented twice.
 
 None of it is a form field: the panel writes it through the plugin's own admin API, and
 that API reports only *whether* a credential exists and what it may do, never its value.
-The fallback key is typed once, behind the *Paste an API key* link on the connect panel,
-and is not shown again.
+The fallback key is typed once, behind the *Connect with an API key instead* link on the
+connect panel, and is not shown again. Shopware's own system-config endpoint is a
+different matter: like every plugin that keeps credentials in `system_config`, the values
+are readable there by an administration user with `system_config:read`.
+
+**Why 6.7 starts at 6.7.9.** Every write to `system_config` invalidates cached pages, and
+on 6.7 one write drops the page cache of the whole shop. A rotated refresh token changes
+nothing a visitor can see, so the plugin writes its internal values *silently*, through
+the flag `SystemConfigService::set()` reads from its fourth argument. That flag exists
+from 6.7.9.0 on; 6.7.0 to 6.7.8 drop the argument and make every rotation, including the
+weekly one, a full page-cache flush. Rather than ship that, the plugin does not install
+there. 6.6 has no flag and needs none: with the default `shopware.cache.tagging.each_config:
+true` a cached page carries a tag per configuration key it read, and no storefront page
+reads a token, so writing one invalidates nothing. A 6.6 shop that turned `each_config` off
+tags every page with one global config tag instead, and there every write is loud, the
+plugin's included.
 
 ## API paths
 
@@ -404,6 +435,10 @@ shop that cannot be updated.
 The base URL is not a setting: one production fastmon, every shop talks to it, and a
 wrong value is a connection that fails in a way no merchant can diagnose. Set
 `FASTMON_API_BASE_URL` in the environment to develop against a local backend or a stub.
+`FASTMON_APP_BASE_URL` does the same for the dashboard links the panel renders
+(`https://app.fastmon.eu` by default), which is a different host and cannot be derived
+from the API's. The discovery document has to name the API base URL as its `issuer`, and
+every endpoint in it has to live under it; a document that says otherwise is refused.
 
 ## Development
 

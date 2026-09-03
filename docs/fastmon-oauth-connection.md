@@ -29,7 +29,7 @@ can see and judge on the consent screen.
 
 | Step | Where | What |
 |---|---|---|
-| Discovery | `FastmonOAuthClient::metadata()` | `GET /.well-known/oauth-authorization-server`, cached per request, never persisted |
+| Discovery | `FastmonOAuthClient::metadata()` | `GET /.well-known/oauth-authorization-server`, cached per request (and per worker message), never persisted; `issuer` must equal the API base URL and every endpoint must live under it |
 | Register | `ConnectionService::client()` | once per shop, again only when the redirect URI changes |
 | Authorize | administration | full-page redirect; the verifier stays in `system_config` |
 | Callback | `util/oauth-callback.js` | takes `?code&state` off whatever admin page loaded, reloads back to the panel |
