@@ -128,10 +128,16 @@ class ServerTimingHeaderBuilderTest extends TestCase
     public function testFormatsWithADecimalPointRegardlessOfLocale(): void
     {
         $previous = setlocale(LC_NUMERIC, '0');
-        setlocale(LC_NUMERIC, 'de_DE.UTF-8', 'de_DE', 'German');
+
+        // Skipped loudly rather than passed quietly: without the locale, `setlocale()`
+        // changes nothing and the assertion below would hold on `%f` as well.
+        if (setlocale(LC_NUMERIC, 'de_DE.UTF-8', 'de_DE', 'German') === false) {
+            self::markTestSkipped('no German locale on this machine, so a decimal comma cannot be provoked');
+        }
 
         try {
             self::assertStringContainsString('dur=42.5', $this->builder->build(['rdbms' => 42.5]));
+            self::assertStringContainsString('dur=0.4', $this->builder->build([], [['fm-backend', 0.4, null]]));
         } finally {
             if (\is_string($previous)) {
                 setlocale(LC_NUMERIC, $previous);

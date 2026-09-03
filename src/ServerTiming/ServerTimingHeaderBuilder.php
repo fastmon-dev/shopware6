@@ -134,7 +134,7 @@ final class ServerTimingHeaderBuilder
             }
 
             return $duration !== null && $duration >= 0.0
-                ? sprintf('%s;dur=%.1f;desc=%s', $name, $duration, $description)
+                ? sprintf('%s;dur=%.1F;desc=%s', $name, $duration, $description)
                 : sprintf('%s;desc=%s', $name, $description);
         }
 
@@ -142,12 +142,14 @@ final class ServerTimingHeaderBuilder
     }
 
     /**
-     * `%.1f` matches the precision the collector rounds to, so the value that arrives is
-     * the value that was sent. PHP's sprintf has been locale independent for floats
-     * since 8.0, so no decimal comma can get into the header.
+     * `%.1F` matches the precision the collector rounds to, so the value that arrives is
+     * the value that was sent. The capital `F` is the point: `%f` follows `LC_NUMERIC`
+     * and writes `42,5` on a German locale, and a decimal comma in the header is an
+     * entry the collector drops. Only the float-to-string cast became locale
+     * independent in PHP 8.0; `sprintf('%f')` did not.
      */
     private function entry(string $metric, float $milliseconds): string
     {
-        return sprintf('%s;dur=%.1f', $metric, $milliseconds);
+        return sprintf('%s;dur=%.1F', $metric, $milliseconds);
     }
 }
