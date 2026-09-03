@@ -6,6 +6,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * The OAuth side of fastmon: registering this installation, sending the merchant to
@@ -29,7 +30,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
  * confidential in the plugin source, which is the only arrangement that can be true of
  * something distributed through a store.
  */
-final class FastmonOAuthClient
+final class FastmonOAuthClient implements ResetInterface
 {
     use ReadsJsonResponses;
 
@@ -57,6 +58,11 @@ final class FastmonOAuthClient
      * is precisely the failure the discovery document exists to prevent. Not re-fetched
      * within a request either, because a connect flow touches it twice and a refresh
      * once, and the answer cannot change in between.
+     *
+     * "This request" is only a boundary in PHP-FPM. The Messenger worker that runs
+     * `RenewConnectionTask` keeps the container across messages, so `reset()` drops the
+     * memo between them, through the `kernel.reset` tag autoconfigure attaches to a
+     * `ResetInterface`.
      *
      * @var array<string, OAuthMetadata>
      */
@@ -114,7 +120,51 @@ final class FastmonOAuthClient
             );
         }
 
+        $this->verifyIssuer($metadata, $baseUrl);
+
         return $this->metadata[$baseUrl] = $metadata;
+    }
+
+    public function reset(): void
+    {
+        $this->metadata = [];
+    }
+
+    /**
+     * The document has to describe the server it was fetched from (RFC 8414 section 3.3),
+     * and every endpoint in it has to live there too.
+     *
+     * Cheap, and it closes the one door discovery opens: a document that names another
+     * issuer, or points the token endpoint at another host, would carry this shop's
+     * authorization code and refresh token wherever it says. fastmon publishes the
+     * issuer from configuration rather than from the Host header for the same reason.
+     */
+    private function verifyIssuer(OAuthMetadata $metadata, string $baseUrl): void
+    {
+        if (rtrim($metadata->issuer, '/') !== $baseUrl) {
+            throw new FastmonApiException(sprintf(
+                'fastmon at %s published OAuth metadata for a different issuer (%s); refusing to use it',
+                $baseUrl,
+                $metadata->issuer
+            ));
+        }
+
+        $endpoints = [
+            $metadata->authorizationEndpoint,
+            $metadata->tokenEndpoint,
+            $metadata->registrationEndpoint,
+            $metadata->revocationEndpoint,
+        ];
+
+        foreach ($endpoints as $endpoint) {
+            if ($endpoint !== '' && !str_starts_with($endpoint, $baseUrl . '/')) {
+                throw new FastmonApiException(sprintf(
+                    'fastmon at %s published an OAuth endpoint outside its issuer (%s); refusing to use it',
+                    $baseUrl,
+                    $endpoint
+                ));
+            }
+        }
     }
 
     /**

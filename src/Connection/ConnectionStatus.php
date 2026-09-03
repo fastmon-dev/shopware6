@@ -20,7 +20,11 @@ use Psr\Log\LoggerInterface;
  * do, and where does the merchant go in fastmon itself.
  *
  * It never returns the credential. The panel learns that one exists and what it may do,
- * never what it is, so a stored token cannot be read back out through the admin API.
+ * never what it is. That holds for this plugin's routes only: Shopware's own
+ * `GET /api/_action/system-config?domain=FastmonCollector.config` hands every key in the
+ * domain to a user with `system_config:read`, tokens included, as it does for every
+ * plugin that keeps credentials in `system_config`. See `ConnectionStore` for why they
+ * live there anyway.
  */
 #[WithMonologChannel('fastmon_collector')]
 final class ConnectionStatus
@@ -43,9 +47,9 @@ final class ConnectionStatus
     }
 
     /**
-     * What the admin module renders. Never returns the credential itself - only whether
-     * one is there and what it may do - so a stored token cannot be read back out through
-     * the admin API.
+     * What the admin module renders. Never returns the credential itself, only whether
+     * one is there and what it may do, so none of this plugin's routes hands a stored
+     * token back out.
      *
      * @return array{
      *     connected: bool, provisioned: bool, connectionKind: string, scopes: list<string>,
@@ -75,10 +79,7 @@ final class ConnectionStatus
         return [
             'connected' => $connection->isConnected(),
             'provisioned' => $connection->isProvisioned(),
-            // Which of the two kinds this is. The panel says so, because "disconnect"
-            // means something different for each: an app connection is revoked on
-            // fastmon's side, a pasted key is only forgotten here.
-            'connectionKind' => $this->kind($connection->credentials),
+            'connectionKind' => ConnectionKind::of($connection->credentials)->value,
             // What was actually granted. The approver may tick fewer permissions than
             // were asked for, and their role cuts the list again.
             'scopes' => $this->scopeList($connection->credentials),
@@ -245,15 +246,6 @@ final class ConnectionStatus
             rawurlencode($connection->organizationId),
             $page
         );
-    }
-
-    private function kind(Credentials $credentials): string
-    {
-        if ($credentials->isAppConnection()) {
-            return 'app';
-        }
-
-        return $credentials->manualToken !== '' ? 'token' : '';
     }
 
     /**

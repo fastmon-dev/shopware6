@@ -76,6 +76,63 @@ class FastmonOAuthClientTest extends TestCase
         $client->metadata(self::BASE);
     }
 
+    public function testADocumentForAnotherIssuerIsRefused(): void
+    {
+        // RFC 8414 section 3.3. A document naming someone else is a document that would
+        // send this shop's code and refresh token to someone else.
+        $client = $this->client([new MockResponse(json_encode([
+            'issuer' => 'https://evil.example',
+            'authorization_endpoint' => self::BASE . '/auth/app/authorize',
+            'token_endpoint' => self::BASE . '/auth/app/token',
+            'registration_endpoint' => self::BASE . '/auth/app/register',
+        ], \JSON_THROW_ON_ERROR), ['http_code' => 200])]);
+
+        $this->expectException(FastmonApiException::class);
+        $this->expectExceptionMessage('different issuer');
+        $client->metadata(self::BASE);
+    }
+
+    public function testAnEndpointOutsideTheIssuerIsRefused(): void
+    {
+        // The issuer can be right and one endpoint still point elsewhere; the token
+        // endpoint is where the verifier and the refresh token go.
+        $client = $this->client([new MockResponse(json_encode([
+            'issuer' => self::BASE,
+            'authorization_endpoint' => self::BASE . '/auth/app/authorize',
+            'token_endpoint' => 'https://evil.example/auth/app/token',
+            'registration_endpoint' => self::BASE . '/auth/app/register',
+        ], \JSON_THROW_ON_ERROR), ['http_code' => 200])]);
+
+        $this->expectException(FastmonApiException::class);
+        $this->expectExceptionMessage('outside its issuer');
+        $client->metadata(self::BASE);
+    }
+
+    public function testATrailingSlashOnTheIssuerIsNotADifferentIssuer(): void
+    {
+        $client = $this->client([new MockResponse(json_encode([
+            'issuer' => self::BASE . '/',
+            'authorization_endpoint' => self::BASE . '/auth/app/authorize',
+            'token_endpoint' => self::BASE . '/auth/app/token',
+            'registration_endpoint' => self::BASE . '/auth/app/register',
+        ], \JSON_THROW_ON_ERROR), ['http_code' => 200])]);
+
+        self::assertSame(self::BASE . '/auth/app/token', $client->metadata(self::BASE)->tokenEndpoint);
+    }
+
+    public function testResetForgetsTheDiscoveryDocument(): void
+    {
+        // The Messenger worker keeps the container across messages; without the reset a
+        // moved endpoint would be missed until the worker restarts.
+        $client = $this->client([$this->discovery(), $this->discovery()]);
+
+        $client->metadata(self::BASE);
+        $client->reset();
+        $client->metadata(self::BASE);
+
+        self::assertCount(2, $this->sent);
+    }
+
     public function testRegistrationDeclaresOneExactRedirectUriAndNoSecret(): void
     {
         $client = $this->client([

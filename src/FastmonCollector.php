@@ -5,6 +5,7 @@ namespace Fastmon\Collector;
 use Doctrine\DBAL\Connection as Database;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Connection\OAuthSession;
+use LogicException;
 use Shopware\Core\Framework\Plugin;
 use Shopware\Core\Framework\Plugin\Context\UninstallContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -42,8 +43,12 @@ final class FastmonCollector extends Plugin
         $systemConfig = $this->container?->get(SystemConfigService::class);
         $database = $this->container?->get(Database::class);
 
+        // Both are core services no Shopware container is without; the database is only
+        // there because the store's constructor wants it for a read this path never
+        // makes. Loud rather than a silent return: a container missing either is a
+        // broken shop, not a shop with nothing to clean up.
         if (!$systemConfig instanceof SystemConfigService || !$database instanceof Database) {
-            return;
+            throw new LogicException('FastmonCollector: the container offers no SystemConfigService or database connection, so the stored connection could not be removed.');
         }
 
         (new ConnectionStore($systemConfig, $database))->clearAll();

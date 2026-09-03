@@ -63,7 +63,9 @@ final class AccessTokenProvider
         private readonly ConnectionStore $store,
         private readonly ConfigResolver $config,
         // By service id: `lock.factory` is what Shopware configures for the shop, and by
-        // type alone autowiring would have no definition to pick.
+        // type alone autowiring would have no definition to pick. It is only as shared
+        // as `LOCK_DSN` makes it: Shopware's default is `flock`, which is per machine,
+        // so a cluster needs a store every node reaches (README, Connecting).
         #[Autowire(service: 'lock.factory')]
         private readonly LockFactory $locks,
         private readonly LoggerInterface $logger,

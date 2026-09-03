@@ -19,7 +19,7 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
  * hand.
  */
 #[AutoconfigureTag('shopware.scheduled.task')]
-class RenewConnectionTask extends ScheduledTask
+final class RenewConnectionTask extends ScheduledTask
 {
     public static function getTaskName(): string
     {

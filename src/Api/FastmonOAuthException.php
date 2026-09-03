@@ -11,7 +11,7 @@ namespace Fastmon\Collector\Api;
  * reworded at any time. So the code is carried separately and the description is only
  * ever shown to a human.
  */
-class FastmonOAuthException extends FastmonApiException
+final class FastmonOAuthException extends FastmonApiException
 {
     public function __construct(
         /** The OAuth error code, e.g. `invalid_grant`. Empty when the response carried none. */

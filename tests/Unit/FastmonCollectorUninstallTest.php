@@ -34,6 +34,17 @@ final class FastmonCollectorUninstallTest extends TestCase
         self::assertCount(15, $this->deleted);
     }
 
+    public function testAContainerWithoutTheServicesFailsLoudly(): void
+    {
+        // Rather than returning with the rows still there: a container without
+        // SystemConfigService is a broken shop, not a shop with nothing to clean up.
+        $plugin = new FastmonCollector(true, \dirname(__DIR__, 2) . '/src');
+        $plugin->setContainer(new ContainerBuilder());
+
+        $this->expectException(\LogicException::class);
+        $plugin->uninstall($this->context($plugin, keepUserData: false));
+    }
+
     public function testKeepsEverythingWhenAskedTo(): void
     {
         $plugin = $this->plugin();

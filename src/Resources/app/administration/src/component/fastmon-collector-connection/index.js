@@ -1,6 +1,7 @@
 import template from './fastmon-collector-connection.html.twig';
 import './fastmon-collector-connection.scss';
 import { connectionChanged } from '../../util/panel-bus';
+import { forget as forgetCallback } from '../../util/oauth-callback';
 
 const { Component, Mixin } = Shopware;
 
@@ -103,6 +104,15 @@ Component.register('fastmon-collector-connection', {
 
                     this.status = status;
                     this.error = status.error || null;
+
+                    // A callback that arrived for a shop that is already connected (a
+                    // second tab finished the flow, or a key was pasted meanwhile) has
+                    // nobody to redeem it: the authorize child only mounts while there
+                    // is no connection. Dropped here, or it would sit in sessionStorage
+                    // for the life of the tab and be redeemed on the next disconnect.
+                    if (status.connected) {
+                        forgetCallback();
+                    }
 
                     if (linkChanged) {
                         connectionChanged();
