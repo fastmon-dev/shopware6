@@ -23,9 +23,9 @@ final class FastmonCollectorException extends \RuntimeException
         return new self('Enter the domain the tracker and beacon should be served from.');
     }
 
-    public static function applicationWithoutTrackerId(): self
+    public static function applicationWithoutSourceHash(): self
     {
-        return new self('That fastmon application has no tracker id.');
+        return new self('That fastmon application has no source_hash.');
     }
 
     public static function emptyToken(): self

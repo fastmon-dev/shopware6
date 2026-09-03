@@ -7,7 +7,7 @@ use Fastmon\Collector\Collection\CollectionMode;
 /**
  * What the storefront templates need to decide whether and what to inject.
  *
- * `trackerId` and `pixelId` are the application's `source_hash` / `collector_hash`.
+ * `sourceHash` and `collectorHash` are the application's `source_hash` / `collector_hash`.
  * They are shop-wide rather than per sales channel: one fastmon application covers
  * every domain the shop serves, and the beacon's own hostname is what splits the data
  * into sites on arrival.
@@ -18,8 +18,8 @@ final readonly class StorefrontConfig
 {
     public function __construct(
         public bool $active,
-        public string $trackerId,
-        public string $pixelId,
+        public string $sourceHash,
+        public string $collectorHash,
         /**
          * Where the browser loads the tracker and the pixel from. Derived from the mode
          * rather than typed in: empty for RELATIVE (same-origin), the merchant's host for

@@ -100,7 +100,7 @@ final class EndpointChecker
         $results = [];
 
         foreach ($origins as $origin) {
-            $results[] = $this->checkOrigin($origin, $connection->trackerId, $connection->pixelId);
+            $results[] = $this->checkOrigin($origin, $connection->sourceHash, $connection->collectorHash);
         }
 
         return $results;
@@ -187,7 +187,7 @@ final class EndpointChecker
      * Two probes with four outcomes each; the reason codes are the point and are enumerated in DomainCheckResult.
      * @SuppressWarnings("PHPMD.CyclomaticComplexity")
      */
-    private function checkOrigin(string $origin, string $trackerId, string $pixelId): DomainCheckResult
+    private function checkOrigin(string $origin, string $sourceHash, string $collectorHash): DomainCheckResult
     {
         $scriptOk = false;
         $collectorOk = false;
@@ -195,7 +195,7 @@ final class EndpointChecker
         $detail = '';
 
         try {
-            $script = $this->httpClient->request('GET', $origin . '/s/' . $trackerId . '.js', [
+            $script = $this->httpClient->request('GET', $origin . '/s/' . $sourceHash . '.js', [
                 'timeout' => self::TIMEOUT_SECONDS,
                 'headers' => ['Accept' => 'application/javascript'],
             ]);
@@ -203,7 +203,7 @@ final class EndpointChecker
             if ($script->getStatusCode() === 200) {
                 // The endpoint fastmon bakes into the bundle. Nothing but fastmon's own
                 // render of THIS application's bundle can contain it.
-                $scriptOk = $pixelId !== '' && str_contains($script->getContent(false), '/c/' . $pixelId);
+                $scriptOk = $collectorHash !== '' && str_contains($script->getContent(false), '/c/' . $collectorHash);
 
                 if (!$scriptOk) {
                     $reason = DomainCheckResult::REASON_SCRIPT_FOREIGN;

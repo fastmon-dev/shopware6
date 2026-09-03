@@ -21,7 +21,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
  * Asserting against `$this->row` says exactly what ends up in
  * `fastmon_collector_connection`, and against `$this->config` what ends up in
  * `system_config`. That split is the point of the storage rather than an artefact of the
- * test: a token is a row, and the tracker id is configuration the page cache depends on.
+ * test: a token is a row, and the source_hash is configuration the page cache depends on.
  *
  * Reads always answer from the current arrays, which is what the real storage does too:
  * nothing memoises the row, and the refresh path depends on that.

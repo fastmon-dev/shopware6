@@ -24,8 +24,8 @@ final class FastmonCollectorUninstallTest extends TestCase
     public function testDropsTheWholeConnectionUnlessTheDataIsKept(): void
     {
         $this->config = [
-            ConfigResolver::DOMAIN . 'trackerId' => 'src123',
-            ConfigResolver::DOMAIN . 'pixelId' => 'pix123',
+            ConfigResolver::DOMAIN . 'sourceHash' => 'src123',
+            ConfigResolver::DOMAIN . 'collectorHash' => 'pix123',
         ];
 
         $plugin = $this->plugin();
@@ -58,12 +58,12 @@ final class FastmonCollectorUninstallTest extends TestCase
 
     public function testKeepsEverythingWhenAskedTo(): void
     {
-        $this->config = [ConfigResolver::DOMAIN . 'trackerId' => 'src123'];
+        $this->config = [ConfigResolver::DOMAIN . 'sourceHash' => 'src123'];
 
         $plugin = $this->plugin();
         $plugin->uninstall($this->context($plugin, keepUserData: true));
 
-        self::assertSame([ConfigResolver::DOMAIN . 'trackerId' => 'src123'], $this->config);
+        self::assertSame([ConfigResolver::DOMAIN . 'sourceHash' => 'src123'], $this->config);
         self::assertSame([], $this->statements);
     }
 

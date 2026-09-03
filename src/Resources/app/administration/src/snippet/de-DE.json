@@ -42,8 +42,8 @@
         },
         "summary": {
             "application": "Application",
-            "trackerId": "Tracker-ID",
-            "pixelId": "Pixel-ID",
+            "sourceHash": "source_hash",
+            "collectorHash": "collector_hash",
             "sites": "Domains, die fastmon gesehen hat",
             "noSites": "Noch keine. Jede Domain meldet sich beim ersten Seitenaufruf selbst an, hier bleibt es also leer, bis die Storefront Besucher bekommt.",
             "debug": "Debug-Informationen"

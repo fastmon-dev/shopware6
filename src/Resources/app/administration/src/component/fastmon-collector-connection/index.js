@@ -100,7 +100,7 @@ Component.register('fastmon-collector-connection', {
                     // Which application the storefront reports for is what the other
                     // panels depend on, so a change to it is announced rather than
                     // waiting for the merchant to reload the page.
-                    const linkChanged = this.status !== null && this.status.trackerId !== status.trackerId;
+                    const linkChanged = this.status !== null && this.status.sourceHash !== status.sourceHash;
 
                     this.status = status;
                     this.error = status.error || null;

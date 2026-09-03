@@ -381,11 +381,11 @@ updated without a gap.
 | `active` | on | per sales channel, leave one storefront untracked |
 | `enableErrorBootstrap` | on | catches errors thrown before the tracker loads |
 | `enablePixel` | on | no-JS pixel for crawlers and link previews |
-| `trackerId` / `pixelId` | not set | written when you link an application |
+| `sourceHash` / `collectorHash` | not set | written when you link an application |
 
-Both snippets are gated on `trackerId`, which only ever gets written once an application
+Both snippets are gated on `sourceHash`, which only ever gets written once an application
 has actually been linked, so an unconfigured shop renders nothing rather than a script tag
-pointing at an empty id.
+pointing at an empty hash.
 
 ## Where the credentials are stored
 
@@ -413,9 +413,9 @@ cache, and a JSON blob for the authorization. A row has none of them:
   user holds. The plugin's own routes report whether a credential exists and what it may
   do, never what it is.
 
-Two values stay in `system_config` on purpose: `trackerId` and `pixelId`, the pair the
+Two values stay in `system_config` on purpose: `sourceHash` and `collectorHash`, the pair the
 storefront templates render. Those are configuration in the full sense, they are read on
-every page, and Shopware dropping the cached pages that carry the old id when they change
+every page, and Shopware dropping the cached pages that carry the old hash when they change
 is the point rather than a side effect to avoid.
 
 The tokens are in plain text, like every other Shopware plugin's API credentials.

@@ -54,8 +54,8 @@ final class ApplicationProvisionerTest extends TestCase
         self::assertSame('shopware6', $body['pagetype_ruleset']);
 
         // And what the storefront renders from here on.
-        self::assertSame('src1', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertSame('pix1', $this->config[ConfigResolver::DOMAIN . 'pixelId']);
+        self::assertSame('src1', $this->config[ConfigResolver::DOMAIN . 'sourceHash']);
+        self::assertSame('pix1', $this->config[ConfigResolver::DOMAIN . 'collectorHash']);
         self::assertSame('app-1', $this->row['applicationId']);
         self::assertSame('org-7', $this->row['organizationId']);
         // Resolved from fastmon, not taken from the browser.
@@ -79,7 +79,7 @@ final class ApplicationProvisionerTest extends TestCase
 
     public function testAttachingReReadsTheHashesRatherThanTrustingTheBrowser(): void
     {
-        // A stale list in an open admin tab must not be able to write a tracker id that
+        // A stale list in an open admin tab must not be able to write a source_hash that
         // no longer exists, so the application is fetched and its hashes are what is
         // stored.
         $provisioner = $this->provisioner([
@@ -90,13 +90,13 @@ final class ApplicationProvisionerTest extends TestCase
         $application = $provisioner->attach('org-7', 'app-9');
 
         self::assertStringEndsWith('/v1/applications/app-9', $this->sent[0]->getRequestUrl());
-        self::assertSame('fresh', $application['trackerId']);
-        self::assertSame('fresh', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertSame('pixfresh', $this->config[ConfigResolver::DOMAIN . 'pixelId']);
+        self::assertSame('fresh', $application['sourceHash']);
+        self::assertSame('fresh', $this->config[ConfigResolver::DOMAIN . 'sourceHash']);
+        self::assertSame('pixfresh', $this->config[ConfigResolver::DOMAIN . 'collectorHash']);
         self::assertSame('app-9', $this->row['applicationId']);
     }
 
-    public function testAnApplicationWithoutATrackerIdIsRefusedBeforeAnythingIsWritten(): void
+    public function testAnApplicationWithoutASourceHashIsRefusedBeforeAnythingIsWritten(): void
     {
         // The storefront cannot emit for it, and a half-linked shop would render nothing
         // while the panel reports a link.
@@ -106,10 +106,10 @@ final class ApplicationProvisionerTest extends TestCase
 
         try {
             $provisioner->attach('org-7', 'app-9');
-            self::fail('an application without a tracker id must be refused');
+            self::fail('an application without a source_hash must be refused');
         } catch (FastmonCollectorException) {
             self::assertNull($this->row['applicationId'] ?? null);
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'trackerId', $this->config);
+            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'sourceHash', $this->config);
         }
     }
 
@@ -124,13 +124,13 @@ final class ApplicationProvisionerTest extends TestCase
 
         $provisioner->create('org-7', '', '', '');
 
-        self::assertSame('src1', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
+        self::assertSame('src1', $this->config[ConfigResolver::DOMAIN . 'sourceHash']);
         self::assertSame('', $this->row['organizationName']);
     }
 
-    public function testTheTrackerIdIsWrittenLast(): void
+    public function testTheSourceHashIsWrittenLast(): void
     {
-        // A half-written link renders nothing rather than a script tag with an empty id,
+        // A half-written link renders nothing rather than a script tag with an empty hash,
         // which only holds if the value that turns the snippets on is the last one in.
         $order = [];
         $systemConfig = $this->createMock(SystemConfigService::class);
@@ -154,7 +154,7 @@ final class ApplicationProvisionerTest extends TestCase
 
         $provisioner->create('org-7', '', '', '');
 
-        self::assertSame(['trackerId'], \array_slice($order, -1));
+        self::assertSame(['sourceHash'], \array_slice($order, -1));
     }
 
     public function testSitesAreNotAskedForWithoutAnApplication(): void
@@ -176,13 +176,13 @@ final class ApplicationProvisionerTest extends TestCase
         self::assertSame([['id' => 's1', 'domain' => 'shop.example', 'name' => 'Shop']], $sites);
     }
 
-    private function application(string $id, string $name, string $trackerId, string $pixelId, int $status): MockResponse
+    private function application(string $id, string $name, string $sourceHash, string $collectorHash, int $status): MockResponse
     {
         $data = ['id' => $id, 'name' => $name, 'environment' => 'prod'];
 
-        if ($trackerId !== '') {
-            $data['source_hash'] = $trackerId;
-            $data['collector_hash'] = $pixelId;
+        if ($sourceHash !== '') {
+            $data['source_hash'] = $sourceHash;
+            $data['collector_hash'] = $collectorHash;
         }
 
         return new MockResponse(json_encode($data, \JSON_THROW_ON_ERROR), ['http_code' => $status]);

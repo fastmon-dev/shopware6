@@ -160,11 +160,11 @@ class FastmonClientTest extends TestCase
         self::assertSame('shopware6', $body['pagetype_ruleset']);
 
         // fastmon's wire names become the names the templates use.
-        self::assertSame('src123', $application['trackerId']);
-        self::assertSame('col456', $application['pixelId']);
+        self::assertSame('src123', $application['sourceHash']);
+        self::assertSame('col456', $application['collectorHash']);
     }
 
-    public function testRefusesAnApplicationWithoutATrackerId(): void
+    public function testRefusesAnApplicationWithoutASourceHash(): void
     {
         $client = $this->client(new MockResponse(
             json_encode(['id' => 'app-1', 'name' => 'Shopware'], \JSON_THROW_ON_ERROR),

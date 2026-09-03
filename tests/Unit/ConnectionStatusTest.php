@@ -152,7 +152,7 @@ class ConnectionStatusTest extends TestCase
         self::assertStringContainsString('could not be found', $status['error']);
     }
 
-    public function testARotatedTrackerIdIsAdoptedRatherThanReported(): void
+    public function testARotatedSourceHashIsAdoptedRatherThanReported(): void
     {
         // Rotating in the dashboard invalidates the embed everywhere it is deployed, so a
         // shop still serving the old id collects nothing while looking perfectly fine.
@@ -175,9 +175,9 @@ class ConnectionStatusTest extends TestCase
         // values the pages render, which is why they are the pair that stayed in
         // `system_config`: Shopware dropping the cached pages that still carry the old
         // id is the point rather than a side effect to avoid.
-        self::assertSame('newhash', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
-        self::assertSame('newpixel', $this->config[ConfigResolver::DOMAIN . 'pixelId']);
-        self::assertSame('newhash', $status['trackerId']);
+        self::assertSame('newhash', $this->config[ConfigResolver::DOMAIN . 'sourceHash']);
+        self::assertSame('newpixel', $this->config[ConfigResolver::DOMAIN . 'collectorHash']);
+        self::assertSame('newhash', $status['sourceHash']);
     }
 
     private function connected(string $applicationId = ''): void
@@ -194,7 +194,7 @@ class ConnectionStatusTest extends TestCase
             'organizationName' => 'Acme',
             'applicationId' => $applicationId,
         ];
-        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'src123';
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'src123';
     }
 
     private function discovery(): MockResponse

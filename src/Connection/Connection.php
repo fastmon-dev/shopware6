@@ -19,8 +19,8 @@ final readonly class Connection
         public string $organizationId,
         public string $organizationName,
         public string $applicationId,
-        public string $trackerId,
-        public string $pixelId,
+        public string $sourceHash,
+        public string $collectorHash,
     ) {
     }
 
@@ -33,6 +33,6 @@ final readonly class Connection
     /** Whether the storefront has what it needs to emit the snippets. */
     public function isProvisioned(): bool
     {
-        return $this->trackerId !== '';
+        return $this->sourceHash !== '';
     }
 }

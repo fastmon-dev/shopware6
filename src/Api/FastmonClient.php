@@ -88,7 +88,7 @@ final class FastmonClient
      * The applications already present in an organization, so the merchant can attach
      * the shop to one instead of creating a duplicate.
      *
-     * @return list<array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}>
+     * @return list<array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}>
      */
     public function applications(string $baseUrl, string $token, string $organizationId): array
     {
@@ -117,7 +117,7 @@ final class FastmonClient
      * runs on. Which domain a beacon belongs to is resolved on arrival from the page
      * URL, so a shop with twelve sales channels still needs exactly one of these.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function createApplication(
         string $baseUrl,
@@ -156,7 +156,7 @@ final class FastmonClient
 
         $created = $this->application($this->decode($response));
 
-        if ($created['trackerId'] === '') {
+        if ($created['sourceHash'] === '') {
             throw new FastmonApiException('fastmon application creation returned no source_hash');
         }
 
@@ -168,7 +168,7 @@ final class FastmonClient
      *
      * With `site_policy: auto` these appear on their own, the first time a visitor loads
      * a page on a domain - so the list is the honest answer to "is it collecting?", in a
-     * way a green checkmark next to a tracker id is not. An empty list on a live shop
+     * way a green checkmark next to a source_hash is not. An empty list on a live shop
      * means the snippet is not reaching anyone.
      *
      * @return list<array{id: string, domain: string, name: string}>
@@ -211,7 +211,7 @@ final class FastmonClient
      * one without the other: they are an atomic pair, and a mode change that left a stale
      * endpoint behind would point every beacon at the wrong host.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function setCollectorMode(
         string $baseUrl,
@@ -286,7 +286,7 @@ final class FastmonClient
      * Re-read one application, to confirm a stored id still exists and its hashes still
      * match what the storefront is emitting.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function fetchApplication(string $baseUrl, string $token, string $applicationId): array
     {
@@ -307,7 +307,7 @@ final class FastmonClient
     /**
      * @param array<mixed> $data
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     private function application(array $data): array
     {
@@ -316,8 +316,8 @@ final class FastmonClient
             'name' => $this->str($data, 'name'),
             // fastmon's field names describe what they are on the wire; the plugin's
             // describe what they do in a template.
-            'trackerId' => $this->str($data, 'source_hash'),
-            'pixelId' => $this->str($data, 'collector_hash'),
+            'sourceHash' => $this->str($data, 'source_hash'),
+            'collectorHash' => $this->str($data, 'collector_hash'),
             'environment' => $this->str($data, 'environment'),
             'siteCount' => $this->int($data, 'site_count', 0),
             // Where fastmon currently sends the beacon. The shop mirrors it rather than

@@ -104,7 +104,7 @@ class CollectionModeServiceTest extends TestCase
         // answer with an empty list, and that would surface as "not ready" naming no
         // origin at all - so the clear message has to come first.
         $this->row['applicationId'] = '';
-        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = '';
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = '';
         $service = $this->service(['https://shop.example' => true]);
 
         try {
@@ -211,8 +211,8 @@ class CollectionModeServiceTest extends TestCase
     private function service(array $origins, string $collectorMode = 'default', ?string $collectorEndpoint = null): CollectionModeService
     {
         $this->row += ['manualToken' => 'fm_token', 'applicationId' => 'app-1'];
-        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'srchash';
-        $this->config[ConfigResolver::DOMAIN . 'pixelId'] = 'colhash';
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'srchash';
+        $this->config[ConfigResolver::DOMAIN . 'collectorHash'] = 'colhash';
 
         $database = $this->createMock(DbalConnection::class);
         $database->method('fetchFirstColumn')->willReturn(array_keys($origins));

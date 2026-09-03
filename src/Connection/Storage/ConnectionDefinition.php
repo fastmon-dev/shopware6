@@ -44,8 +44,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
  * plugin's own admin routes report whether a credential exists and what it may do, and
  * that stays the only window.
  *
- * What the storefront renders (the tracker and pixel ids) is deliberately not here: those
- * two are configuration in the full sense, and Shopware dropping the cached pages that
+ * What the storefront renders (the source and collector hashes) is deliberately not
+ * here: those two are configuration in the full sense, and Shopware dropping the cached pages that
  * carry them when they change is the point. They stay in `system_config`.
  */
 final class ConnectionDefinition extends EntityDefinition

@@ -17,7 +17,7 @@ use Psr\Log\LoggerInterface;
  *
  * There used to be one. The fastmon Shopware app creates a *Site* per sales channel: it
  * reads every channel and its domains through the Admin API, creates one site for each,
- * and writes a separate tracker id into that channel's `system_config`. Adding a domain
+ * and writes a separate source_hash into that channel's `system_config`. Adding a domain
  * meant going back into the wizard, and a channel with two domains had to pick one.
  *
  * The Application model replaced that. An application is one embed whose collection
@@ -66,7 +66,7 @@ final class ApplicationProvisioner
     }
 
     /**
-     * @return list<array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}>
+     * @return list<array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}>
      */
     public function applications(string $organizationId): array
     {
@@ -80,7 +80,7 @@ final class ApplicationProvisioner
     /**
      * Create an application and point the storefront at it.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function create(string $organizationId, string $name, string $environment, string $preset): array
     {
@@ -108,9 +108,9 @@ final class ApplicationProvisioner
      * one dashboard, or a re-link after someone disconnected.
      *
      * The hashes are re-read rather than taken from whatever the browser posted, so a
-     * stale list in an open admin tab cannot write a tracker id that no longer exists.
+     * stale list in an open admin tab cannot write a source_hash that no longer exists.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function attach(string $organizationId, string $applicationId): array
     {
@@ -120,8 +120,8 @@ final class ApplicationProvisioner
             $applicationId
         ));
 
-        if ($application['trackerId'] === '') {
-            throw FastmonCollectorException::applicationWithoutTrackerId();
+        if ($application['sourceHash'] === '') {
+            throw FastmonCollectorException::applicationWithoutSourceHash();
         }
 
         $this->persist($organizationId, $application);
@@ -155,7 +155,7 @@ final class ApplicationProvisioner
     }
 
     /**
-     * @param array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string} $application
+     * @param array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string} $application
      */
     private function persist(string $organizationId, array $application): void
     {
@@ -163,8 +163,8 @@ final class ApplicationProvisioner
         $this->store->saveApplication(
             $organizationId,
             $application['id'],
-            $application['trackerId'],
-            $application['pixelId'],
+            $application['sourceHash'],
+            $application['collectorHash'],
         );
     }
 

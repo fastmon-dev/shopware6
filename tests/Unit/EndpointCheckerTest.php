@@ -199,8 +199,8 @@ class EndpointCheckerTest extends TestCase
         });
 
         if ($provisioned) {
-            $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'srchash';
-            $this->config[ConfigResolver::DOMAIN . 'pixelId'] = 'colhash';
+            $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'srchash';
+            $this->config[ConfigResolver::DOMAIN . 'collectorHash'] = 'colhash';
         }
 
         $systemConfig = $this->systemConfig();

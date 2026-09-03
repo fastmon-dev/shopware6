@@ -65,8 +65,8 @@ final class ConfigResolver
 
         return new StorefrontConfig(
             active: $this->bool('active', $salesChannelId, true),
-            trackerId: $this->string('trackerId', null),
-            pixelId: $this->string('pixelId', null),
+            sourceHash: $this->string('sourceHash', null),
+            collectorHash: $this->string('collectorHash', null),
             scriptBaseUrl: $this->scriptBaseUrl($mode, $customDomain),
             errorBootstrap: $this->bool('enableErrorBootstrap', $salesChannelId, true),
             pixel: $this->bool('enablePixel', $salesChannelId, true),

@@ -125,15 +125,15 @@ final class ConnectionStoreTest extends TestCase
 
         // The pair the storefront templates read, where a write invalidates the pages
         // that carry the old id. Everything else about the link is a column.
-        self::assertSame('src123', $this->systemConfig->get(ConfigResolver::DOMAIN . 'trackerId'));
-        self::assertSame('pix123', $this->systemConfig->get(ConfigResolver::DOMAIN . 'pixelId'));
+        self::assertSame('src123', $this->systemConfig->get(ConfigResolver::DOMAIN . 'sourceHash'));
+        self::assertSame('pix123', $this->systemConfig->get(ConfigResolver::DOMAIN . 'collectorHash'));
         self::assertNull($this->systemConfig->get(ConfigResolver::DOMAIN . 'applicationId'));
         self::assertNull($this->systemConfig->get(ConfigResolver::DOMAIN . 'oauthRefreshToken'));
 
         $connection = $this->store->load();
         self::assertSame('app-1', $connection->applicationId);
         self::assertSame('org-7', $connection->organizationId);
-        self::assertSame('src123', $connection->trackerId);
+        self::assertSame('src123', $connection->sourceHash);
     }
 
     public function testADisconnectKeepsTheRegistrationAndAnUninstallDoesNot(): void
@@ -149,7 +149,7 @@ final class ConnectionStoreTest extends TestCase
         self::assertSame('dyn_1', $this->store->credentials()->clientId);
         self::assertSame('', $this->store->credentials()->refreshToken);
         self::assertFalse($this->store->load()->isConnected());
-        self::assertSame('', $this->store->load()->trackerId);
+        self::assertSame('', $this->store->load()->sourceHash);
 
         $this->store->clearAll();
 

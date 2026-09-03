@@ -125,10 +125,10 @@
                         <dl class="fastmon-collector-connection__summary">
                             <dt>{{ $t('fastmon-collector.summary.application') }}</dt>
                             <dd><code>{{ status.applicationId }}</code></dd>
-                            <dt>{{ $t('fastmon-collector.summary.trackerId') }}</dt>
-                            <dd><code>{{ status.trackerId }}</code></dd>
-                            <dt>{{ $t('fastmon-collector.summary.pixelId') }}</dt>
-                            <dd><code>{{ status.pixelId || '-' }}</code></dd>
+                            <dt>{{ $t('fastmon-collector.summary.sourceHash') }}</dt>
+                            <dd><code>{{ status.sourceHash }}</code></dd>
+                            <dt>{{ $t('fastmon-collector.summary.collectorHash') }}</dt>
+                            <dd><code>{{ status.collectorHash || '-' }}</code></dd>
                         </dl>
                     </details>
                 </template>

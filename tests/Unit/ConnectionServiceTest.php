@@ -94,7 +94,7 @@ class ConnectionServiceTest extends TestCase
             'clientId' => 'dyn_old',
             'redirectUri' => 'https://old.example.com/admin',
         ];
-        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'src123';
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'src123';
 
         $service = $this->service(oauth: [$this->discovery(), $this->registration('dyn_new')]);
         $service->beginAuthorization(self::ADMIN);
@@ -183,11 +183,11 @@ class ConnectionServiceTest extends TestCase
         self::assertSame('fmr_live', $body['token']);
         self::assertNull($this->row['refreshToken'] ?? null);
 
-        // The tracker id is the one thing a disconnect has to take out of
+        // The source_hash is the one thing a disconnect has to take out of
         // `system_config`: the cached pages still carry the snippet, and a disconnected
         // shop must stop serving it. Everything else was a row, and no page is tagged
         // with that.
-        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'trackerId', $this->config);
+        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'sourceHash', $this->config);
 
         // Not a credential, and re-using it keeps this shop one entry in that list rather
         // than a new one per reconnect.

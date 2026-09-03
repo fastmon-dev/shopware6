@@ -29,9 +29,9 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * it is wrong for a token, so the connection has a table of its own and the fields are
  * typed. `ConnectionDefinition` carries the rest of that reasoning.
  *
- * Two values stay in `system_config` on purpose: `trackerId` and `pixelId`, the pair the
- * storefront templates render. Those are configuration in the full sense, they are read
- * on every page, and Shopware dropping the cached pages that carry the old id when they
+ * Two values stay in `system_config` on purpose: `sourceHash` and `collectorHash`, the
+ * pair the storefront templates render. Those are configuration in the full sense, they are read
+ * on every page, and Shopware dropping the cached pages that carry the old hash when they
  * change is the point rather than a side effect to avoid.
  *
  * ## On storing tokens in the shop database
@@ -62,8 +62,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class ConnectionStore
 {
     /** The two values the storefront actually renders, and the only two left in `system_config`. */
-    private const TRACKER_ID = 'trackerId';
-    private const PIXEL_ID = 'pixelId';
+    private const SOURCE_HASH = 'sourceHash';
+    private const COLLECTOR_HASH = 'collectorHash';
 
     /**
      * The same two, for the one caller that cannot hold a store: an uninstall runs in a
@@ -72,7 +72,7 @@ final class ConnectionStore
      *
      * @var string[]
      */
-    public const RENDERED_KEYS = [self::TRACKER_ID, self::PIXEL_ID];
+    public const RENDERED_KEYS = [self::SOURCE_HASH, self::COLLECTOR_HASH];
 
     /**
      * Everything that authenticates. Dropped together, whichever kind is stored.
@@ -128,8 +128,8 @@ final class ConnectionStore
             organizationId: $this->str($row?->organizationId),
             organizationName: $this->str($row?->organizationName),
             applicationId: $this->str($row?->applicationId),
-            trackerId: $this->rendered(self::TRACKER_ID),
-            pixelId: $this->rendered(self::PIXEL_ID),
+            sourceHash: $this->rendered(self::SOURCE_HASH),
+            collectorHash: $this->rendered(self::COLLECTOR_HASH),
         );
     }
 
@@ -208,15 +208,15 @@ final class ConnectionStore
     }
 
     /**
-     * Point the storefront at an application. `trackerId` is what actually turns the
+     * Point the storefront at an application. `sourceHash` is what actually turns the
      * snippets on, so it is written last: a half-written link renders nothing rather than
-     * a script tag with an empty id.
+     * a script tag with an empty hash.
      */
-    public function saveApplication(string $organizationId, string $applicationId, string $trackerId, string $pixelId): void
+    public function saveApplication(string $organizationId, string $applicationId, string $sourceHash, string $collectorHash): void
     {
         $this->write(['organizationId' => $organizationId, 'applicationId' => $applicationId]);
-        $this->saveRendered(self::PIXEL_ID, $pixelId);
-        $this->saveRendered(self::TRACKER_ID, $trackerId);
+        $this->saveRendered(self::COLLECTOR_HASH, $collectorHash);
+        $this->saveRendered(self::SOURCE_HASH, $sourceHash);
     }
 
     /**

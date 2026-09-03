@@ -55,7 +55,7 @@ final class ConnectionStatus
      *     connected: bool, provisioned: bool, connectionKind: string, scopes: list<string>,
      *     missingScopes: list<string>,
      *     accountEmail: string, accountName: string, organizationId: string,
-     *     organizationName: string, applicationId: string, trackerId: string, pixelId: string,
+     *     organizationName: string, applicationId: string, sourceHash: string, collectorHash: string,
      *     apiBaseUrl: string, dashboardUrl: string, applicationsUrl: string,
      *     tokenValid: bool|null, applicationValid: bool|null, error: string
      * }
@@ -92,8 +92,8 @@ final class ConnectionStatus
             'organizationId' => $connection->organizationId,
             'organizationName' => $checked['organizationName'] ?? $connection->organizationName,
             'applicationId' => $connection->applicationId,
-            'trackerId' => $connection->trackerId,
-            'pixelId' => $connection->pixelId,
+            'sourceHash' => $connection->sourceHash,
+            'collectorHash' => $connection->collectorHash,
             'apiBaseUrl' => $this->config->apiBaseUrl(),
             // Assembled here rather than in the panel, so the dashboard's routes are
             // written down in one place. Empty without an organization, because both
@@ -180,19 +180,19 @@ final class ConnectionStatus
             // the old id collects nothing while looking perfectly fine. fastmon owns
             // them, so the shop takes what it is told instead of reporting a
             // disagreement the merchant would have to resolve by hand.
-            if ($application['trackerId'] !== '' && $application['trackerId'] !== $connection->trackerId) {
+            if ($application['sourceHash'] !== '' && $application['sourceHash'] !== $connection->sourceHash) {
                 $this->store->saveApplication(
                     $connection->organizationId,
                     $connection->applicationId,
-                    $application['trackerId'],
-                    $application['pixelId'],
+                    $application['sourceHash'],
+                    $application['collectorHash'],
                 );
                 $this->logger->info('fastmon: the application hashes changed, the storefront now serves the new ones');
             }
 
-            // What is left to report is existence: an application with no tracker id is
+            // What is left to report is existence: an application with no source_hash is
             // one the storefront cannot emit for.
-            $checked['applicationValid'] = $application['trackerId'] !== '';
+            $checked['applicationValid'] = $application['sourceHash'] !== '';
         } catch (FastmonApiException $e) {
             $checked['applicationValid'] = false;
 

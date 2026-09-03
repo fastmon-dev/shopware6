@@ -122,7 +122,7 @@ class AccessTokenProviderTest extends TestCase
             self::assertNull($this->row['accessToken'] ?? null);
             // The application stays linked: reconnecting for the same organization must
             // not cost the merchant the storefront snippets.
-            self::assertSame('src123', $this->config[ConfigResolver::DOMAIN . 'trackerId']);
+            self::assertSame('src123', $this->config[ConfigResolver::DOMAIN . 'sourceHash']);
         }
     }
 
@@ -265,7 +265,7 @@ class AccessTokenProviderTest extends TestCase
             'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + $expiresIn)),
             'accessToken' => $accessToken,
         ];
-        $this->config[ConfigResolver::DOMAIN . 'trackerId'] = 'src123';
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'src123';
     }
 
     private function discovery(): MockResponse
