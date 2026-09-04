@@ -9,37 +9,13 @@ namespace Fastmon\Collector\ServerTiming;
  * optionally `;desc=<text>`. Browsers show them in the network panel, and fastmon reads
  * them from `performance.getEntriesByType("navigation")[0].serverTiming`.
  *
- * ## Why the layer names are mostly left alone
+ * Two things about the names are decided elsewhere and are worth reading before changing
+ * one: the layer names stay as the profiler reports them rather than becoming `fm-*`
+ * aliases, and the collector's entry caps are deliberately not arbitrated here. The
+ * ordering below (ours first, then layers slowest first) is what the second one relies
+ * on.
  *
- * fastmon's collector already recognises the Tideways vocabulary and promotes it into
- * the dashboard columns itself (`rdbms` -> db_dur, `redis` -> kv_dur, `elasticsearch`
- * -> search_dur, `http` -> http_dur). Renaming everything to the first-party `fm-*`
- * aliases would gain nothing and would *lose* the per-layer drill-down, because several
- * layers map into the same summed column - two `fm-kv` entries are one number, while
- * `redis` plus `memcache` is that same number and the split that explains it.
- *
- * So `fm-*` is used only where there is no native equivalent to lean on:
- *   - `fm-backend` for total PHP wall time. Our own measurement, and the one entry the
- *     layers below are a share of.
- *   - `fm-origin-cache` for the full-page-cache verdict, which no profiler reports,
- *     and `fm-origin-age` for how old the served copy was. Sent one after the other.
- *   - `fm-host` for the machine that answered. A name, never a duration.
- *
- * ## Why nothing here arbitrates the collector's caps
- *
- * The collector keeps at most 32 entries per pageview and, of those, at most 8 whose
- * names are outside its catalog. Neither limit needs a policy on this side. Every layer
- * Tideways reports is either promoted into a column (`rdbms`, `redis`, `http`, ...) or
- * listed in that catalog (`autoloading`, `compiling`, `gc`, `disk`, ...), so the layers
- * reach the second limit not at all.
- *
- * The `fm-origin-*` pair is the exception, and it is a named one: until the collector
- * promotes those two names they are outside its catalog, so on a cache hit they take two
- * of those eight slots. That is affordable because a hit is the response with the fewest
- * entries to begin with, no layer timings exist for a page nobody rendered. And where a
- * third-party provider does emit a foreign vocabulary, the collector fills the rest of
- * that budget in the order the header arrives, which is the order below: slowest first.
- *
+ * @see docs/server-timing-header.md
  * @see docs/server-timing-setup.md in the fastmon backend for the full contract.
  */
 final class ServerTimingHeaderBuilder

@@ -56,4 +56,7 @@ red leg is a bug in the change, not in the matrix.
 - Conventional Commits, English, body explains the why.
 - Feature branches, one topic per PR, `composer ci` green and the integration suite run locally
   when the change is Shopware-facing.
-- `docs/` holds backend specs only; user documentation lives in the README until it outgrows it.
+- `docs/` holds the contracts with the fastmon backend, and the design rationale that is
+  too long to live in a class header: a decision spanning several classes, or one that reads
+  as an oversight from any single one of them. The class keeps a short pointer, so rule 6
+  still holds where it matters. User documentation lives in the README until it outgrows it.

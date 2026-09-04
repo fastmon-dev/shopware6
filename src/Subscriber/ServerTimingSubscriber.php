@@ -30,21 +30,18 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * `kernel.response` is the obvious place and it is the wrong one, because Shopware's
  * HTTP cache sits *outside* the kernel. On a full-page-cache hit the inner kernel never
- * runs, so a `kernel.response` listener never fires - and the response that goes out is
- * the stored one, carrying the header from whichever request populated the cache. The
- * browser would receive a completely plausible set of database and render timings
- * belonging to a different request, on every hit, for as long as the cache entry lives.
- * On a warm shop that is the overwhelming majority of pageviews.
+ * runs, so a `kernel.response` listener never fires, and the response that goes out is
+ * the stored one, carrying the header from whichever request populated the cache. What
+ * that does to the numbers is described where it is fixed, at
+ * `ServerTimingResponseWriter`. On a warm shop it would be the majority of pageviews.
  *
  * `BeforeSendResponseEvent` is dispatched by `HttpCacheKernel::handle()` on every main
  * request, hit and miss alike - its own docblock says "This event is also called on
  * cached responses" - and it runs *after* the response has been written to the cache.
  * Writing here therefore gets two things at once: the header reflects the request that
- * is actually being answered, and our entries never end up inside the cached copy.
- *
- * `ServerTimingResponseWriter` still strips stale `fm-*` entries on the way in, because
- * an *external* cache (Varnish, nginx, a CDN) stores whatever we sent and hands it back
- * on its own hits, where none of the above applies.
+ * is actually being answered, and our entries never end up inside the cached copy. The
+ * writer's stripping is still needed for an *external* cache, which hands back whatever
+ * we sent on its own hits.
  *
  * ## Exactly one write point
  *
