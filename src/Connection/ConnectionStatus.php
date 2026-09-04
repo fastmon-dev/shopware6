@@ -20,11 +20,8 @@ use Psr\Log\LoggerInterface;
  * do, and where does the merchant go in fastmon itself.
  *
  * It never returns the credential. The panel learns that one exists and what it may do,
- * never what it is. That holds for this plugin's routes only: Shopware's own
- * `GET /api/_action/system-config?domain=FastmonCollector.config` hands every key in the
- * domain to a user with `system_config:read`, tokens included, as it does for every
- * plugin that keeps credentials in `system_config`. See `ConnectionStore` for why they
- * live there anyway.
+ * never what it is, and no other route hands it out either: the credential lives in the
+ * connection table, which admits the system scope only.
  */
 #[WithMonologChannel('fastmon_collector')]
 final class ConnectionStatus

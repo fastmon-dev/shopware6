@@ -6,18 +6,11 @@ services:
     # Every class under src/ that is a service. Value objects, enums, exceptions and the
     # plugin class itself are excluded: those are constructed by hand, not by the container.
     #
-    # What a service needs is on its constructor, and the container reads the types. The
-    # few things a type cannot say are attributes next to the code they concern:
-    #   #[Autowire(service: 'fastmon_collector.http_client')]         the plugin's own HTTP client
-    #   #[Autowire(service: 'lock.factory')]                          serialises the token refresh
-    #                                                                 (symfony/lock is a hard requirement
-    #                                                                 of shopware/core, like http-client below)
-    #   #[AutowireIterator('fastmon_collector.layer_metrics_provider')] the measurement sources
-    #   #[AutoconfigureTag(...)] on LayerMetricsProviderInterface       what makes a class a source
-    #   #[AsAlias(LayerMetricsProviderInterface::class)]                which source callers get
-    #   #[WithMonologChannel('fastmon_collector')]                      the log channel
-    # Subscribers, the Twig extension, the resettable RequestInsights and the controller
-    # are tagged by autoconfigure from the interfaces they implement.
+    # What a service needs is on its constructor and the container reads the types, so
+    # nothing is wired here. The few things a type cannot say are attributes next to the
+    # code they concern (#[Autowire], #[AutowireIterator], #[AsAlias],
+    # #[WithMonologChannel]); subscribers, the Twig extension and the controller are
+    # tagged by autoconfigure from the interfaces they implement.
     Fastmon\Collector\:
         resource: '../../*'
         exclude:

@@ -15,12 +15,11 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
  * registers it.
  *
  * OpenTelemetry is deliberately not that source. Its spans go to the processors that
- * existed when the TracerProvider was built - during composer autoloading, before any
- * plugin - and there is no API to read them back, so the gap is architectural rather than
- * a class nobody has written yet. Tideways is the only source today.
+ * existed when the TracerProvider was built, during composer autoloading and before any
+ * plugin, and there is no API to read them back: the gap is architectural rather than a
+ * class nobody has written yet. Tideways is the only source today.
  *
- * This interface is the plugin's one extension point. Every class in the plugin is
- * `final`: a second source implements this, it does not inherit from the first.
+ * The plugin's one extension point, and the one class that is not `final`.
  */
 #[AutoconfigureTag('fastmon_collector.layer_metrics_provider')]
 interface LayerMetricsProviderInterface

@@ -18,25 +18,18 @@ final class FastmonCollector extends Plugin
      *
      * Two things are ours: the connection table, and the two `system_config` values the
      * storefront renders. Shopware clears a plugin's configuration rows itself right
-     * after this returns (`PluginLifecycleService::uninstallPlugin()`), so the second
-     * part is belt and braces, and a table is nobody's business but ours.
+     * after this returns, so the second part is belt and braces; a table is nobody's
+     * business but ours. The key names come from `ConnectionStore`, because a second list
+     * here would be the one that is forgotten the day a field is added.
      *
-     * ## Only core services here
+     * Core services only. The plugin is deactivated by the time this runs, so the
+     * container no longer holds anything it defined: asking for the entity's repository
+     * would end the uninstall with a `ServiceNotFoundException`, which is a plugin a
+     * merchant cannot remove.
      *
-     * By the time this runs the plugin has been deactivated, and the container it runs in
-     * no longer holds anything the plugin defined: asking for the entity's repository
-     * ends the uninstall with a `ServiceNotFoundException`, which is a plugin a merchant
-     * cannot remove. So the table goes with SQL and the two values through
-     * `SystemConfigService`, both of which every Shopware container has. The key names
-     * come from `ConnectionStore` rather than being repeated here, because a second list
-     * would be the one that is forgotten the day a field is added.
-     *
-     * ## Nothing reaches fastmon
-     *
-     * An uninstall runs where no HTTP call belongs, it must finish on a shop that cannot
-     * reach the internet, so the connection is ended the way it should be ended: with
-     * "Disconnect" in the panel, which hands the refresh token back and closes the grant.
-     * What is left after an uninstall without that is a grant the merchant can drop in
+     * Nothing reaches fastmon either, because an uninstall has to finish on a shop with
+     * no internet. Ending the grant is what "Disconnect" in the panel is for; after an
+     * uninstall without it, the merchant drops the entry under
      * **Organization settings -> Access**.
      */
     public function uninstall(UninstallContext $uninstallContext): void

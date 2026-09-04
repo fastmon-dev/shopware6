@@ -2,17 +2,13 @@
  * One message between the plugin's own configuration panels.
  *
  * The connection panel and the collection panel are two separate `<component>` entries in
- * config.xml. Shopware renders them as siblings with nothing between them, so linking an
- * application in the first one left the second one showing "no application linked" until
- * the merchant reloaded the page by hand.
+ * config.xml, rendered as siblings with nothing between them, so linking an application in
+ * the first one left the second showing "no application linked" until the merchant
+ * reloaded the page by hand.
  *
- * A module-level emitter is enough for that, and is the smallest thing that is: both
- * panels live in this bundle, an event carries no payload because every listener reads
- * its own state from the admin API anyway, and nothing outside the plugin can subscribe.
- * A Pinia store would be the same thing with a lifecycle to get wrong.
- *
- * One signal: the linked application changed. The collection card reloads on it, because
- * what it can offer depends on there being one.
+ * A module-level emitter is the smallest thing that fixes that: both panels live in this
+ * bundle, the event carries no payload because every listener reads its own state from the
+ * admin API anyway, and nothing outside the plugin can subscribe.
  */
 
 const listeners = new Set();

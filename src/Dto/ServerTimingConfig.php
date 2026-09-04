@@ -17,18 +17,9 @@ final readonly class ServerTimingConfig
 {
     public function __construct(
         public bool $enabled,
-        /**
-         * Off by default. The node name is a fact about the merchant's infrastructure,
-         * and only a cluster has a use for it: one server learns nothing from its own
-         * name in every response.
-         */
+        /** Off by default: only a cluster has a use for the node name. */
         public bool $reportHost,
-        /**
-         * Off by default. A login flag is a visitor attribute in a header fastmon
-         * classifies as server self-measurement and collects in every privacy mode,
-         * the cookieless one included. Sending it is a decision about that
-         * classification.
-         */
+        /** Off by default: a visitor attribute in a header collected without consent. */
         public bool $reportLoggedIn,
     ) {
     }

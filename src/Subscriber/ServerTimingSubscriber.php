@@ -49,16 +49,12 @@ use Symfony\Component\HttpFoundation\Response;
  * ## Exactly one write point
  *
  * There is deliberately no `kernel.response` listener alongside this one. `http_kernel`
- * is decorated by `HttpCacheKernel` unconditionally - the decoration is plain, and the
- * compiler pass only injects options into it - so every web request reaches the event
- * above and a second listener would have nothing left to cover.
- *
- * It would, however, break the header. Our entries carry the layer names the profiler
- * reports (`rdbms`, `redis`, …), which is what lets fastmon promote them into its
- * columns without a translation table; but those names are not in the `fm-` namespace,
- * so the writer cannot tell one of ours from another party's and leaves them alone.
- * Writing twice therefore appends a second set of layers rather than replacing the
- * first, and the summed columns - kv, http, search - would count both.
+ * is decorated by `HttpCacheKernel` unconditionally, so every web request reaches the
+ * event above and a second listener would cover nothing. It would, however, break the
+ * header: our layer entries carry the profiler's own names (`rdbms`, `redis`, …) rather
+ * than `fm-` ones, so the writer cannot tell them from another party's and leaves them
+ * standing. Writing twice appends a second set of layers instead of replacing the first,
+ * and the summed columns would count both.
  */
 #[WithMonologChannel('fastmon_collector')]
 final class ServerTimingSubscriber implements EventSubscriberInterface

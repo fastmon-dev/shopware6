@@ -19,34 +19,17 @@ use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
 
 /**
  * The shop's fastmon connection as its own table: the registration, the tokens, who
- * approved it, and the authorization in flight.
+ * approved it, and the authorization in flight. `ConnectionStore` carries why none of
+ * that is a setting, and why the two hashes the storefront renders stay in
+ * `system_config`.
  *
- * ## Why a table and not `system_config`
- *
- * `system_config` is built for configuration: memoised once per request, tagged into the
- * page cache, readable through Shopware's generic system-config endpoint. Every one of
- * those is right for a setting and wrong for a token. Keeping the connection there meant
- * a raw SQL read past the memo, a flag to keep writes out of the page cache that only
- * some Shopware releases understood, and a JSON blob for the authorization in flight.
- * A row of typed columns has none of that: the repository reads what the database holds,
- * a write invalidates no page, and nothing here is a string somebody has to unwrap.
- *
- * ## One row
- *
- * A shop has one connection, so the table holds one row under a fixed id. That keeps
- * every write an upsert and every read a lookup by primary key.
- *
- * ## Not reachable through the API
+ * A shop has one connection, so the table holds one row under a fixed id: every write is
+ * an upsert, every read a lookup by primary key.
  *
  * Both protections admit the system scope only. The plugin reads and writes the row on
- * the shop's behalf, never on a user's, and the tokens must not be listable through
- * `/api/fastmon-collector-connection` by anyone, whatever privileges they hold. The
- * plugin's own admin routes report whether a credential exists and what it may do, and
- * that stays the only window.
- *
- * What the storefront renders (the source and collector hashes) is deliberately not
- * here: those two are configuration in the full sense, and Shopware dropping the cached pages that
- * carry them when they change is the point. They stay in `system_config`.
+ * the shop's behalf, never on a user's, so no privilege makes the tokens listable through
+ * `/api/fastmon-collector-connection`. The plugin's own admin routes report whether a
+ * credential exists and what it may do, and that stays the only window.
  */
 final class ConnectionDefinition extends EntityDefinition
 {

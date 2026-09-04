@@ -11,20 +11,15 @@ use Shopware\Core\DevOps\Environment\EnvironmentHelper;
  * node slower than the others", and that is invisible unless the response says which node
  * it came from.
  *
- * ## Why the name is not a setting
- *
- * Whether it is sent is one (`serverTimingHost`, off by default). What it says cannot
- * be, because a setting could not work. Plugin configuration lives in `system_config`, in the
- * database every node of the cluster shares - so a configured name would be the *same* on
- * all of them, which is precisely the opposite of what this is for. The value has to come
- * from the machine that answered.
+ * Whether it is sent is a setting (`serverTimingHost`, off by default), what it says
+ * cannot be: plugin configuration lives in the database every node shares, so a
+ * configured name would be identical on all of them. The value has to come from the
+ * machine that answered, which is why `FASTMON_SERVER_NAME` overrides it and no field
+ * does. On Kubernetes that variable is the right answer anyway, because the hostname is
+ * a pod name that changes every deploy.
  *
  * Only the first label of the hostname: an FQDN would disclose domain structure and
  * internal naming, `web-01` discloses that the servers are called `web-01`.
- *
- * `FASTMON_SERVER_NAME` overrides it, because an environment variable is per node the way
- * a database row can never be - and it is the right move on Kubernetes, where the
- * hostname is a pod name that changes every deploy and groups nothing.
  */
 final class ServerIdentity
 {

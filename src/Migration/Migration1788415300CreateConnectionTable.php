@@ -6,15 +6,11 @@ use Doctrine\DBAL\Connection;
 use Shopware\Core\Framework\Migration\MigrationStep;
 
 /**
- * Creates the table the fastmon connection lives in.
+ * Creates the table the fastmon connection lives in: one row per shop, every field typed.
+ * `ConnectionStore` carries why a credential does not belong in `system_config`.
  *
- * One row per shop, and every field typed. What used to be a handful of `system_config`
- * keys read through a store built for configuration is a row here: see
- * `ConnectionDefinition` for why that is the difference between a setting and a
- * credential.
- *
- * No data is carried over and none needs to be: this is the release that introduces app
- * connections, so there is no shop with a stored one to migrate.
+ * No data is carried over and none needs to be: 0.1.0 is the first release, so no shop
+ * has a stored connection, and there is no earlier key layout to clean up either.
  */
 final class Migration1788415300CreateConnectionTable extends MigrationStep
 {

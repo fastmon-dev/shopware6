@@ -27,16 +27,17 @@ use Symfony\Component\Routing\Attribute\Route;
  * The admin module's back end: connecting to fastmon, choosing an application, and
  * reporting what Server-Timing can see on this host.
  *
- * Every route is admin-API scoped and gated on the `system_config` ACL, which is the
- * right tier: everything here reads or writes the same rows the plugin configuration
- * screen does, and the token in particular is exactly as sensitive as the payment
- * credentials sitting next to it.
+ * Every route is admin-API scoped and gated on the `system_config` ACL. That is the right
+ * tier because these routes are the plugin configuration screen: they are reachable from
+ * nowhere else, and whoever may configure the plugin is who may connect it. The rows they
+ * touch are the plugin's own, not `system_config`, and none of them hands a credential
+ * back out (see `ConnectionStatus`).
  *
  * fastmon errors are translated into a `{success: false, error}` body rather than an
- * exception, because all of them are things the merchant is meant to read and act on -
- * a declined authorization, a revoked token, an unreachable API - and none of them are
- * faults in the shop. Anything else is a fault and propagates: Shopware's API error
- * handler logs it and answers 500, which is where a programming error belongs.
+ * exception, because all of them are things the merchant is meant to read and act on:
+ * a declined authorization, a revoked token, an unreachable API, none of them a fault in
+ * the shop. Anything else is a fault and propagates: Shopware's API error handler logs it
+ * and answers 500, which is where a programming error belongs.
  */
 #[Route(defaults: [PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID]])]
 /**

@@ -2,20 +2,18 @@
  * The browser's half of the connect flow.
  *
  * fastmon sends the merchant back to the administration's own address with `?code=` and
- * `?state=` on it - an exact, registered redirect URI, which a hash route could never be.
- * So the code arrives on whatever page the administration happens to load first, usually
- * the dashboard, and has to find its way back to the plugin's configuration page.
+ * `?state=` on it, an exact registered redirect URI that a hash route could never be. So
+ * the code arrives on whatever page the administration loads first, usually the dashboard,
+ * and has to find its way back to the plugin's configuration page. This file runs on every
+ * administration boot and does exactly that on the one boot after a consent screen: take
+ * the parameters out of the URL, keep them in `sessionStorage`, and land back on the page
+ * the merchant started from, where the connection panel hands them to the shop.
  *
- * That is all this file does. It runs on every administration boot, and on the one boot
- * that follows a consent screen it takes the parameters out of the URL, keeps them in
- * `sessionStorage`, and reloads the page the merchant started from - which is where the
- * connection panel picks them up and hands them to the shop.
+ * `sessionStorage` is the right place for it: per tab, cleared when the tab closes, and
+ * what it holds is worthless on its own, because redeeming the code needs the PKCE
+ * verifier and that never leaves the server.
  *
- * `sessionStorage` is the right place for exactly this: it is per tab, it is cleared when
- * the tab closes, and what it holds is worthless on its own. The authorization code
- * cannot be redeemed without the PKCE verifier, and the verifier never leaves the server.
- *
- * Nothing here happens unless this shop started a connection in this tab, so the
+ * Nothing happens here unless this shop started a connection in this tab, so the
  * administration's own query parameters are never touched.
  */
 
