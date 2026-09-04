@@ -22,40 +22,25 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * ## Where it lives
  *
  * In `fastmon_collector_connection`, one row, one column per field. It used to live in
- * `system_config`, and everything that was awkward about this class followed from that:
- * a store built for configuration memoises the whole of it once per request, tags it into
- * the page cache, keeps every value as a JSON-wrapped string, and hands the lot to anyone
- * who may read the system-config endpoint. None of that is wrong for a setting and all of
- * it is wrong for a token, so the connection has a table of its own and the fields are
- * typed. `ConnectionDefinition` carries the rest of that reasoning.
+ * `system_config`, and everything awkward about this class followed from that: a store
+ * built for configuration memoises the whole of it once per request, tags it into the
+ * page cache, and keeps every value as a JSON-wrapped string. That is right for a setting
+ * and wrong for a token, so the connection has a table of its own.
  *
  * Two values stay in `system_config` on purpose: `sourceHash` and `collectorHash`, the
- * pair the storefront templates render. Those are configuration in the full sense, they are read
- * on every page, and Shopware dropping the cached pages that carry the old hash when they
+ * pair the storefront templates render. Those are settings in the full sense, read on
+ * every page, and Shopware dropping the cached pages that carry the old hash when they
  * change is the point rather than a side effect to avoid.
  *
- * ## On storing tokens in the shop database
- *
- * In plain text, which is where every Shopware plugin keeps its API credentials, payment
- * providers included. Encrypting them would mean keeping a key in `.env`, next to the
- * database credentials that already grant access to the same rows: it would change who
- * can read a token from "anyone with the database" to "anyone with the database and the
- * application directory", which is the same person on every shop this plugin will run on.
- *
- * What did change with app connections is how much a stolen row is worth. The access
- * token expires in minutes and the refresh token rotates on every use, so a copy taken
- * from a backup stops working the moment the shop refreshes, and using it announces the
- * theft, because fastmon ends a connection whose refresh token is presented twice.
- *
- * None of it is a form field, and none of it is reachable through the API: the entity
- * admits the system scope only, and the plugin's own admin routes report whether a
- * connection exists and what it may do, never what it is.
+ * The tokens are in plain text, like every other Shopware plugin's API credentials; the
+ * README says why encrypting them would buy nothing. What app connections changed is what
+ * a stolen row is worth: the access token expires in minutes, the refresh token rotates on
+ * every use, and presenting a spent one ends the connection rather than opening it.
  *
  * ## One method per group of fields
  *
- * That is the design rather than an accident: the fields written together are written in
- * one statement, and a caller assembling the writes itself is exactly the coupling this
- * class exists to remove.
+ * The fields written together are written in one statement, and a caller assembling the
+ * writes itself is exactly the coupling this class exists to remove.
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
@@ -123,11 +108,11 @@ final class ConnectionStore
 
         return new Connection(
             credentials: $this->credentialsOf($row),
-            accountEmail: $this->str($row?->accountEmail),
-            accountName: $this->str($row?->accountName),
-            organizationId: $this->str($row?->organizationId),
-            organizationName: $this->str($row?->organizationName),
-            applicationId: $this->str($row?->applicationId),
+            accountEmail: $this->str($row?->getAccountEmail()),
+            accountName: $this->str($row?->getAccountName()),
+            organizationId: $this->str($row?->getOrganizationId()),
+            organizationName: $this->str($row?->getOrganizationName()),
+            applicationId: $this->str($row?->getApplicationId()),
             sourceHash: $this->rendered(self::SOURCE_HASH),
             collectorHash: $this->rendered(self::COLLECTOR_HASH),
         );
@@ -239,8 +224,8 @@ final class ConnectionStore
     public function authorization(): ?Authorization
     {
         $row = $this->row();
-        $state = $this->str($row?->authorizationState);
-        $verifier = $this->str($row?->authorizationVerifier);
+        $state = $this->str($row?->getAuthorizationState());
+        $verifier = $this->str($row?->getAuthorizationVerifier());
 
         if ($state === '' || $verifier === '') {
             return null;
@@ -249,9 +234,9 @@ final class ConnectionStore
         return new Authorization(
             state: $state,
             verifier: $verifier,
-            clientId: $this->str($row?->authorizationClientId),
-            redirectUri: $this->str($row?->authorizationRedirectUri),
-            expiresAt: $row?->authorizationExpiresAt?->getTimestamp() ?? 0,
+            clientId: $this->str($row?->getAuthorizationClientId()),
+            redirectUri: $this->str($row?->getAuthorizationRedirectUri()),
+            expiresAt: $row?->getAuthorizationExpiresAt()?->getTimestamp() ?? 0,
         );
     }
 
@@ -324,13 +309,13 @@ final class ConnectionStore
     private function credentialsOf(?ConnectionEntity $row): Credentials
     {
         return new Credentials(
-            clientId: $this->str($row?->clientId),
-            redirectUri: $this->str($row?->redirectUri),
-            accessToken: $this->str($row?->accessToken),
-            expiresAt: $row?->accessTokenExpiresAt?->getTimestamp() ?? 0,
-            refreshToken: $this->str($row?->refreshToken),
-            scopes: $this->str($row?->scopes),
-            manualToken: $this->str($row?->manualToken),
+            clientId: $this->str($row?->getClientId()),
+            redirectUri: $this->str($row?->getRedirectUri()),
+            accessToken: $this->str($row?->getAccessToken()),
+            expiresAt: $row?->getAccessTokenExpiresAt()?->getTimestamp() ?? 0,
+            refreshToken: $this->str($row?->getRefreshToken()),
+            scopes: $this->str($row?->getScopes()),
+            manualToken: $this->str($row?->getManualToken()),
         );
     }
 

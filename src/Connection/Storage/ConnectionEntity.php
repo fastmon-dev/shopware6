@@ -9,50 +9,220 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityIdTrait;
 /**
  * One row of `fastmon_collector_connection`, as the DAL hydrates it.
  *
- * Plain public properties: the DAL assigns them and `ConnectionStore` reads them, and it
- * is the only reader. Nothing outside the store sees this class; callers get the
- * `Connection` and `Credentials` value objects, which know what an empty column means.
+ * Protected fields behind getters and setters, which is what `bin/console dal:validate`
+ * checks every entity for. Nothing outside `ConnectionStore` sees this class: callers get
+ * the `Connection` and `Credentials` value objects, which know what an empty column means.
  *
- * One property per column, so it is as wide as the connection is: the registration, the
- * two tokens with their expiry, the pasted key, who approved it, what it points at, and
- * the authorization in flight. Splitting it would mean splitting the row.
+ * One field per column, so it is as wide as the connection is. Splitting it would mean
+ * splitting the row.
+ *
  * @SuppressWarnings("PHPMD.TooManyFields")
  */
 final class ConnectionEntity extends Entity
 {
     use EntityIdTrait;
 
-    public ?string $clientId = null;
+    protected ?string $clientId = null;
 
-    public ?string $redirectUri = null;
+    protected ?string $redirectUri = null;
 
-    public ?string $accessToken = null;
+    protected ?string $accessToken = null;
 
-    public ?DateTimeInterface $accessTokenExpiresAt = null;
+    protected ?DateTimeInterface $accessTokenExpiresAt = null;
 
-    public ?string $refreshToken = null;
+    protected ?string $refreshToken = null;
 
-    public ?string $scopes = null;
+    protected ?string $scopes = null;
 
-    public ?string $manualToken = null;
+    protected ?string $manualToken = null;
 
-    public ?string $accountEmail = null;
+    protected ?string $accountEmail = null;
 
-    public ?string $accountName = null;
+    protected ?string $accountName = null;
 
-    public ?string $organizationId = null;
+    protected ?string $organizationId = null;
 
-    public ?string $organizationName = null;
+    protected ?string $organizationName = null;
 
-    public ?string $applicationId = null;
+    protected ?string $applicationId = null;
 
-    public ?string $authorizationState = null;
+    protected ?string $authorizationState = null;
 
-    public ?string $authorizationVerifier = null;
+    protected ?string $authorizationVerifier = null;
 
-    public ?string $authorizationClientId = null;
+    protected ?string $authorizationClientId = null;
 
-    public ?string $authorizationRedirectUri = null;
+    protected ?string $authorizationRedirectUri = null;
 
-    public ?DateTimeInterface $authorizationExpiresAt = null;
+    protected ?DateTimeInterface $authorizationExpiresAt = null;
+
+    public function getClientId(): ?string
+    {
+        return $this->clientId;
+    }
+
+    public function setClientId(?string $clientId): void
+    {
+        $this->clientId = $clientId;
+    }
+
+    public function getRedirectUri(): ?string
+    {
+        return $this->redirectUri;
+    }
+
+    public function setRedirectUri(?string $redirectUri): void
+    {
+        $this->redirectUri = $redirectUri;
+    }
+
+    public function getAccessToken(): ?string
+    {
+        return $this->accessToken;
+    }
+
+    public function setAccessToken(?string $accessToken): void
+    {
+        $this->accessToken = $accessToken;
+    }
+
+    public function getAccessTokenExpiresAt(): ?DateTimeInterface
+    {
+        return $this->accessTokenExpiresAt;
+    }
+
+    public function setAccessTokenExpiresAt(?DateTimeInterface $accessTokenExpiresAt): void
+    {
+        $this->accessTokenExpiresAt = $accessTokenExpiresAt;
+    }
+
+    public function getRefreshToken(): ?string
+    {
+        return $this->refreshToken;
+    }
+
+    public function setRefreshToken(?string $refreshToken): void
+    {
+        $this->refreshToken = $refreshToken;
+    }
+
+    public function getScopes(): ?string
+    {
+        return $this->scopes;
+    }
+
+    public function setScopes(?string $scopes): void
+    {
+        $this->scopes = $scopes;
+    }
+
+    public function getManualToken(): ?string
+    {
+        return $this->manualToken;
+    }
+
+    public function setManualToken(?string $manualToken): void
+    {
+        $this->manualToken = $manualToken;
+    }
+
+    public function getAccountEmail(): ?string
+    {
+        return $this->accountEmail;
+    }
+
+    public function setAccountEmail(?string $accountEmail): void
+    {
+        $this->accountEmail = $accountEmail;
+    }
+
+    public function getAccountName(): ?string
+    {
+        return $this->accountName;
+    }
+
+    public function setAccountName(?string $accountName): void
+    {
+        $this->accountName = $accountName;
+    }
+
+    public function getOrganizationId(): ?string
+    {
+        return $this->organizationId;
+    }
+
+    public function setOrganizationId(?string $organizationId): void
+    {
+        $this->organizationId = $organizationId;
+    }
+
+    public function getOrganizationName(): ?string
+    {
+        return $this->organizationName;
+    }
+
+    public function setOrganizationName(?string $organizationName): void
+    {
+        $this->organizationName = $organizationName;
+    }
+
+    public function getApplicationId(): ?string
+    {
+        return $this->applicationId;
+    }
+
+    public function setApplicationId(?string $applicationId): void
+    {
+        $this->applicationId = $applicationId;
+    }
+
+    public function getAuthorizationState(): ?string
+    {
+        return $this->authorizationState;
+    }
+
+    public function setAuthorizationState(?string $authorizationState): void
+    {
+        $this->authorizationState = $authorizationState;
+    }
+
+    public function getAuthorizationVerifier(): ?string
+    {
+        return $this->authorizationVerifier;
+    }
+
+    public function setAuthorizationVerifier(?string $authorizationVerifier): void
+    {
+        $this->authorizationVerifier = $authorizationVerifier;
+    }
+
+    public function getAuthorizationClientId(): ?string
+    {
+        return $this->authorizationClientId;
+    }
+
+    public function setAuthorizationClientId(?string $authorizationClientId): void
+    {
+        $this->authorizationClientId = $authorizationClientId;
+    }
+
+    public function getAuthorizationRedirectUri(): ?string
+    {
+        return $this->authorizationRedirectUri;
+    }
+
+    public function setAuthorizationRedirectUri(?string $authorizationRedirectUri): void
+    {
+        $this->authorizationRedirectUri = $authorizationRedirectUri;
+    }
+
+    public function getAuthorizationExpiresAt(): ?DateTimeInterface
+    {
+        return $this->authorizationExpiresAt;
+    }
+
+    public function setAuthorizationExpiresAt(?DateTimeInterface $authorizationExpiresAt): void
+    {
+        $this->authorizationExpiresAt = $authorizationExpiresAt;
+    }
 }
