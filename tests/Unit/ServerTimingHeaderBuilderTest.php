@@ -33,23 +33,23 @@ class ServerTimingHeaderBuilderTest extends TestCase
     public function testCacheStatusLeadsEverything(): void
     {
         $header = $this->builder->build(['rdbms' => 42.5], [
-            ['fm-fpc', null, 'hit'],
+            ['fm-origin-cache', null, 'hit'],
             ['fm-backend', 128.4, null],
         ]);
 
-        self::assertStringStartsWith('fm-fpc;desc=hit, fm-backend;dur=128.4', $header);
+        self::assertStringStartsWith('fm-origin-cache;desc=hit, fm-backend;dur=128.4', $header);
     }
 
     public function testCacheStatusAloneIsAValidHeader(): void
     {
         // The verdict needs no profiler, so a host without one still says something
         // worth reading.
-        self::assertSame('fm-fpc;desc=miss', $this->builder->build([], [['fm-fpc', null, 'miss']]));
+        self::assertSame('fm-origin-cache;desc=miss', $this->builder->build([], [['fm-origin-cache', null, 'miss']]));
     }
 
     public function testRejectsACacheStatusTheCollectorWouldDiscard(): void
     {
-        $header = $this->builder->build([], [['fm-fpc', null, str_repeat('x', 33)]]);
+        $header = $this->builder->build([], [['fm-origin-cache', null, str_repeat('x', 33)]]);
 
         self::assertSame('', $header);
     }
@@ -120,7 +120,7 @@ class ServerTimingHeaderBuilderTest extends TestCase
             $metrics['layer' . $i] = (float) $i * 10;
         }
 
-        $header = $this->builder->build($metrics, [['fm-fpc', null, 'miss'], ['fm-backend', 100.0, null]]);
+        $header = $this->builder->build($metrics, [['fm-origin-cache', null, 'miss'], ['fm-backend', 100.0, null]]);
 
         self::assertLessThanOrEqual(32, \count(explode(', ', $header)));
     }

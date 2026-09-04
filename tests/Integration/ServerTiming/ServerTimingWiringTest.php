@@ -37,7 +37,7 @@ final class ServerTimingWiringTest extends TestCase
     {
         $header = $this->homepageHeader();
 
-        self::assertStringContainsString('fm-fpc;desc=miss', $header);
+        self::assertStringContainsString('fm-origin-cache;desc=miss', $header);
         self::assertMatchesRegularExpression('/fm-backend;dur=[0-9.]+/', $header);
         self::assertStringContainsString('fm-pagetype;desc=home', $header);
         self::assertMatchesRegularExpression('/fm-render;dur=[0-9.]+/', $header);
@@ -47,7 +47,7 @@ final class ServerTimingWiringTest extends TestCase
         self::assertStringNotContainsString('fm-loggedin', $header);
         // A miss has no age. Symfony sets `Age` on one anyway, derived from the Date
         // header, so the entry is gated on the hit rather than on the header.
-        self::assertStringNotContainsString('fm-cacheage', $header);
+        self::assertStringNotContainsString('fm-origin-age', $header);
     }
 
     public function testTheOptInsAreReportedOnceSwitchedOn(): void

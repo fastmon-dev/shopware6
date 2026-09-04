@@ -172,8 +172,8 @@ only annotates a response that was going out regardless. A shop that never conne
 gets a useful header in devtools.
 
 ```http
-Server-Timing: fm-fpc;desc=hit, fm-backend;dur=3.1
-Server-Timing: fm-fpc;desc=miss, fm-backend;dur=128.4, rdbms;dur=42.5, redis;dur=6.0
+Server-Timing: fm-origin-cache;desc=hit, fm-origin-age;desc=312, fm-backend;dur=3.1
+Server-Timing: fm-origin-cache;desc=miss, fm-backend;dur=128.4, rdbms;dur=42.5, redis;dur=6.0
 ```
 
 ### Why the layer names are mostly left alone
@@ -186,7 +186,8 @@ into one summed column: two `fm-kv` entries are one number, while `redis` plus `
 is that same number **and** the split that explains it.
 
 So `fm-*` is used only where there is no native equivalent: `fm-backend` for total PHP
-wall time, `fm-fpc` for the cache verdict, and `fm-host` for the machine that answered.
+wall time, `fm-origin-cache` and `fm-origin-age` for the cache verdict and the age of the
+copy it served, and `fm-host` for the machine that answered.
 
 The plugin also does not arbitrate the collector's entry caps. It sorts slowest first and
 sends; the collector fills its caps in that same order, and every layer Tideways reports
@@ -208,7 +209,7 @@ never end up inside the cached copy. For caches Shopware does not control (Varni
 a CDN), stale `fm-*` entries are stripped on the way out; the `fm-` prefix is fastmon's
 namespace, so nothing else is ever touched.
 
-`fm-fpc` reports `hit`, `miss`, or `bypass` for a response the cache was never going to
+`fm-origin-cache` reports `hit`, `miss`, or `bypass` for a response the cache was never going to
 serve (a logged-in customer, a filled cart, a POST). Keeping those out of `miss` is what
 stops the cache rate from looking terrible on a shop whose cache is working perfectly.
 
@@ -226,17 +227,29 @@ of nothing:
 
 | Entry | What it is |
 |---|---|
-| `fm-fpc` | the full-page-cache verdict: `hit`, `miss`, or `bypass` |
-| `fm-cacheage` | how old the served copy is, in seconds, on a hit |
+| `fm-origin-cache` | the full-page-cache verdict: `hit`, `miss`, or `bypass` |
+| `fm-origin-age` | how old the served copy is, in seconds, on a hit |
 | `fm-backend` | total PHP wall time |
 | `fm-render` | template render time: **no profiler extension reports this**, so `render_dur` is empty on every Shopware shop without it |
 | `fm-pagetype` | the page type, derived from the dispatched route |
 | `fm-host` | which machine answered |
 | `fm-loggedin` | whether a customer was authenticated |
 
-**`fm-cacheage`** is gated on the hit, not on the header being present: Symfony sets an
-`Age` on a miss too, derived from the `Date` header, and that zero would look like a
-measurement.
+**`fm-origin-cache` and `fm-origin-age` are a pair** and go out one after the other, so
+they arrive as what they are: one cache, its verdict and the age of the copy it served.
+`origin` names the tier the way `origin_cache_status` and `origin_host` do in the
+collector, and it earns its place: a shop behind a CDN has two caches and two ages, the
+edge's and its own, and an unqualified name does not say which one arrived.
+
+The age travels as a `desc`, not as a `dur`, because it is in seconds while a `dur` is in
+milliseconds. As a `dur` it would read as a layer that took 312ms rather than a page that
+was five minutes old, and sending milliseconds instead is no way out: the collector drops
+a `dur` above ten million as a mistaken timestamp, which is under three hours and well
+inside what a full page cache serves. As a `desc` it is a number the collector reads as a
+number and a browser's network panel shows as a label.
+
+It is gated on the hit, not on the header being present: Symfony sets an `Age` on a miss
+too, derived from the `Date` header, and that zero would look like a measurement.
 
 **`fm-pagetype`** produces exactly the values fastmon's `shopware6` body-class ruleset
 produces, so the two cannot disagree, which matters because only the ruleset works on a

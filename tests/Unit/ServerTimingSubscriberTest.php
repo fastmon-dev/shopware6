@@ -99,7 +99,12 @@ class ServerTimingSubscriberTest extends TestCase
         $this->subscriber([], available: false)
             ->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
-        self::assertStringContainsString('fm-cacheage;dur=742.0', (string) $response->headers->get('Server-Timing'));
+        // Seconds in a `desc`, and straight after the verdict: the pair describes one
+        // cache and is read as one.
+        self::assertStringContainsString(
+            'fm-origin-cache;desc=hit, fm-origin-age;desc=742',
+            (string) $response->headers->get('Server-Timing')
+        );
     }
 
     public function testNoCacheAgeWithoutAHit(): void
@@ -114,7 +119,7 @@ class ServerTimingSubscriberTest extends TestCase
         $this->subscriber([], available: false)
             ->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
-        self::assertStringNotContainsString('fm-cacheage', (string) $response->headers->get('Server-Timing'));
+        self::assertStringNotContainsString('fm-origin-age', (string) $response->headers->get('Server-Timing'));
     }
 
     public function testNoRenderTimeIsReportedWhenNothingWasRendered(): void
@@ -141,7 +146,7 @@ class ServerTimingSubscriberTest extends TestCase
         $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
         $header = $response->headers->get('Server-Timing');
-        self::assertStringContainsString('fm-fpc;desc=miss', (string) $header);
+        self::assertStringContainsString('fm-origin-cache;desc=miss', (string) $header);
         self::assertStringContainsString('rdbms;dur=42.5', (string) $header);
     }
 
@@ -158,14 +163,14 @@ class ServerTimingSubscriberTest extends TestCase
         $request->attributes->set(CacheStatusResolver::HIT_ATTRIBUTE, true);
 
         $response = $this->html();
-        $response->headers->set('Server-Timing', 'fm-fpc;desc=miss, fm-backend;dur=250.0, rdbms;dur=200.0');
+        $response->headers->set('Server-Timing', 'fm-origin-cache;desc=miss, fm-backend;dur=250.0, rdbms;dur=200.0');
 
         $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
         $values = $response->headers->all('Server-Timing');
         $joined = implode(' | ', $values);
 
-        self::assertStringContainsString('fm-fpc;desc=hit', $joined);
+        self::assertStringContainsString('fm-origin-cache;desc=hit', $joined);
         self::assertStringNotContainsString('fm-backend;dur=250.0', $joined);
         // A layer entry that is not ours is left alone: only `fm-` names are ours to
         // replace.
@@ -184,7 +189,7 @@ class ServerTimingSubscriberTest extends TestCase
 
         $subscriber->onBeforeSendResponse(new BeforeSendResponseEvent($request, $response));
 
-        self::assertSame('fm-fpc;desc=miss, fm-backend;dur=0.0', $this->normalise($response));
+        self::assertSame('fm-origin-cache;desc=miss, fm-backend;dur=0.0', $this->normalise($response));
     }
 
     public function testTheNodeNameIsReportedOnceSwitchedOn(): void
@@ -199,7 +204,7 @@ class ServerTimingSubscriberTest extends TestCase
         // The node name comes from the machine, so it is normalised away with the
         // duration; what matters here is where in the header it lands.
         self::assertSame(
-            'fm-fpc;desc=miss, fm-host;desc=node, fm-backend;dur=0.0',
+            'fm-origin-cache;desc=miss, fm-host;desc=node, fm-backend;dur=0.0',
             $this->normalise($response)
         );
     }
@@ -253,7 +258,7 @@ class ServerTimingSubscriberTest extends TestCase
 
         $header = (string) $response->headers->get('Server-Timing');
 
-        self::assertStringNotContainsString('fm-fpc', $header);
+        self::assertStringNotContainsString('fm-origin-cache', $header);
         self::assertStringNotContainsString('fm-host', $header);
         // The durations still go out: useful in devtools on any request.
         self::assertStringContainsString('rdbms;dur=42.5', $header);

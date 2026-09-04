@@ -166,15 +166,16 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
 
             if ($status !== null) {
                 // Leads: on a hit it is the only entry that explains the numbers next to it.
-                $own[] = [ServerTimingHeaderBuilder::CACHE_METRIC, null, $status];
+                $own[] = [ServerTimingHeaderBuilder::ORIGIN_CACHE_METRIC, null, $status];
             }
 
-            // Seconds. Gated on the hit, not on the header: Symfony sets `Age` on a miss
-            // too, derived from the Date header.
+            // Straight after the verdict, so the pair arrives together. Seconds in a
+            // `desc`, see ServerTimingHeaderBuilder. Gated on the hit, not on the header:
+            // Symfony sets `Age` on a miss too, derived from the Date header.
             $age = $response->headers->get('Age');
 
             if ($status === CacheStatusResolver::HIT && is_numeric($age)) {
-                $own[] = ['fm-cacheage', (float) $age, null];
+                $own[] = [ServerTimingHeaderBuilder::ORIGIN_AGE_METRIC, null, (string) (int) $age];
             }
 
             // Opt-in: which machine answered is a fact about the merchant's

@@ -21,7 +21,8 @@ namespace Fastmon\Collector\ServerTiming;
  * So `fm-*` is used only where there is no native equivalent to lean on:
  *   - `fm-backend` for total PHP wall time. Our own measurement, and the one entry the
  *     layers below are a share of.
- *   - `fm-fpc` for the full-page-cache verdict, which no profiler reports.
+ *   - `fm-origin-cache` for the full-page-cache verdict, which no profiler reports,
+ *     and `fm-origin-age` for how old the served copy was. Sent one after the other.
  *   - `fm-host` for the machine that answered. A name, never a duration.
  *
  * ## Why nothing here arbitrates the collector's caps
@@ -29,10 +30,15 @@ namespace Fastmon\Collector\ServerTiming;
  * The collector keeps at most 32 entries per pageview and, of those, at most 8 whose
  * names are outside its catalog. Neither limit needs a policy on this side. Every layer
  * Tideways reports is either promoted into a column (`rdbms`, `redis`, `http`, ...) or
- * listed in that catalog (`autoloading`, `compiling`, `gc`, `disk`, ...), so nothing this
- * plugin produces reaches the second limit at all. And where a third-party provider does
- * emit a foreign vocabulary, the collector fills that budget in the order the header
- * arrives, which is the order below: slowest first.
+ * listed in that catalog (`autoloading`, `compiling`, `gc`, `disk`, ...), so the layers
+ * reach the second limit not at all.
+ *
+ * The `fm-origin-*` pair is the exception, and it is a named one: until the collector
+ * promotes those two names they are outside its catalog, so on a cache hit they take two
+ * of those eight slots. That is affordable because a hit is the response with the fewest
+ * entries to begin with, no layer timings exist for a page nobody rendered. And where a
+ * third-party provider does emit a foreign vocabulary, the collector fills the rest of
+ * that budget in the order the header arrives, which is the order below: slowest first.
  *
  * @see docs/server-timing-setup.md in the fastmon backend for the full contract.
  */
@@ -41,8 +47,26 @@ final class ServerTimingHeaderBuilder
     /** Total PHP wall time. First-party alias, guaranteed to land in `backend_dur`. */
     public const TOTAL_METRIC = 'fm-backend';
 
-    /** Full-page-cache verdict. Carries a `desc`, never a `dur`. */
-    public const CACHE_METRIC = 'fm-fpc';
+    /**
+     * The origin's full page cache, as a pair: the verdict, and on a hit how old the
+     * copy it served was. Both carry a `desc`, never a `dur`, and they are emitted one
+     * after the other so they arrive that way.
+     *
+     * `origin` names the tier, the way `origin_cache_status`, `origin_dur` and
+     * `origin_host` do on the other side. It is not cosmetic: a shop behind a CDN has
+     * two caches and two ages, the edge's and its own, and an unqualified name does not
+     * say which one arrived.
+     *
+     * The age travels as a `desc` because it is in seconds and a `dur` is in
+     * milliseconds. As a `dur` it would read as a layer that took 312ms rather than a
+     * page that was five minutes old, and sending the milliseconds instead is no way out
+     * either: the collector drops any `dur` above ten million as a mistaken timestamp,
+     * which is under three hours and well inside what a full page cache serves. As a
+     * `desc` it is a number the collector reads as a number and a browser's network panel
+     * shows as a label, which is what it is.
+     */
+    public const ORIGIN_CACHE_METRIC = 'fm-origin-cache';
+    public const ORIGIN_AGE_METRIC = 'fm-origin-age';
 
     /**
      * Entries the collector accepts per pageview. Anything past it is dropped on arrival,
