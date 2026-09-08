@@ -5,38 +5,6 @@ How to write in this repository. The engineering rules live in
 in code comments, in documentation, in snippets, in commit messages and in
 answers given in the terminal.
 
-## No dashes
-
-**No en dash and no em dash anywhere.** Not in Markdown, not in PHP or JavaScript
-comments, not in snippet strings, not in commit messages, not in a reply to the
-user. The characters are banned outright, not merely discouraged.
-
-Every place one would have gone has a better replacement, and which one it is
-follows from what the sentence is doing:
-
-| The dash was doing this | Use instead |
-|---|---|
-| introducing an explanation or a list | a colon |
-| adding a subordinate remark | a comma |
-| joining two full statements | a full stop, or "and", "or", "because", "so" |
-| separating a label from its description | a colon |
-| enclosing an aside, both sides at once | brackets |
-| joining words or a numeric range | a hyphen, or "to" for the range |
-
-A hyphen (`-`) stays allowed: `first-party`, `PHP 8.2 to 8.5`, `Server-Timing`.
-What is banned is the typographic dash, `U+2013` and `U+2014`.
-
-Before finishing a change, check it:
-
-```bash
-grep -rnP '\x{2013}|\x{2014}' . | grep -v vendor/ | grep -v src/Resources/public/
-```
-
-Written with escapes on purpose, so this file stays free of the characters it
-bans.
-
-Anything it prints is a defect.
-
 ## German that reads like German
 
 The `de-DE` snippets are not a translation of `en-GB`, they are the German text
