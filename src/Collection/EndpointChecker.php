@@ -87,9 +87,13 @@ final class EndpointChecker
      *   - **Distinct origins.** Two channels differing only by language path are one
      *     origin; probing both would report the same answer twice.
      *
-     * Read through DBAL rather than the DAL: this is a list of URLs, the DAL's
-     * `EntitySearchResult::getEntities()` is deprecated for 6.8, and the filters above are
-     * a plain join.
+     * Read through DBAL rather than the DAL. A DAL read needs a `Context`, and none fits:
+     * `Context::createDefaultContext()` is refused outside a CLI command by Shopware's
+     * analysis rules (`shopware-cli extension validate --check-against highest`), the
+     * system context `ConnectionStore` builds is justified there by an entity that admits
+     * nothing else, and threading the request's context from the controller through two
+     * services would be plumbing for a single column. The two columns the join reads have
+     * not changed since 6.0.
      *
      * @return list<string>
      */
