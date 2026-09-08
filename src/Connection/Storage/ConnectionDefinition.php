@@ -30,6 +30,13 @@ use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
  * the shop's behalf, never on a user's, so no privilege makes the tokens listable through
  * `/api/fastmon-collector-connection`. The plugin's own admin routes report whether a
  * credential exists and what it may do, and that stays the only window.
+ *
+ * A classic definition rather than an attribute entity, the one place this plugin departs
+ * from attributes everywhere, for two reasons that hold on every supported release: the
+ * `#[Protection]` attribute takes write scopes only, so the read protection above, which
+ * is what keeps the tokens out of the entity API, has no attribute form (checked on
+ * 6.7.8.1 and 6.7.13.1); and attribute entities exist from 6.6.3.0, while `composer.json`
+ * admits 6.6.0.
  */
 final class ConnectionDefinition extends EntityDefinition
 {
