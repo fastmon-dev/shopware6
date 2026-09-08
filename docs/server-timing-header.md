@@ -27,10 +27,21 @@ So `fm-*` is used only where there is no native equivalent to lean on:
 - `fm-backend` for total PHP wall time. Our own measurement, and the one entry the layers
   below are a share of.
 - `fm-origin-cache` for the full-page-cache verdict, which no profiler reports, and
-  `fm-origin-age` for how old the served copy was. Sent one after the other. Why they
-  carry a `desc` rather than a `dur`, and why the name says `origin`, is documented at the
-  constants themselves.
+  `fm-origin-age` for how old the served copy was. Sent one after the other, see below.
 - `fm-host` for the machine that answered. A name, never a duration.
+
+## Why the pair says `origin`, and why the age is a `desc`
+
+`origin` names the tier, the way `origin_cache_status`, `origin_dur` and `origin_host` do
+on the collector's side. It is not cosmetic: a shop behind a CDN has two caches and two
+ages, the edge's and its own, and an unqualified name does not say which one arrived.
+
+The age travels as a `desc` because it is in seconds and a `dur` is in milliseconds. As a
+`dur` it would read as a layer that took 312ms rather than a page that was five minutes
+old, and sending the milliseconds instead is no way out either: the collector drops any
+`dur` above ten million as a mistaken timestamp, which is under three hours and well
+inside what a full page cache serves. As a `desc` it is a number the collector reads as a
+number and a browser's network panel shows as a label, which is what it is.
 
 ## Why nothing here arbitrates the collector's caps
 

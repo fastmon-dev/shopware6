@@ -26,20 +26,8 @@ final class ServerTimingHeaderBuilder
     /**
      * The origin's full page cache, as a pair: the verdict, and on a hit how old the
      * copy it served was. Both carry a `desc`, never a `dur`, and they are emitted one
-     * after the other so they arrive that way.
-     *
-     * `origin` names the tier, the way `origin_cache_status`, `origin_dur` and
-     * `origin_host` do on the other side. It is not cosmetic: a shop behind a CDN has
-     * two caches and two ages, the edge's and its own, and an unqualified name does not
-     * say which one arrived.
-     *
-     * The age travels as a `desc` because it is in seconds and a `dur` is in
-     * milliseconds. As a `dur` it would read as a layer that took 312ms rather than a
-     * page that was five minutes old, and sending the milliseconds instead is no way out
-     * either: the collector drops any `dur` above ten million as a mistaken timestamp,
-     * which is under three hours and well inside what a full page cache serves. As a
-     * `desc` it is a number the collector reads as a number and a browser's network panel
-     * shows as a label, which is what it is.
+     * after the other so they arrive that way. Why the name says `origin` and why the
+     * age is a `desc` is in docs/server-timing-header.md.
      */
     public const ORIGIN_CACHE_METRIC = 'fm-origin-cache';
     public const ORIGIN_AGE_METRIC = 'fm-origin-age';
