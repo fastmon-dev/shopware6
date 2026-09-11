@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  # Packagist takes the version from the tag, Shopware's plugin lifecycle takes it from
+  # composer.json, so one number has two sources and they can drift. What makes the drift
+  # expensive is that Composer's VCS driver skips a tag disagreeing with the manifest
+  # without saying so: the release is tagged, the workflow is green, and the version
+  # simply never appears on Packagist. The tag is therefore refused, not reconciled - a
+  # tag that has been published cannot be moved afterwards, because Packagist and the
+  # Composer caches keep the tree they saw first.
+  #
+  # Everything that publishes (zip, GitHub Release, Packagist) follows in #12 and hangs
+  # off this job, so a mismatch leaves nothing behind to clean up.
+  check-version:
+    name: Tag matches composer.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compare tag and manifest
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH[-prerelease], for example v0.2.0 or v0.2.0-rc.1. Delete it and tag again."
+            exit 1
+          fi
+
+          declared="$(jq -r '.version // ""' composer.json)"
+
+          if [ -z "$declared" ]; then
+            echo "::error::composer.json has no version field. Shopware reads the plugin version from there, and without it Composer guesses one from the checkout."
+            exit 1
+          fi
+
+          if [ "${GITHUB_REF_NAME#v}" != "$declared" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match composer.json version $declared. Delete the tag (git push origin :refs/tags/$GITHUB_REF_NAME), set the version on main, tag again."
+            exit 1
+          fi
+
+  # The gates a pull request passes, against the tagged commit, by calling ci.yml rather
+  # than repeating its steps - a release must not be held to a weaker standard than a
+  # PR, and a copy drifts. ci.yml ignores tag pushes itself, so it runs once per tag,
+  # from here.
+  ci:
+    name: Quality gates
+    needs: check-version
+    uses: ./.github/workflows/ci.yml
+
+  zip:
+    name: Zip and GitHub Release
+    needs: [check-version, ci]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the Release and attach the zip
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # --release builds a changelog from the commits since the last tag
+          fetch-tags: true
+      - uses: shopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3.0.0
+
+      # What .shopware-extension.yml describes: no composer step, assets built, toolchain
+      # files left out. The built src/Resources/public/ therefore travels in the zip
+      # although git never sees it.
+      - name: Build the zip
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          shopware-cli extension zip . --release \
+            --git-commit "$GITHUB_REF_NAME" \
+            --filename "FastmonCollector-${version}.zip" \
+            --output-directory dist
+
+      # The artefact is checked, not the working tree: the zip is assembled from a clean
+      # copy and differs from the tree by design.
+      #
+      # Without phpstan, and that is not a convenience. The zip leaves out tests/ and
+      # phpstan.neon.dist on purpose, so shopware-cli falls back to its own configuration
+      # and reports against a tree that is missing half of what the project's own run
+      # analyses. PHP static analysis is a source check, at level max, and it has already
+      # run on this commit in the ci job above. What stays here is everything that is
+      # about the packaged files themselves: store compliance, twig, eslint, stylelint.
+      #
+      # The no-JS pixel's empty alt is reported as a warning, because the ignore rule for
+      # it lives in .shopware-extension.yml, which the zip does not carry. Warnings do not
+      # fail the step; an error does.
+      - name: Validate the artefact
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          shopware-cli extension validate --full --check-against highest --exclude phpstan \
+            "dist/FastmonCollector-${version}.zip"
+
+      # check-version compared the tag against the tree. This compares it against the zip
+      # that merchants actually install, and confirms the administration bundle is in
+      # there: it is gitignored, built during packing, and a plugin that ships without it
+      # installs cleanly and then has no module.
+      - name: The zip says what the tag says
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive="dist/FastmonCollector-${version}.zip"
+
+          packed="$(unzip -p "$archive" 'FastmonCollector/composer.json' | jq -r '.version // ""')"
+
+          if [ "$packed" != "$version" ]; then
+            echo "::error::The zip reports version $packed, the tag says $version."
+            exit 1
+          fi
+
+          if ! unzip -l "$archive" | grep -q 'FastmonCollector/src/Resources/public/administration/'; then
+            echo "::error::The zip carries no built administration bundle. Check the asset build in the packing step."
+            exit 1
+          fi
+
+      # gh is on the runner, so this needs no third-party action to keep pinned. A version
+      # with a suffix (v0.2.0-rc.1) becomes a pre-release: GitHub marks it, and Composer
+      # resolves it only for someone who asked for it by constraint.
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          prerelease=()
+          case "$version" in
+            *-*) prerelease=(--prerelease) ;;
+          esac
+
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/FastmonCollector-${version}.zip" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            "${prerelease[@]}"
