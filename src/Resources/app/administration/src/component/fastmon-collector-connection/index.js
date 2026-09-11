@@ -151,8 +151,27 @@ Component.register('fastmon-collector-connection', {
             return this.load(false);
         },
 
-        onLinked() {
+        /**
+         * The panel switches out of the provisioning state from the response that
+         * linked, not from the reload that follows it. The reload is still worth
+         * making - it brings the domains and whatever else moved - but the state the
+         * merchant is waiting for is already in hand, and making the switch wait for a
+         * second round trip is what left the form standing after a successful create.
+         */
+        onLinked(application) {
             this.resetError();
+
+            if (application && application.sourceHash) {
+                this.status = {
+                    ...this.status,
+                    provisioned: true,
+                    applicationId: application.id,
+                    sourceHash: application.sourceHash,
+                    collectorHash: application.collectorHash,
+                };
+
+                connectionChanged();
+            }
 
             return this.load(false);
         },
