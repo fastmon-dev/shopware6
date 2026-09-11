@@ -1,7 +1,7 @@
 {
     "name": "fastmon/shopware-collector",
     "description": "Real user monitoring for your Shopware storefront: Core Web Vitals, JavaScript errors and per-layer Server-Timing from real visitors. EU-hosted and cookieless.",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "type": "shopware-platform-plugin",
     "license": "MIT",
     "authors": [
