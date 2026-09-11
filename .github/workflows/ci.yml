@@ -71,3 +71,47 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: shopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3.0.0
       - run: shopware-cli extension validate --full --check-against highest .
+
+  # The release guard, one step earlier. release.yml refuses a tag that disagrees with
+  # composer.json, but by then the tag exists and has to be deleted; on the release PR
+  # the same mistake is a red check. Only the version bump itself is inspected: a PR that
+  # leaves the field alone passes without a word.
+  version:
+    name: composer.json version
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: New and higher than the base branch
+        run: |
+          git fetch --depth=1 origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+
+          base="$(git show "origin/${GITHUB_BASE_REF}:composer.json" | jq -r '.version // ""')"
+          head="$(jq -r '.version // ""' composer.json)"
+
+          if [ -z "$head" ]; then
+            echo "::error::composer.json has no version field. Shopware reads the plugin version from there, and without it Composer guesses one from the checkout."
+            exit 1
+          fi
+
+          if [ "$base" = "$head" ]; then
+            echo "Version unchanged at $head."
+            exit 0
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v${head}" >/dev/null 2>&1; then
+            echo "::error::v${head} is already tagged. A published version is never re-released - bump to one that has not been."
+            exit 1
+          fi
+
+          # sort -V reads ~ the way Debian does, and that is the one place where it agrees
+          # with semver on prereleases: 0.2.0~rc.1 comes before 0.2.0, 0.2.0-rc.1 would not.
+          highest="$(printf '%s\n%s\n' "$(printf '%s' "$base" | sed 's/-/~/')" "$(printf '%s' "$head" | sed 's/-/~/')" | sort -V | tail -n1)"
+
+          if [ "$highest" != "$(printf '%s' "$head" | sed 's/-/~/')" ]; then
+            echo "::error::Version goes backwards: $base -> $head. Raise it instead."
+            exit 1
+          fi
+
+          echo "Version $base -> $head."
