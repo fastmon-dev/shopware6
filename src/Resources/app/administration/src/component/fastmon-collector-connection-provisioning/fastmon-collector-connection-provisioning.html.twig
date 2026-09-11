@@ -73,11 +73,16 @@
             :disabled="isBusy"
         />
 
+        {# Both carry a value from the first render and neither has a meaningful empty
+           state, so the clear button mt-select shows by default would only produce a
+           form that cannot be submitted. The organisation above keeps its one: clearing
+           it is how a merchant starts over. #}
         <mt-select
             v-model="environment"
             :options="environmentOptions"
             :label="$t('fastmon-collector.provision.environment')"
             :disabled="isBusy"
+            hide-clearable-button
         />
 
         <mt-select
@@ -85,6 +90,7 @@
             :options="presetOptions"
             :label="$t('fastmon-collector.provision.preset')"
             :disabled="isBusy"
+            hide-clearable-button
         />
 
         <p class="fastmon-collector-connection__hint">

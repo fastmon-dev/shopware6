@@ -3,6 +3,31 @@
 // Layout only. Colours, spacing rhythm and typography of the controls come from the
 // Meteor components; what is left here is how the plugin's own text and lists sit.
 .fastmon-collector-connection {
+    // Our own anchor rather than a Meteor link component. 6.6 registers MtExternalLink
+    // and no MtLink, 6.7 registers MtLink and no MtExternalLink, so neither name
+    // resolves on both - and an unresolved component renders nothing at all, which is
+    // how two working buttons went missing on 6.6 while looking fine on 6.7. The
+    // <button> that reveals the API key field carries the same class, so a control that
+    // reads as a link is one rule rather than two.
+    &__link {
+        display: inline-block;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: $color-shopware-brand-500;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.5;
+        text-decoration: underline;
+        cursor: pointer;
+
+        &:hover,
+        &:focus-visible {
+            color: $color-shopware-brand-700;
+        }
+    }
+
     margin-bottom: 22px;
 
     &__banner {

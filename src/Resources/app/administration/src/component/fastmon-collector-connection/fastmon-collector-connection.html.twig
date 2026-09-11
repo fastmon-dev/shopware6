@@ -53,25 +53,23 @@
             {# Straight into fastmon, for everything this panel deliberately does not do:
                reading the measurements, and the settings of the application itself. #}
             <p v-if="status.dashboardUrl" class="fastmon-collector-connection__links">
-                <mt-link
-                    as="a"
-                    type="external"
+                <a
+                    class="fastmon-collector-connection__link"
                     :href="status.dashboardUrl"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
                     {{ $t('fastmon-collector.openDashboard') }}
-                </mt-link>
+                </a>
 
-                <mt-link
-                    as="a"
-                    type="external"
+                <a
+                    class="fastmon-collector-connection__link"
                     :href="status.applicationsUrl"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
                     {{ $t('fastmon-collector.openApplications') }}
-                </mt-link>
+                </a>
             </p>
 
             {# A rejected credential is the one state that replaces everything below it:
