@@ -145,6 +145,7 @@ jobs:
     needs: zip
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The token travels in the Authorization header, not in the query string the older
       # examples use: a URL ends up in error output, proxy logs and shell history, and a
       # masked secret is only masked where GitHub does the printing. The safe token is
@@ -166,18 +167,26 @@ jobs:
       # the Release page looks finished while `composer require` cannot see the version, so
       # the job waits for the listing instead of trusting the POST.
       #
-      # Packagist keeps the tag string as the version, so the tag is what is compared.
+      # Which version string to expect is not obvious. Packagist keeps the tag as the
+      # version for a package that declares none, which is what most packages do - but
+      # this one declares `version` in composer.json, because Shopware's plugin
+      # lifecycle reads it from there, and Composer's VCS driver then reports that value
+      # instead. So the tag v0.1.0 is listed as 0.1.0. Both are accepted: check-version
+      # has already proven the two agree, so whichever Packagist reports is the right
+      # one, and the package stops being able to lie about it the day the version field
+      # can go.
       - name: Wait until Packagist lists the release
         run: |
           package="$(jq -r .name composer.json)"
+          version="${GITHUB_REF_NAME#v}"
 
           # Not a pipeline: the default shell for a step is `bash -e` without `pipefail`,
           # and `jq --exit-status` answers 0 for the empty input a 404 pipes into it. A
           # package that was never submitted would report itself as published.
           for _ in $(seq 1 20); do
             if curl --silent --fail --output metadata.json "https://repo.packagist.org/p2/${package}.json" \
-              && jq --exit-status --arg package "$package" --arg tag "$GITHUB_REF_NAME" \
-                '.packages[$package][] | select(.version == $tag)' metadata.json >/dev/null; then
+              && jq --exit-status --arg package "$package" --arg tag "$GITHUB_REF_NAME" --arg version "$version" \
+                '.packages[$package][] | select(.version == $tag or .version == $version)' metadata.json >/dev/null; then
               echo "Packagist lists $GITHUB_REF_NAME."
               exit 0
             fi
