@@ -26,13 +26,14 @@
     </mt-banner>
 
     <div class="fastmon-collector-connection__section">
-        <mt-link
+        <button
             v-if="!showToken"
-            as="button"
+            type="button"
+            class="fastmon-collector-connection__link"
             @click="showToken = true"
         >
             {{ $t('fastmon-collector.connect.useToken') }}
-        </mt-link>
+        </button>
 
         <template v-if="showToken">
             <mt-password-field

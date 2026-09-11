@@ -13,15 +13,14 @@
 
         <p class="fastmon-collector-collection__hint">
             {{ $t('fastmon-collector.collection.intro') }}
-            <mt-link
-                as="a"
-                type="external"
+            <a
+                class="fastmon-collector-collection__link"
                 :href="$t('fastmon-collector.collection.docsUrl')"
                 target="_blank"
                 rel="noopener noreferrer"
             >
                 {{ $t('fastmon-collector.collection.docs') }}
-            </mt-link>
+            </a>
         </p>
 
         <sw-radio-field
@@ -101,15 +100,14 @@
         {# Said once, at the end: which mode stays out of reach, and what to do next. #}
         <mt-banner v-else-if="checkedThisMode && !status.ready" variant="attention">
             {{ $t('fastmon-collector.collection.blocked', { mode: selectedModeLabel }) }}
-            <mt-link
-                as="a"
-                type="external"
+            <a
+                class="fastmon-collector-collection__link"
                 :href="$t('fastmon-collector.collection.docsUrl')"
                 target="_blank"
                 rel="noopener noreferrer"
             >
                 {{ $t('fastmon-collector.collection.docs') }}
-            </mt-link>
+            </a>
         </mt-banner>
 
         <mt-banner v-else-if="checkedThisMode" variant="positive">
