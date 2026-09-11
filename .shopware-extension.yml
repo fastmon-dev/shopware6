@@ -1,5 +1,7 @@
 # shopware-cli: what goes into the store zip. No composer step - the plugin has no
-# runtime dependency Shopware does not already ship - and nothing from the toolchain.
+# runtime dependency Shopware does not already ship - and nothing from the toolchain or
+# from the rules for working on the plugin. README.md stays: it is the only one of the
+# three written for whoever installs this.
 # compatibility_date pins which generation of validation rules applies; bump it deliberately.
 compatibility_date: "2026-08-30"
 
@@ -28,6 +30,8 @@ build:
                 paths:
                     - tests
                     - docs
+                    - AGENTS.md
+                    - CLAUDE.md
                     - .devcontainer
                     - .github
                     - .gitignore
