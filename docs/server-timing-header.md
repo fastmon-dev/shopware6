@@ -63,3 +63,31 @@ order the header arrives, which is the order the builder writes: slowest first.
 Not in `kernel.response`, because Shopware's HTTP cache sits outside the kernel. The
 reasoning belongs with the listener that makes the choice and stays there, at
 `Fastmon\Collector\Subscriber\ServerTimingSubscriber`.
+
+## Why the layer breakdown needs Tideways
+
+The per-layer numbers come from `\Tideways\Profiler::getLayerMetrics()`, which hands back
+the wall time the extension already aggregated for this request. That API is the whole
+reason Tideways is the requirement, and it is the only one of its kind:
+
+- **OpenTelemetry cannot supply them.** Spans go to whatever processors existed when the
+  TracerProvider was built, and Shopware's integration (`shopware/opentelemetry`) relies on
+  auto-instrumentation through the `opentelemetry` extension, which builds that provider
+  during composer autoloading, before any plugin exists. There is no documented way to add
+  a processor afterwards and no way to read spans back out. Its instrumentation does
+  collect controller, HTTP-client and MySQL timings; they go to the OTLP exporter, not
+  anywhere a plugin can reach. The same reasoning sits on
+  `Fastmon\Collector\ServerTiming\LayerMetricsProviderInterface`, which is where a second
+  source would be added.
+- **Measuring the database ourselves is closed too.** Shopware builds its connection in
+  `Kernel::boot()` via `MySQLFactory::create()` with no middlewares, long before the
+  container exists, so a plugin cannot register a DBAL middleware.
+
+Without Tideways the plugin still reports the seven entries that need no profiler. The
+configuration page distinguishes measuring, installed but too old (pre-5.23), and not
+installed, because a boolean cannot tell the last two apart and they are different
+afternoons.
+
+One source at a time, deliberately: two profilers measure overlapping things with
+different boundaries, and summing two views of the same database time would report more
+`db` than the request it sits in.

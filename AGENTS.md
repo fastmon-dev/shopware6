@@ -11,7 +11,7 @@ Every change passes `composer ci` before it is committed. No exceptions, no `--n
 |---|---|---|
 | `composer ci` | `cs-check`, `phpstan` (level max), `phpmd`, `test` | before every commit |
 | `composer test` | unit suite, no shop, no database | while working |
-| `composer test-integration` | integration suite, boots Shopware, needs a project (see README, *Tests*) | before opening a PR that touches anything Shopware-facing |
+| `composer test-integration` | integration suite, boots Shopware, needs a project (see README, *Development*) | before opening a PR that touches anything Shopware-facing |
 | `composer cs-fix` | apply the style fixes `cs-check` reported | as needed |
 | `shopware-cli extension validate --full .` | the store validator | before a release |
 

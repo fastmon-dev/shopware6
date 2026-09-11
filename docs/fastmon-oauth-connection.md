@@ -85,3 +85,20 @@ A shop behind a proxy that rewrites the address the browser sees sets
 Consent itself, and everything on fastmon's side of it. The plugin cannot influence it and
 does not model it: it sends the merchant to `authorization_endpoint` and reads whatever
 comes back.
+
+## How the plugin reacts to fastmon's errors
+
+| Response | Meaning | What the plugin does |
+|---|---|---|
+| `403 organization_not_approved` | the organisation is still under review | renders a waiting state, **keeps the credential** |
+| `403 permission_denied` | the connection lacks a permission | names it from `details.permission` so it can be approved |
+| `404 organization_not_found` | the account is no longer a member | asks the merchant to connect again |
+| `401 credential_expired` | the credential reached its expiry | says so, asks to connect again |
+| `401` otherwise | the access token expired, or the connection was ended | refreshes and retries once, then asks to connect again |
+| `400 invalid_grant` at the token endpoint | the refresh token is spent, expired or revoked | drops the credential and asks to connect again |
+
+Two rows matter more than the rest. `organization_not_approved` is the only failure where
+the credential is still good: discarding it there would turn a wait into a reconnect the
+merchant cannot complete either, and a freshly registered account runs into it every time.
+`invalid_grant` is the opposite: it cannot be retried under any of its four meanings, and
+retrying is exactly what looks like theft from fastmon's side.
