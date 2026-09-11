@@ -53,8 +53,8 @@
             "de-DE": "https://fastmon.eu"
         },
         "supportLink": {
-            "en-GB": "https://fastmon.eu/support",
-            "de-DE": "https://fastmon.eu/support"
+            "en-GB": "https://fastmon.eu/en/contact/",
+            "de-DE": "https://fastmon.eu/de/kontakt/"
         }
     },
     "config": {
