@@ -134,3 +134,56 @@ jobs:
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
             "${prerelease[@]}"
+
+  # Packagist serves the git tags of this repository, so a release is not published here
+  # so much as announced. The call is explicit rather than left to Packagist's GitHub
+  # App: the App reacts to every push, including branches, while this runs only after the
+  # guard, the gates and the Release have all succeeded, and its result is visible in the
+  # run rather than in a webhook log nobody opens.
+  packagist:
+    name: Packagist
+    needs: zip
+    runs-on: ubuntu-latest
+    steps:
+      # The token travels in the Authorization header, not in the query string the older
+      # examples use: a URL ends up in error output, proxy logs and shell history, and a
+      # masked secret is only masked where GitHub does the printing. The safe token is
+      # enough, because update-package is one of the endpoints Packagist marks SAFE.
+      - name: Ask Packagist to re-crawl the package
+        env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
+        run: |
+          curl --silent --show-error --fail-with-body -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer ${PACKAGIST_USERNAME}:${PACKAGIST_API_TOKEN}" \
+            -d "{\"repository\":\"https://github.com/${GITHUB_REPOSITORY}\"}" \
+            https://packagist.org/api/update-package
+
+      # The crawl is asynchronous and it is where a release goes missing quietly: Composer's
+      # VCS driver skips a tag whose name disagrees with composer.json without a word, and a
+      # package that was never submitted answers this call and then lists nothing. Either way
+      # the Release page looks finished while `composer require` cannot see the version, so
+      # the job waits for the listing instead of trusting the POST.
+      #
+      # Packagist keeps the tag string as the version, so the tag is what is compared.
+      - name: Wait until Packagist lists the release
+        run: |
+          package="$(jq -r .name composer.json)"
+
+          # Not a pipeline: the default shell for a step is `bash -e` without `pipefail`,
+          # and `jq --exit-status` answers 0 for the empty input a 404 pipes into it. A
+          # package that was never submitted would report itself as published.
+          for _ in $(seq 1 20); do
+            if curl --silent --fail --output metadata.json "https://repo.packagist.org/p2/${package}.json" \
+              && jq --exit-status --arg package "$package" --arg tag "$GITHUB_REF_NAME" \
+                '.packages[$package][] | select(.version == $tag)' metadata.json >/dev/null; then
+              echo "Packagist lists $GITHUB_REF_NAME."
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::Packagist does not list $GITHUB_REF_NAME five minutes after the release. Check that $package is submitted at packagist.org and that the crawl did not skip the tag."
+          exit 1
