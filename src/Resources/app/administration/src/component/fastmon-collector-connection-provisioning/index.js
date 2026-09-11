@@ -149,19 +149,21 @@ Component.register('fastmon-collector-connection-provisioning', {
             this.loadApplications();
         },
 
+        // Both hand the application on rather than only announcing that there is one:
+        // it is what the panel needs to switch, and the server has already sent it.
         createApplication() {
             this.busy(() => this.fastmonCollectorService.createApplication({
                 organizationId: this.organizationId,
                 name: this.applicationName,
                 environment: this.environment,
                 preset: this.preset,
-            }).then(() => this.$emit('linked')));
+            }).then((response) => this.$emit('linked', response.application)));
         },
 
         attachApplication(applicationId) {
             this.busy(() => this.fastmonCollectorService
                 .attachApplication(this.organizationId, applicationId)
-                .then(() => this.$emit('linked')));
+                .then((response) => this.$emit('linked', response.application)));
         },
 
         busy(action) {
