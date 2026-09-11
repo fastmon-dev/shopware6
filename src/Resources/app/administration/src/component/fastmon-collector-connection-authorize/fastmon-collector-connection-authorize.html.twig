@@ -1,0 +1,57 @@
+{% block fastmon_collector_connection_authorize %}
+<div class="fastmon-collector-connection-authorize">
+    <p class="fastmon-collector-connection__hint">
+        {{ $t('fastmon-collector.connect.intro') }}
+    </p>
+
+    <mt-button
+        v-if="!unsupported"
+        variant="primary"
+        :disabled="isBusy"
+        :is-loading="isBusy"
+        @click="connect"
+    >
+        {{ $t('fastmon-collector.connect.start') }}
+    </mt-button>
+
+    <p v-if="!unsupported" class="fastmon-collector-connection__hint">
+        {{ $t('fastmon-collector.connect.consentHint') }}
+    </p>
+
+    {# Only when the shop cannot run the redirect at all. Everywhere else the key field
+       stays behind a link, so the good path is never competing with a field asking for a
+       secret. #}
+    <mt-banner v-if="unsupported" variant="info">
+        {{ unsupportedReason || $t('fastmon-collector.connect.unsupported') }}
+    </mt-banner>
+
+    <div class="fastmon-collector-connection__section">
+        <mt-link
+            v-if="!showToken"
+            as="button"
+            @click="showToken = true"
+        >
+            {{ $t('fastmon-collector.connect.useToken') }}
+        </mt-link>
+
+        <template v-if="showToken">
+            <mt-password-field
+                v-model="token"
+                name="fastmon-token"
+                :label="$t('fastmon-collector.connect.tokenLabel')"
+                :help-text="$t('fastmon-collector.connect.tokenScopes')"
+                placeholder="fmo_..."
+            />
+
+            <mt-button
+                variant="secondary"
+                :disabled="isBusy || !token"
+                :is-loading="isBusy"
+                @click="connectWithToken"
+            >
+                {{ $t('fastmon-collector.connect.saveToken') }}
+            </mt-button>
+        </template>
+    </div>
+</div>
+{% endblock %}

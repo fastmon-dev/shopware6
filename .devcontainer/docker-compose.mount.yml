@@ -1,4 +1,4 @@
-# MOUNT MODE overlay — the default workspace mode (enabled in devcontainer.json).
+# MOUNT MODE overlay: the default workspace mode (enabled in devcontainer.json).
 #
 # Replaces the named-volume workspace with a BIND MOUNT of your host checkout in
 # BOTH containers: the dev container sees it as the workspace, the shop sees it
@@ -11,7 +11,7 @@
 #   "dockerComposeFile": ["docker-compose.yml", "docker-compose.mount.yml"]
 #
 # vendor/ stays on its named volume in the dev container and stays SHADOWED
-# (empty) in the shop container — see the base file for why.
+# (empty) in the shop container: see the base file for why.
 services:
   plugin:
     volumes:

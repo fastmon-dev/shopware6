@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time HOST setup for the fastmon Shopware plugin dev container — run on
+# One-time HOST setup for the fastmon Shopware plugin dev container: run on
 # your Mac, NOT inside the container. Idempotent: safe to re-run any time.
 #
 #     ./.devcontainer/init.sh
@@ -36,7 +36,7 @@ problems=0
 
 printf '%sHost setup for the %s dev container%s\n\n' "$B" "$PROJECT" "$N"
 
-# 1. Dedicated Claude store — the only thing we create.
+# 1. Dedicated Claude store: the only thing we create.
 mkdir -p "$STORE/.claude"
 # Self-heal: if the container was ever opened before this script ran, Docker's
 # single-file bind mount created .claude.json as an EMPTY DIRECTORY (its default
@@ -46,7 +46,7 @@ if [ -d "$STORE/.claude.json" ]; then
   if rmdir "$STORE/.claude.json" 2>/dev/null; then
     warn "Removed a stray .claude.json directory (Docker auto-created it before setup ran)"
   else
-    err "$STORE/.claude.json is a non-empty directory — remove it by hand, then re-run"
+    err "$STORE/.claude.json is a non-empty directory, remove it by hand, then re-run"
     problems=$((problems + 1))
   fi
 fi
@@ -66,7 +66,7 @@ if [ -f "$AUTH_KEY" ]; then
          -T git@github.com 2>&1 | grep -qi 'successfully authenticated'; then
       ok "GitHub SSH auth works"
     else
-      warn "Could not confirm GitHub SSH auth — ensure id_fastmon_shopware_plugin is a"
+      warn "Could not confirm GitHub SSH auth, ensure id_fastmon_shopware_plugin is a"
       warn "  deploy key on fastmon-dev/shopware-plugin. Test:"
       warn "  ssh -i $AUTH_KEY -o IdentitiesOnly=yes -T git@github.com"
     fi
@@ -91,13 +91,13 @@ fi
 if git config --global user.name >/dev/null 2>&1; then
   ok "Git user.name set ($(git config --global user.name))"
 else
-  err "Git user.name not set — run: git config --global user.name \"Your Name\""
+  err "Git user.name not set, run: git config --global user.name \"Your Name\""
   problems=$((problems + 1))
 fi
 if [ -n "${FASTMON_GIT_EMAIL:-}" ]; then
   ok "FASTMON_GIT_EMAIL set ($FASTMON_GIT_EMAIL)"
 else
-  warn "FASTMON_GIT_EMAIL is not exported in your host shell — commits inside the"
+  warn "FASTMON_GIT_EMAIL is not exported in your host shell, so commits inside the"
   warn "  container will fail with a git config error. Add to your shell profile:"
   warn "  export FASTMON_GIT_EMAIL=you@fastmon.eu"
 fi
@@ -108,7 +108,7 @@ for sib in backend platform-fastmon-collector-app shopware-sctracking; do
   if [ -d "$REPO_PARENT/$sib" ]; then
     ok "Sibling checkout present ($sib)"
   else
-    warn "Sibling checkout missing: $REPO_PARENT/$sib — clone it next to shopware_plugin"
+    warn "Sibling checkout missing: $REPO_PARENT/$sib, clone it next to shopware_plugin"
   fi
 done
 
@@ -123,10 +123,10 @@ fi
 
 printf '\n'
 if [ "$problems" -eq 0 ]; then
-  ok "${B}Host setup complete — you can open the dev container.$N"
+  ok "${B}Host setup complete, you can open the dev container.$N"
   echo "  First start pulls dockware/shopware (~1.8 GB) and boots MySQL + Shopware;"
   echo "  give it a few minutes, then run \`make sw-install\` in the container."
 else
-  err "${B}$problems blocking item(s) above — fix and re-run before opening the container.$N"
+  err "${B}$problems blocking item(s) above, fix and re-run before opening the container.$N"
   exit 1
 fi

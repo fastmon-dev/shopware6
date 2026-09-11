@@ -5,16 +5,20 @@ namespace Fastmon\Collector\Tests\Integration\Collection;
 use Doctrine\DBAL\Connection;
 use Fastmon\Collector\Collection\EndpointChecker;
 use Fastmon\Collector\Connection\ConnectionStore;
+use Fastmon\Collector\Connection\Storage\ConnectionCollection;
+use Fastmon\Collector\Connection\Storage\ConnectionDefinition;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Defaults;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpClient\MockHttpClient;
 
 /**
- * `storefrontOrigins()` is raw SQL against `sales_channel_domain` and `sales_channel`.
+ * `storefrontOrigins()` reads `sales_channel_domain` with SQL, joined to the channel it
+ * belongs to.
  * The unit test mocks the connection and so never sees the schema; a column renamed in
  * a later Shopware release would first fail in a production shop. This runs the real
  * query, and exercises each of the three filters the docblock promises.
@@ -31,11 +35,18 @@ final class EndpointCheckerStorefrontOriginsTest extends TestCase
     {
         $database = static::getContainer()->get(Connection::class);
         $systemConfig = static::getContainer()->get(SystemConfigService::class);
+        $repository = static::getContainer()->get(ConnectionDefinition::ENTITY_NAME . '.repository');
         self::assertInstanceOf(Connection::class, $database);
         self::assertInstanceOf(SystemConfigService::class, $systemConfig);
+        self::assertInstanceOf(EntityRepository::class, $repository);
 
+        /** @var EntityRepository<ConnectionCollection> $repository */
         $this->database = $database;
-        $this->checker = new EndpointChecker(new MockHttpClient(), new ConnectionStore($systemConfig), $database);
+        $this->checker = new EndpointChecker(
+            new MockHttpClient(),
+            new ConnectionStore($repository, $systemConfig),
+            $database
+        );
     }
 
     public function testTheStorefrontDomainIsAnOrigin(): void

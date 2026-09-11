@@ -4,16 +4,16 @@
        another one rather than sending the merchant through a disconnect that would drop
        a working credential. #}
     <mt-banner v-if="needsRelink" variant="critical">
-        {{ $tc('fastmon-collector.provision.relink') }}
+        {{ $t('fastmon-collector.provision.relink') }}
     </mt-banner>
 
     <p class="fastmon-collector-connection__hint">
-        {{ $tc('fastmon-collector.provision.intro') }}
+        {{ $t('fastmon-collector.provision.intro') }}
     </p>
 
     {# Settled on fastmon's own consent screen: shown, not offered. #}
     <p v-if="organizationIsSettled" class="fastmon-collector-connection__account">
-        {{ $tc('fastmon-collector.provision.organization') }}:
+        {{ $t('fastmon-collector.provision.organization') }}:
         <strong>{{ settledOrganizationName }}</strong>
     </p>
 
@@ -21,8 +21,8 @@
         v-else
         :model-value="organizationId"
         :options="organizationOptions"
-        :label="$tc('fastmon-collector.provision.organization')"
-        :placeholder="$tc('fastmon-collector.provision.chooseOrganization')"
+        :label="$t('fastmon-collector.provision.organization')"
+        :placeholder="$t('fastmon-collector.provision.chooseOrganization')"
         :is-loading="isLoadingOrganizations"
         :disabled="isBusy"
         @update:model-value="onOrganizationChange"
@@ -30,12 +30,12 @@
 
     <template v-if="organizationId">
         <p v-if="!applications.length && !isLoadingApplications" class="fastmon-collector-connection__hint">
-            {{ $tc('fastmon-collector.provision.noneYet') }}
+            {{ $t('fastmon-collector.provision.noneYet') }}
         </p>
 
         <template v-if="applications.length">
             <p class="fastmon-collector-connection__label">
-                {{ $tc('fastmon-collector.provision.existing') }}
+                {{ $t('fastmon-collector.provision.existing') }}
             </p>
 
             <ul class="fastmon-collector-connection__list">
@@ -48,7 +48,7 @@
                         <strong>{{ app.name }}</strong>
                         <span class="fastmon-collector-connection__meta">
                             {{ app.environment }} &middot;
-                            {{ $tc('fastmon-collector.provision.domainCount', app.siteCount, { count: app.siteCount }) }}
+                            {{ $t('fastmon-collector.provision.domainCount', { count: app.siteCount }, app.siteCount) }}
                         </span>
                     </span>
 
@@ -58,7 +58,7 @@
                         :disabled="isBusy"
                         @click="attachApplication(app.id)"
                     >
-                        {{ $tc('fastmon-collector.provision.link') }}
+                        {{ $t('fastmon-collector.provision.link') }}
                     </mt-button>
                 </li>
             </ul>
@@ -69,26 +69,26 @@
         <mt-text-field
             v-model="applicationName"
             name="fastmon-app-name"
-            :label="$tc('fastmon-collector.provision.name')"
+            :label="$t('fastmon-collector.provision.name')"
             :disabled="isBusy"
         />
 
         <mt-select
             v-model="environment"
             :options="environmentOptions"
-            :label="$tc('fastmon-collector.provision.environment')"
+            :label="$t('fastmon-collector.provision.environment')"
             :disabled="isBusy"
         />
 
         <mt-select
             v-model="preset"
             :options="presetOptions"
-            :label="$tc('fastmon-collector.provision.preset')"
+            :label="$t('fastmon-collector.provision.preset')"
             :disabled="isBusy"
         />
 
         <p class="fastmon-collector-connection__hint">
-            {{ $tc('fastmon-collector.provision.autoSites') }}
+            {{ $t('fastmon-collector.provision.autoSites') }}
         </p>
 
         <mt-button
@@ -97,7 +97,7 @@
             :is-loading="isBusy"
             @click="createApplication"
         >
-            {{ $tc('fastmon-collector.provision.create') }}
+            {{ $t('fastmon-collector.provision.create') }}
         </mt-button>
     </template>
 </div>

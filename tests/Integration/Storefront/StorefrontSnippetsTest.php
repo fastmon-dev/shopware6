@@ -11,7 +11,7 @@ use Shopware\Storefront\Test\Controller\StorefrontControllerTestBehaviour;
 /**
  * What the two template overrides actually render, through the real storefront.
  *
- * The templates gate everything on `trackerId` and derive the script host from the
+ * The templates gate everything on `sourceHash` and derive the script host from the
  * collection mode. Both rules are asserted in their docblocks; this is where they are
  * proven, on the HTML a browser would get.
  */
@@ -85,8 +85,8 @@ final class StorefrontSnippetsTest extends TestCase
 
     private function link(): void
     {
-        $this->config->set(ConfigResolver::DOMAIN . 'trackerId', 'srchash');
-        $this->config->set(ConfigResolver::DOMAIN . 'pixelId', 'colhash');
+        $this->config->set(ConfigResolver::DOMAIN . 'sourceHash', 'srchash');
+        $this->config->set(ConfigResolver::DOMAIN . 'collectorHash', 'colhash');
     }
 
     private function scriptBase(string $html): string

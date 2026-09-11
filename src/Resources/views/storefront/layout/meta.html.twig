@@ -3,9 +3,9 @@
 {#
     fastmon real user monitoring.
 
-    Both snippets are gated on `trackerId`, which is only ever written once an
+    Both snippets are gated on `sourceHash`, which is only ever written once an
     application has actually been linked. An unconfigured shop therefore renders
-    nothing at all rather than a script tag pointing at an empty id.
+    nothing at all rather than a script tag pointing at an empty hash.
 
     `active` is per sales channel, so a single storefront can be left out without
     touching the connection.
@@ -20,7 +20,7 @@
 {% block layout_head_meta_tags_charset %}
     {% if config('FastmonCollector.config.active')
         and config('FastmonCollector.config.enableErrorBootstrap')
-        and config('FastmonCollector.config.trackerId') %}
+        and config('FastmonCollector.config.sourceHash') %}
         <script>window.__fastmon=window.__fastmon||{q:[]};(function(q){function h(k){return function(e){q.push([k,e,Date.now()])}}addEventListener("error",h("e"),true);addEventListener("unhandledrejection",h("r"))})(window.__fastmon.q);</script>
     {% endif %}
     {{ parent() }}
@@ -39,9 +39,9 @@
         snippet first-party on every sales-channel domain at once - and the mode is only
         ever set once the plugin probed that those domains really answer.
     #}
-    {% set fmTrackerId = config('FastmonCollector.config.trackerId') %}
+    {% set fmSourceHash = config('FastmonCollector.config.sourceHash') %}
     {% set fmBase = fastmon_script_base() %}
-    {% if config('FastmonCollector.config.active') and fmTrackerId %}
-        <script defer src="{{ fmBase }}/s/{{ fmTrackerId }}.js"></script>
+    {% if config('FastmonCollector.config.active') and fmSourceHash %}
+        <script defer src="{{ fmBase }}/s/{{ fmSourceHash }}.js"></script>
     {% endif %}
 {% endblock %}

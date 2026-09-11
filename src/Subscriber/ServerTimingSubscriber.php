@@ -30,35 +30,28 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * `kernel.response` is the obvious place and it is the wrong one, because Shopware's
  * HTTP cache sits *outside* the kernel. On a full-page-cache hit the inner kernel never
- * runs, so a `kernel.response` listener never fires - and the response that goes out is
- * the stored one, carrying the header from whichever request populated the cache. The
- * browser would receive a completely plausible set of database and render timings
- * belonging to a different request, on every hit, for as long as the cache entry lives.
- * On a warm shop that is the overwhelming majority of pageviews.
+ * runs, so a `kernel.response` listener never fires, and the response that goes out is
+ * the stored one, carrying the header from whichever request populated the cache. What
+ * that does to the numbers is described where it is fixed, at
+ * `ServerTimingResponseWriter`. On a warm shop it would be the majority of pageviews.
  *
  * `BeforeSendResponseEvent` is dispatched by `HttpCacheKernel::handle()` on every main
  * request, hit and miss alike - its own docblock says "This event is also called on
  * cached responses" - and it runs *after* the response has been written to the cache.
  * Writing here therefore gets two things at once: the header reflects the request that
- * is actually being answered, and our entries never end up inside the cached copy.
- *
- * `ServerTimingResponseWriter` still strips stale `fm-*` entries on the way in, because
- * an *external* cache (Varnish, nginx, a CDN) stores whatever we sent and hands it back
- * on its own hits, where none of the above applies.
+ * is actually being answered, and our entries never end up inside the cached copy. The
+ * writer's stripping is still needed for an *external* cache, which hands back whatever
+ * we sent on its own hits.
  *
  * ## Exactly one write point
  *
  * There is deliberately no `kernel.response` listener alongside this one. `http_kernel`
- * is decorated by `HttpCacheKernel` unconditionally - the decoration is plain, and the
- * compiler pass only injects options into it - so every web request reaches the event
- * above and a second listener would have nothing left to cover.
- *
- * It would, however, break the header. Our entries carry the layer names the profiler
- * reports (`rdbms`, `redis`, …), which is what lets fastmon promote them into its
- * columns without a translation table; but those names are not in the `fm-` namespace,
- * so the writer cannot tell one of ours from another party's and leaves them alone.
- * Writing twice therefore appends a second set of layers rather than replacing the
- * first, and the summed columns - kv, http, search - would count both.
+ * is decorated by `HttpCacheKernel` unconditionally, so every web request reaches the
+ * event above and a second listener would cover nothing. It would, however, break the
+ * header: our layer entries carry the profiler's own names (`rdbms`, `redis`, …) rather
+ * than `fm-` ones, so the writer cannot tell them from another party's and leaves them
+ * standing. Writing twice appends a second set of layers instead of replacing the first,
+ * and the summed columns would count both.
  */
 #[WithMonologChannel('fastmon_collector')]
 final class ServerTimingSubscriber implements EventSubscriberInterface
@@ -125,7 +118,7 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            $header = $this->headerBuilder->build($metrics, $config->blockedLayers, $own);
+            $header = $this->headerBuilder->build($metrics, $own);
 
             if ($header === '') {
                 return;
@@ -147,69 +140,69 @@ final class ServerTimingSubscriber implements EventSubscriberInterface
      * clear of the collector's budget for names it does not recognise.
      *
      * @return list<array{0: string, 1: float|null, 2: string|null}>
- *
- * One guarded entry per setting - a table, not a tangle. Splitting it would spread the rules for one header over six methods.
- * @SuppressWarnings("PHPMD.CyclomaticComplexity")
- * @SuppressWarnings("PHPMD.NPathComplexity")
- */
+     *
+     * One guarded entry per value, a table rather than a tangle. Splitting it would
+     * spread the rules for one header over six methods.
+     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
+     */
     private function ownEntries(Request $request, Response $response, ServerTimingConfig $config): array
     {
         $own = [];
 
-        // Everything categorical describes a page, and only the top-level document
-        // carries a navigation entry for fastmon to read one from. Emitting them on every
-        // stylesheet and image would add bytes to every response on the page for a reader
-        // that does not exist - the durations still go out, because those are worth
-        // having in devtools on any request.
+        // Categorical entries describe a page, and only the document carries a navigation
+        // entry to read one from. Durations still go out on every response.
         $isDocument = $this->cacheStatusResolver->isDocument($response);
 
-        if ($config->reportCacheStatus && $isDocument) {
+        if ($isDocument) {
             $status = $this->cacheStatusResolver->resolve($request, $response);
 
             if ($status !== null) {
-                // Leads: the cheapest thing to read off a header by eye, and on a hit it
-                // is the only entry that explains the numbers next to it.
-                $own[] = [ServerTimingHeaderBuilder::CACHE_METRIC, null, $status];
+                // Leads: on a hit it is the only entry that explains the numbers next to it.
+                $own[] = [ServerTimingHeaderBuilder::ORIGIN_CACHE_METRIC, null, $status];
             }
-        }
 
-        if ($config->reportServer && $isDocument) {
-            $server = $this->serverIdentity->name();
+            // Straight after the verdict, so the pair arrives together. Seconds in a
+            // `desc`, see ServerTimingHeaderBuilder. Gated on the hit, not on the header:
+            // Symfony sets `Age` on a miss too, derived from the Date header.
+            $age = $response->headers->get('Age');
+
+            if ($status === CacheStatusResolver::HIT && is_numeric($age)) {
+                $own[] = [ServerTimingHeaderBuilder::ORIGIN_AGE_METRIC, null, (string) (int) $age];
+            }
+
+            // Opt-in: which machine answered is a fact about the merchant's
+            // infrastructure, and only a cluster has a use for it.
+            $server = $config->reportHost ? $this->serverIdentity->name() : '';
 
             if ($server !== '') {
-                $own[] = ['fm-node', null, $server];
+                $own[] = ['fm-host', null, $server];
             }
         }
 
-        if ($config->reportTotal) {
-            $total = $this->totalMilliseconds($request);
+        $total = $this->totalMilliseconds($request);
 
-            if ($total !== null) {
-                $own[] = [ServerTimingHeaderBuilder::TOTAL_METRIC, $total, null];
-            }
+        if ($total !== null) {
+            $own[] = [ServerTimingHeaderBuilder::TOTAL_METRIC, $total, null];
         }
 
-        if ($config->reportRender) {
-            $render = $this->insights->renderMilliseconds();
+        // Absent on a cache hit: a zero would be a real-looking number in the column.
+        $render = $this->insights->renderMilliseconds();
 
-            // Absent on a cache hit, where no template was rendered - which is correct:
-            // reporting a render time of zero would put a real-looking number into the
-            // column and drag every average towards it.
-            if ($render !== null) {
-                $own[] = ['fm-render', $render, null];
-            }
+        if ($render !== null) {
+            $own[] = ['fm-render', $render, null];
         }
 
-        if ($config->reportPageType && $isDocument) {
+        if ($isDocument) {
             $pageType = $this->insights->pageType();
 
             if ($pageType !== null && $pageType !== '') {
                 $own[] = ['fm-pagetype', null, $pageType];
             }
-        }
 
-        if ($config->reportLoggedIn && $isDocument) {
-            $loggedIn = $this->insights->loggedIn();
+            // Opt-in, unlike everything else here: a visitor attribute in a header that
+            // is collected in every privacy mode is the merchant's decision to make.
+            $loggedIn = $config->reportLoggedIn ? $this->insights->loggedIn() : null;
 
             if ($loggedIn !== null) {
                 $own[] = ['fm-loggedin', null, $loggedIn ? 'yes' : 'no'];

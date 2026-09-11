@@ -1,5 +1,6 @@
 import template from './fastmon-collector-collection.html.twig';
 import './fastmon-collector-collection.scss';
+import { onConnectionChanged } from '../../util/panel-bus';
 
 const { Component, Mixin } = Shopware;
 
@@ -11,7 +12,7 @@ const MODES = { DEFAULT: 'default', CUSTOM: 'custom', RELATIVE: 'relative' };
  * Three choices, mirroring fastmon's collector modes. Two of them depend on the
  * merchant's own web server, and those cannot simply be selected: the collector endpoint
  * is baked into the bundle fastmon serves, so applying one before the server forwards
- * `/s/` and `/c/` makes every tracker in every browser post into a 404 — no error, no
+ * `/s/` and `/c/` makes every tracker in every browser post into a 404: no error, no
  * data, and nobody notices for days. So the apply button stays out of reach until a probe
  * against the real origins has come back green for the mode being considered.
  *
@@ -35,7 +36,7 @@ Component.register('fastmon-collector-collection', {
             status: null,
 
             // What the merchant is considering, which is not what is stored until they
-            // apply it — the probe has to run against the prospective mode.
+            // apply it, because the probe has to run against the prospective mode.
             selectedMode: MODES.DEFAULT,
             customDomain: '',
             proxySecret: '',
@@ -51,18 +52,18 @@ Component.register('fastmon-collector-collection', {
             return [
                 {
                     value: MODES.DEFAULT,
-                    name: this.$tc('fastmon-collector.collection.modeDefault'),
-                    description: this.$tc('fastmon-collector.collection.modeDefaultHint'),
+                    name: this.$t('fastmon-collector.collection.modeDefault'),
+                    description: this.$t('fastmon-collector.collection.modeDefaultHint'),
                 },
                 {
                     value: MODES.CUSTOM,
-                    name: this.$tc('fastmon-collector.collection.modeCustom'),
-                    description: this.$tc('fastmon-collector.collection.modeCustomHint'),
+                    name: this.$t('fastmon-collector.collection.modeCustom'),
+                    description: this.$t('fastmon-collector.collection.modeCustomHint'),
                 },
                 {
                     value: MODES.RELATIVE,
-                    name: this.$tc('fastmon-collector.collection.modeRelative'),
-                    description: this.$tc('fastmon-collector.collection.modeRelativeHint'),
+                    name: this.$t('fastmon-collector.collection.modeRelative'),
+                    description: this.$t('fastmon-collector.collection.modeRelativeHint'),
                 },
             ];
         },
@@ -121,6 +122,14 @@ Component.register('fastmon-collector-collection', {
 
     created() {
         this.load();
+
+        // Linking an application happens in the panel above this one. Without this, the
+        // collection card keeps saying that nothing is linked until the page is reloaded.
+        this.stopListening = onConnectionChanged(() => this.load());
+    },
+
+    beforeUnmount() {
+        this.stopListening();
     },
 
     methods: {
@@ -133,7 +142,7 @@ Component.register('fastmon-collector-collection', {
                 return '';
             }
 
-            return this.$tc(`fastmon-collector.collection.reason.${domain.reason}`, 0, {
+            return this.$t(`fastmon-collector.collection.reason.${domain.reason}`, {
                 detail: domain.detail || '',
             });
         },

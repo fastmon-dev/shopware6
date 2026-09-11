@@ -19,8 +19,13 @@ class ServerIdentityTest extends TestCase
         // - the opposite of what this dimension is for.
         $name = (new ServerIdentity())->name();
 
+        // Only the first label: `web-01.fra.internal` answers as `web-01`, because an
+        // FQDN would disclose domain structure and internal naming.
+        $firstLabel = explode('.', (string) gethostname())[0];
+
         self::assertNotSame('', $name);
-        self::assertSame(mb_substr((string) gethostname(), 0, 32), $name);
+        self::assertStringNotContainsString('.', $name);
+        self::assertSame(mb_substr($firstLabel, 0, 32), $name);
     }
 
     public function testTheEnvironmentOverridesTheHostname(): void

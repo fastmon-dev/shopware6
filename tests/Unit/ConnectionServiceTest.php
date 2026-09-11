@@ -2,219 +2,328 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
+use DateTimeImmutable;
+use Fastmon\Collector\Api\FastmonApiException;
 use Fastmon\Collector\Api\FastmonClient;
+use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStore;
-use Fastmon\Collector\Connection\DeviceAuthorizationSession;
+use Fastmon\Collector\Connection\OAuthSession;
+use Fastmon\Collector\Connection\RedirectUri;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 class ConnectionServiceTest extends TestCase
 {
-    /** @var array<string, mixed> */
-    private array $stored = [];
+    use StoresConnection;
 
-    public function testAnApprovedDeviceAuthorizationStoresTheToken(): void
+    private const BASE = 'https://api.fastmon.eu';
+    private const ADMIN = 'https://shop.example.com/admin';
+
+    /** @var list<MockResponse> */
+    private array $oauthCalls = [];
+
+    private MockHttpClient $oauthHttp;
+
+    /** @var array{mixed, mixed} */
+    private array $appUrl;
+
+    protected function setUp(): void
     {
-        $service = $this->service([
-            // start
+        $this->appUrl = [$_SERVER['APP_URL'] ?? null, $_ENV['APP_URL'] ?? null];
+        $_SERVER['APP_URL'] = 'https://shop.example.com';
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER['APP_URL'], $_ENV['APP_URL']);
+        [$server, $env] = $this->appUrl;
+
+        if ($server !== null) {
+            $_SERVER['APP_URL'] = $server;
+        }
+
+        if ($env !== null) {
+            $_ENV['APP_URL'] = $env;
+        }
+    }
+
+    public function testConnectingRegistersThisShopAndSendsOnlyTheChallenge(): void
+    {
+        $service = $this->service(oauth: [$this->discovery(), $this->registration('dyn_1')]);
+
+        $started = $service->beginAuthorization(self::ADMIN);
+
+        parse_str((string) parse_url($started['authorizeUrl'], \PHP_URL_QUERY), $query);
+
+        self::assertSame('dyn_1', $query['client_id']);
+        self::assertSame(self::ADMIN, $query['redirect_uri']);
+        self::assertSame('S256', $query['code_challenge_method']);
+
+        // The verifier is the only thing authenticating the exchange, so it stays on the
+        // shop: not in the URL, not in the answer to the browser.
+        self::assertStringNotContainsString($this->attempt()['verifier'], $started['authorizeUrl']);
+        self::assertSame(['authorizeUrl'], array_keys($started));
+
+        self::assertSame('dyn_1', $this->row['clientId']);
+    }
+
+    public function testTheRegistrationIsReusedRatherThanRepeated(): void
+    {
+        // A `client_id` is how this shop appears in fastmon's connection list. Registering
+        // again on every connect would leave a trail of clients nobody can tell apart -
+        // and would run into the registration rate limit on a shop that reconnects twice.
+        $service = $this->service(oauth: [$this->discovery(), $this->registration('dyn_1')]);
+
+        $service->beginAuthorization(self::ADMIN);
+        $service->beginAuthorization(self::ADMIN);
+
+        // Discovery and one registration, and nothing more on the second pass.
+        self::assertSame(2, $this->oauthHttp->getRequestsCount(), 'a second connect must not register again');
+    }
+
+    public function testAChangedAddressRegistersAgain(): void
+    {
+        // The redirect URI is the one field a registration cannot be corrected in, so a
+        // shop that moved domain needs a new client rather than a broken one.
+        $this->row = [
+            'clientId' => 'dyn_old',
+            'redirectUri' => 'https://old.example.com/admin',
+        ];
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'src123';
+
+        $service = $this->service(oauth: [$this->discovery(), $this->registration('dyn_new')]);
+        $service->beginAuthorization(self::ADMIN);
+
+        self::assertSame('dyn_new', $this->row['clientId']);
+        self::assertSame(self::ADMIN, $this->row['redirectUri']);
+    }
+
+    public function testTheCodeIsRedeemedWithTheStoredVerifierAndTheAttemptIsClosed(): void
+    {
+        $service = $this->service(oauth: [
+            $this->discovery(),
+            $this->registration('dyn_1'),
             new MockResponse(json_encode([
-                'device_code' => 'dev-123',
-                'user_code' => 'WDJB-MJHT',
-                'verification_uri' => 'https://fastmon.eu/device',
+                'access_token' => 'fmt_new',
+                'refresh_token' => 'fmr_new',
                 'expires_in' => 900,
-                'interval' => 5,
-            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-            // poll: still waiting
-            new MockResponse(json_encode(['error' => 'authorization_pending'], \JSON_THROW_ON_ERROR), ['http_code' => 400]),
-            // poll: approved, with the organization the merchant consented for
-            new MockResponse(json_encode([
-                'access_token' => 'fm_secret',
+                'scope' => 'org:read app:read app:write site:read',
                 'account' => ['email' => 'merchant@example.com', 'name' => 'Merchant'],
                 'organization' => ['id' => 'org-7', 'name' => 'Acme'],
             ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
         ]);
 
-        $started = $service->startDeviceAuthorization();
+        $service->beginAuthorization(self::ADMIN);
+        $attempt = $this->attempt();
 
-        self::assertSame('WDJB-MJHT', $started['userCode']);
-        // The device code is the credential the shop redeems with, so it stays here and
-        // only an opaque handle goes to the browser.
-        self::assertArrayNotHasKey('deviceCode', $started);
-        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $started['handle']);
+        $connected = $service->completeAuthorization('the-code', $attempt['state']);
 
-        self::assertSame('pending', $service->pollDeviceAuthorization($started['handle'])['status']);
-
-        $completed = $service->pollDeviceAuthorization($started['handle']);
-
-        self::assertSame('complete', $completed['status']);
-        self::assertSame('merchant@example.com', $completed['accountEmail']);
-        self::assertSame('fm_secret', $this->stored[ConfigResolver::DOMAIN . 'apiToken']);
+        self::assertSame('merchant@example.com', $connected['accountEmail']);
+        self::assertSame('fmr_new', $this->row['refreshToken']);
 
         // Settled on fastmon's consent screen, so the shop never asks again - and can
         // never end up reporting to a different organization than the one approved.
-        self::assertSame('org-7', $this->stored[ConfigResolver::DOMAIN . 'organizationId']);
-        self::assertSame('Acme', $this->stored[ConfigResolver::DOMAIN . 'organizationName']);
+        self::assertSame('org-7', $this->row['organizationId']);
+        self::assertSame('Acme', $this->row['organizationName']);
+
+        // The code is single-use, so an attempt left open is one an intercepted code
+        // could still be redeemed against.
+        self::assertNull($this->row['authorizationVerifier']);
+
+        $body = $this->form($this->oauthCalls[2]);
+        self::assertSame($attempt['verifier'], $body['code_verifier']);
+        self::assertSame(self::ADMIN, $body['redirect_uri']);
     }
 
-    public function testAnInstanceThatDoesNotCarryTheOrganizationLeavesTheShopToAsk(): void
+    public function testACallbackThisShopDidNotStartIsRefused(): void
     {
-        // Additive on both sides: against a backend that has not shipped it yet the
-        // token still lands, and the module falls back to its own picker.
-        $service = $this->service([
-            new MockResponse(json_encode([
-                'device_code' => 'dev-123',
-                'user_code' => 'WDJB-MJHT',
-                'verification_uri' => 'https://fastmon.eu/device',
-                'expires_in' => 900,
-                'interval' => 5,
-            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-            new MockResponse(json_encode([
-                'access_token' => 'fm_secret',
-                'account' => ['email' => 'merchant@example.com', 'name' => 'Merchant'],
-            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-        ]);
+        // The state is what ties an answer back to an attempt. Without a matching one
+        // there is no verifier, and redeeming anything would be redeeming a stranger's
+        // code.
+        $service = $this->service();
 
-        $started = $service->startDeviceAuthorization();
-        $completed = $service->pollDeviceAuthorization($started['handle']);
-
-        self::assertSame('complete', $completed['status']);
-        self::assertSame('fm_secret', $this->stored[ConfigResolver::DOMAIN . 'apiToken']);
-        self::assertSame('', $completed['organizationId']);
-        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'organizationId', $this->stored);
-    }
-
-    public function testAnUnknownHandleEndsTheFlowInsteadOfFailing(): void
-    {
-        // Expiry costs the merchant one more click, which is not worth an exception.
-        $service = $this->service([]);
-
-        self::assertSame('expired', $service->pollDeviceAuthorization('deadbeef')['status']);
-    }
-
-    public function testATokenIsVerifiedBeforeItIsStored(): void
-    {
-        $service = $this->service([new MockResponse('', ['http_code' => 401])]);
-
-        $this->expectExceptionMessage('fastmon account lookup failed');
+        $this->expectException(FastmonApiException::class);
 
         try {
-            $service->connectWithToken('fm_typo');
+            $service->completeAuthorization('the-code', str_repeat('a', 32));
         } finally {
-            // A typo must be reported as a typo, not stored to become a storefront that
-            // quietly never provisions.
-            self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'apiToken', $this->stored);
+            self::assertNull($this->row['refreshToken'] ?? null);
         }
     }
 
-    public function testTheStatusNeverReturnsTheToken(): void
+    public function testADeclinedConsentClosesTheAttemptAndSaysWhatHappened(): void
     {
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'apiToken' => 'fm_secret',
-            ConfigResolver::DOMAIN . 'accountEmail' => 'merchant@example.com',
-            ConfigResolver::DOMAIN . 'trackerId' => 'src123',
+        $service = $this->service(oauth: [$this->discovery(), $this->registration('dyn_1')]);
+        $service->beginAuthorization(self::ADMIN);
+
+        $this->expectExceptionMessage('declined');
+
+        try {
+            $service->declineAuthorization($this->attempt()['state'], 'access_denied');
+        } finally {
+            self::assertNull($this->row['authorizationVerifier']);
+        }
+    }
+
+    public function testDisconnectingHandsTheConnectionBackToFastmon(): void
+    {
+        // Revoking the refresh token ends the grant on fastmon's side, so the shop cannot
+        // rotate its way back in and the entry disappears from the merchant's connection
+        // list without them having to go and remove it.
+        $this->connected();
+
+        $this->service(oauth: [$this->discovery(), new MockResponse('', ['http_code' => 200])])->disconnect();
+
+        $body = $this->form($this->oauthCalls[1]);
+        self::assertSame('fmr_live', $body['token']);
+        self::assertNull($this->row['refreshToken'] ?? null);
+
+        // The source_hash is the one thing a disconnect has to take out of
+        // `system_config`: the cached pages still carry the snippet, and a disconnected
+        // shop must stop serving it. Everything else was a row, and no page is tagged
+        // with that.
+        self::assertArrayNotHasKey(ConfigResolver::DOMAIN . 'sourceHash', $this->config);
+
+        // Not a credential, and re-using it keeps this shop one entry in that list rather
+        // than a new one per reconnect.
+        self::assertSame('dyn_1', $this->row['clientId']);
+    }
+
+    public function testAShopThatCannotReachFastmonCanStillDisconnect(): void
+    {
+        $this->connected();
+
+        $this->service(oauth: [new MockResponse('', ['http_code' => 500])])->disconnect();
+
+        self::assertNull($this->row['refreshToken'] ?? null);
+    }
+
+    public function testAKeyIsVerifiedBeforeItIsStored(): void
+    {
+        $service = $this->service(api: [new MockResponse('', ['http_code' => 401])]);
+
+        $this->expectExceptionMessage('fastmon organization list failed');
+
+        try {
+            $service->connectWithToken('fmo_typo');
+        } finally {
+            // A typo must be reported as a typo, not stored to become a storefront that
+            // quietly never provisions.
+            self::assertNull($this->row['manualToken'] ?? null);
+        }
+    }
+
+    public function testAKeyBoundToOneOrganizationSettlesItWithoutAsking(): void
+    {
+        $service = $this->service(api: [$this->organizations([['id' => 'org-7', 'name' => 'Acme']])]);
+
+        $service->connectWithToken('fmo_key');
+
+        self::assertSame('fmo_key', $this->row['manualToken']);
+        self::assertSame('org-7', $this->row['organizationId']);
+    }
+
+    private function connected(string $applicationId = ''): void
+    {
+        $this->row = [
+            'clientId' => 'dyn_1',
+            'redirectUri' => self::ADMIN,
+            'refreshToken' => 'fmr_live',
+            'scopes' => 'org:read app:read app:write site:read',
+            'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + 600)),
+            'accessToken' => 'fmt_live',
+            'accountEmail' => 'merchant@example.com',
+            'organizationId' => 'org-7',
+            'organizationName' => 'Acme',
+            'applicationId' => $applicationId,
         ];
-
-        $status = $this->service([])->describe();
-
-        self::assertTrue($status['connected']);
-        self::assertTrue($status['provisioned']);
-        self::assertNotContains('fm_secret', $status, 'a stored credential must not be readable through the admin API');
-    }
-
-    public function testAnApplicationThatIsNotThereIsReported(): void
-    {
-        // A working token says nothing about the application still existing. It can be
-        // deleted in the dashboard, or refer to an id from a different fastmon instance -
-        // and the storefront then keeps serving a snippet that collects nothing.
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'apiToken' => 'fm_ok',
-            ConfigResolver::DOMAIN . 'applicationId' => 'app-gone',
-            ConfigResolver::DOMAIN . 'trackerId' => 'srchash',
-        ];
-
-        $status = $this->service([
-            new MockResponse(json_encode(['email' => 'm@example.com'], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-            new MockResponse(json_encode(
-                ['error' => ['code' => 'resource_not_found', 'message' => 'No such application']],
-                \JSON_THROW_ON_ERROR
-            ), ['http_code' => 404]),
-        ])->describe(verify: true);
-
-        self::assertTrue($status['tokenValid']);
-        self::assertFalse($status['applicationValid']);
-        self::assertStringContainsString('could not be found', $status['error']);
-    }
-
-    public function testARotatedTrackerIdIsReported(): void
-    {
-        // Rotating in the dashboard invalidates the embed everywhere it is deployed. A
-        // shop still serving the old id collects nothing while looking perfectly fine.
-        $this->stored = [
-            ConfigResolver::DOMAIN . 'apiToken' => 'fm_ok',
-            ConfigResolver::DOMAIN . 'applicationId' => 'app-1',
-            ConfigResolver::DOMAIN . 'trackerId' => 'oldhash',
-        ];
-
-        $status = $this->service([
-            new MockResponse(json_encode(['email' => 'm@example.com'], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-            new MockResponse(json_encode([
-                'id' => 'app-1', 'name' => 'Shopware',
-                'source_hash' => 'newhash', 'collector_hash' => 'colhash',
-            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
-        ])->describe(verify: true);
-
-        self::assertFalse($status['applicationValid']);
-        self::assertStringContainsString('tracker id changed', $status['error']);
-    }
-
-    public function testARevokedTokenIsReportedAsSuchRatherThanAsDisconnected(): void
-    {
-        $this->stored = [ConfigResolver::DOMAIN . 'apiToken' => 'fm_revoked'];
-
-        $status = $this->service([new MockResponse('', ['http_code' => 401])])->describe(verify: true);
-
-        self::assertTrue($status['connected']);
-        self::assertFalse($status['tokenValid']);
-        self::assertNotSame('', $status['error']);
-    }
-
-    public function testATransientFailureDoesNotInvalidateAWorkingConnection(): void
-    {
-        // Telling a merchant to reconnect because fastmon was briefly unreachable would
-        // cost them a connection that is fine.
-        $this->stored = [ConfigResolver::DOMAIN . 'apiToken' => 'fm_ok'];
-
-        $status = $this->service([new MockResponse('', ['http_code' => 503])])->describe(verify: true);
-
-        self::assertTrue($status['connected']);
-        self::assertNull($status['tokenValid']);
-        self::assertNotSame('', $status['error']);
     }
 
     /**
-     * @param list<MockResponse> $responses
+     * The authorization in flight, as it sits in the connection row.
+     *
+     * @return array{state: string, verifier: string}
      */
-    private function service(array $responses): ConnectionService
+    private function attempt(): array
     {
-        $systemConfig = $this->createMock(SystemConfigService::class);
-        $systemConfig->method('get')->willReturnCallback(fn (string $key): mixed => $this->stored[$key] ?? null);
-        $systemConfig->method('set')->willReturnCallback(function (string $key, mixed $value): void {
-            $this->stored[$key] = $value;
-        });
-        $systemConfig->method('delete')->willReturnCallback(function (string $key): void {
-            unset($this->stored[$key]);
-        });
+        $state = $this->row['authorizationState'] ?? null;
+        $verifier = $this->row['authorizationVerifier'] ?? null;
+
+        return [
+            'state' => \is_string($state) ? $state : '',
+            'verifier' => \is_string($verifier) ? $verifier : '',
+        ];
+    }
+
+    /**
+     * The form-encoded body of a request that was sent.
+     *
+     * @return array<mixed>
+     */
+    private function form(MockResponse $response): array
+    {
+        $body = $response->getRequestOptions()['body'] ?? null;
+        parse_str(\is_string($body) ? $body : '', $parsed);
+
+        return $parsed;
+    }
+
+    private function discovery(): MockResponse
+    {
+        return new MockResponse(json_encode([
+            'issuer' => self::BASE,
+            'authorization_endpoint' => self::BASE . '/auth/app/authorize',
+            'token_endpoint' => self::BASE . '/auth/app/token',
+            'registration_endpoint' => self::BASE . '/auth/app/register',
+            'revocation_endpoint' => self::BASE . '/auth/app/revoke',
+        ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
+    }
+
+    private function registration(string $clientId): MockResponse
+    {
+        return new MockResponse(
+            json_encode(['client_id' => $clientId], \JSON_THROW_ON_ERROR),
+            ['http_code' => 201]
+        );
+    }
+
+    /**
+     * @param list<array{id: string, name: string}> $organizations
+     */
+    private function organizations(array $organizations): MockResponse
+    {
+        return new MockResponse(
+            json_encode(['data' => $organizations], \JSON_THROW_ON_ERROR),
+            ['http_code' => 200]
+        );
+    }
+
+    /**
+     * @param list<MockResponse> $api
+     * @param list<MockResponse> $oauth
+     */
+    private function service(array $api = [], array $oauth = []): ConnectionService
+    {
+        $this->oauthCalls = $oauth;
+        $systemConfig = $this->systemConfig();
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
+        $session = new OAuthSession($store);
+        $config = new ConfigResolver($systemConfig);
+        $this->oauthHttp = new MockHttpClient($oauth);
+        $oauthClient = new FastmonOAuthClient($this->oauthHttp);
 
         return new ConnectionService(
-            new FastmonClient(new MockHttpClient($responses)),
-            new ConnectionStore($systemConfig),
-            new DeviceAuthorizationSession($systemConfig),
-            new ConfigResolver($systemConfig),
+            new FastmonClient(new MockHttpClient($api)),
+            $oauthClient,
+            $store,
+            $session,
+            new RedirectUri(),
+            $config,
             new NullLogger(),
         );
     }

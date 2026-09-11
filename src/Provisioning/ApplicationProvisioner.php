@@ -3,7 +3,7 @@
 namespace Fastmon\Collector\Provisioning;
 
 use Fastmon\Collector\Api\FastmonClient;
-use Fastmon\Collector\Connection\ConnectionService;
+use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
@@ -17,7 +17,7 @@ use Psr\Log\LoggerInterface;
  *
  * There used to be one. The fastmon Shopware app creates a *Site* per sales channel: it
  * reads every channel and its domains through the Admin API, creates one site for each,
- * and writes a separate tracker id into that channel's `system_config`. Adding a domain
+ * and writes a separate source_hash into that channel's `system_config`. Adding a domain
  * meant going back into the wizard, and a channel with two domains had to pick one.
  *
  * The Application model replaced that. An application is one embed whose collection
@@ -48,7 +48,7 @@ final class ApplicationProvisioner
 
     public function __construct(
         private readonly FastmonClient $client,
-        private readonly ConnectionService $connection,
+        private readonly AccessTokenProvider $tokens,
         private readonly ConnectionStore $store,
         private readonly ConfigResolver $config,
         private readonly LoggerInterface $logger,
@@ -60,36 +60,38 @@ final class ApplicationProvisioner
      */
     public function organizations(): array
     {
-        return $this->client->organizations($this->config->apiBaseUrl(), $this->connection->requireToken());
+        return $this->tokens->call(
+            fn (string $token): array => $this->client->organizations($this->config->apiBaseUrl(), $token)
+        );
     }
 
     /**
-     * @return list<array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}>
+     * @return list<array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}>
      */
     public function applications(string $organizationId): array
     {
-        return $this->client->applications(
+        return $this->tokens->call(fn (string $token): array => $this->client->applications(
             $this->config->apiBaseUrl(),
-            $this->connection->requireToken(),
+            $token,
             $organizationId
-        );
+        ));
     }
 
     /**
      * Create an application and point the storefront at it.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function create(string $organizationId, string $name, string $environment, string $preset): array
     {
-        $application = $this->client->createApplication(
+        $application = $this->tokens->call(fn (string $token): array => $this->client->createApplication(
             $this->config->apiBaseUrl(),
-            $this->connection->requireToken(),
+            $token,
             $organizationId,
             $name !== '' ? $name : self::DEFAULT_NAME,
             $environment !== '' ? $environment : 'prod',
             $preset !== '' ? $preset : self::DEFAULT_PRESET,
-        );
+        ));
 
         $this->persist($organizationId, $application);
         $this->logger->info(sprintf(
@@ -106,20 +108,20 @@ final class ApplicationProvisioner
      * one dashboard, or a re-link after someone disconnected.
      *
      * The hashes are re-read rather than taken from whatever the browser posted, so a
-     * stale list in an open admin tab cannot write a tracker id that no longer exists.
+     * stale list in an open admin tab cannot write a source_hash that no longer exists.
      *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
+     * @return array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string}
      */
     public function attach(string $organizationId, string $applicationId): array
     {
-        $application = $this->client->fetchApplication(
+        $application = $this->tokens->call(fn (string $token): array => $this->client->fetchApplication(
             $this->config->apiBaseUrl(),
-            $this->connection->requireToken(),
+            $token,
             $applicationId
-        );
+        ));
 
-        if ($application['trackerId'] === '') {
-            throw FastmonCollectorException::applicationWithoutTrackerId();
+        if ($application['sourceHash'] === '') {
+            throw FastmonCollectorException::applicationWithoutSourceHash();
         }
 
         $this->persist($organizationId, $application);
@@ -130,26 +132,6 @@ final class ApplicationProvisioner
         ));
 
         return $application;
-    }
-
-    /**
-     * Re-read the linked application and write back what fastmon says now.
-     *
-     * The one thing this catches is rotated hashes: rotating in the dashboard invalidates
-     * the embed everywhere it is deployed, and a shop still serving the old id collects
-     * nothing while looking perfectly healthy.
-     *
-     * @return array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int}
-     */
-    public function refresh(): array
-    {
-        $connection = $this->store->load();
-
-        if ($connection->applicationId === '') {
-            throw FastmonCollectorException::noApplicationLinked();
-        }
-
-        return $this->attach($connection->organizationId, $connection->applicationId);
     }
 
     /**
@@ -165,15 +147,15 @@ final class ApplicationProvisioner
             return [];
         }
 
-        return $this->client->applicationSites(
+        return $this->tokens->call(fn (string $token): array => $this->client->applicationSites(
             $this->config->apiBaseUrl(),
-            $this->connection->requireToken(),
+            $token,
             $connection->applicationId
-        );
+        ));
     }
 
     /**
-     * @param array{id: string, name: string, trackerId: string, pixelId: string, environment: string, siteCount: int} $application
+     * @param array{id: string, name: string, sourceHash: string, collectorHash: string, environment: string, siteCount: int, collectorMode: string, collectorEndpoint: string} $application
      */
     private function persist(string $organizationId, array $application): void
     {
@@ -181,8 +163,8 @@ final class ApplicationProvisioner
         $this->store->saveApplication(
             $organizationId,
             $application['id'],
-            $application['trackerId'],
-            $application['pixelId'],
+            $application['sourceHash'],
+            $application['collectorHash'],
         );
     }
 

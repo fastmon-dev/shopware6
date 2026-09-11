@@ -45,12 +45,12 @@ class ServerTimingResponseWriterTest extends TestCase
         // back carrying the header it had when it was stored, so the timings belong to a
         // different request entirely.
         $response = new Response();
-        $response->headers->set('Server-Timing', 'fm-fpc;desc=miss, fm-backend;dur=250.0, rdbms;dur=200.0');
+        $response->headers->set('Server-Timing', 'fm-origin-cache;desc=miss, fm-backend;dur=250.0, rdbms;dur=200.0');
 
-        $this->writer->write($response, 'fm-fpc;desc=hit, fm-backend;dur=0.8');
+        $this->writer->write($response, 'fm-origin-cache;desc=hit, fm-backend;dur=0.8');
 
         self::assertSame(
-            ['rdbms;dur=200.0', 'fm-fpc;desc=hit, fm-backend;dur=0.8'],
+            ['rdbms;dur=200.0', 'fm-origin-cache;desc=hit, fm-backend;dur=0.8'],
             $response->headers->all('Server-Timing')
         );
     }

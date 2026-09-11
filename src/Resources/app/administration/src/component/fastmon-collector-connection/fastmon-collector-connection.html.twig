@@ -3,26 +3,29 @@
     <mt-loader v-if="isLoading" size="32px" />
 
     <template v-else>
-        {# A pending org review is a waiting state, not a fault, so it is not styled as
+        {# One banner per state. A rejected credential has its own further down, in the
+           reader's language, so the raw sentence from the API is not repeated here.
+
+           A pending org review is a waiting state, not a fault, so it is not styled as
            one - the merchant has nothing to fix and nothing to retry. #}
         <mt-banner
-            v-if="error"
+            v-if="error && !needsReconnect"
             :variant="errorVariant"
             class="fastmon-collector-connection__banner"
         >
             <template v-if="pendingApproval">
-                {{ $tc('fastmon-collector.provision.pendingApproval') }}
+                {{ $t('fastmon-collector.provision.pendingApproval') }}
             </template>
             <template v-else>
                 {{ error }}
                 <template v-if="missingPermission">
-                    {{ $tc('fastmon-collector.connect.missingPermission', 0, { permission: missingPermission }) }}
+                    {{ $t('fastmon-collector.connect.missingPermission', { permission: missingPermission }) }}
                 </template>
             </template>
         </mt-banner>
 
         {# ---------- not connected ---------- #}
-        <fastmon-collector-connection-device
+        <fastmon-collector-connection-authorize
             v-if="!isConnected"
             @connected="onConnected"
             @error="applyFastmonError"
@@ -30,85 +33,119 @@
 
         {# ---------- connected ---------- #}
         <template v-else>
+            {# The connection belongs to the organisation, not to the person: it keeps
+               working after they leave. So the organisation is the subject, and whoever
+               approved it is the footnote. A pasted key names nobody at all. #}
             <p class="fastmon-collector-connection__account">
-                {{ $tc('fastmon-collector.connectedAs') }}
-                <strong>{{ connectedAs }}</strong>
                 <template v-if="organizationLabel">
-                    &middot; {{ $tc('fastmon-collector.provision.organization') }}
+                    {{ $t('fastmon-collector.connectedTo') }}
                     <strong>{{ organizationLabel }}</strong>
+                </template>
+                <template v-else>
+                    {{ $t('fastmon-collector.connected') }}
+                </template>
+                <template v-if="approvedBy">
+                    &middot; {{ $t('fastmon-collector.approvedBy') }}
+                    <strong>{{ approvedBy }}</strong>
                 </template>
             </p>
 
+            {# Straight into fastmon, for everything this panel deliberately does not do:
+               reading the measurements, and the settings of the application itself. #}
+            <p v-if="status.dashboardUrl" class="fastmon-collector-connection__links">
+                <mt-link
+                    as="a"
+                    type="external"
+                    :href="status.dashboardUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {{ $t('fastmon-collector.openDashboard') }}
+                </mt-link>
+
+                <mt-link
+                    as="a"
+                    type="external"
+                    :href="status.applicationsUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {{ $t('fastmon-collector.openApplications') }}
+                </mt-link>
+            </p>
+
+            {# A rejected credential is the one state that replaces everything below it:
+               nothing can be provisioned with it, so the panel says so and stops. #}
             <mt-banner v-if="needsReconnect" variant="critical">
-                {{ $tc('fastmon-collector.connect.rejected') }}
+                {{ $t('fastmon-collector.connect.rejected') }}
             </mt-banner>
 
-            {# Connected, but no usable application: the token is good, so this is a
-               choice to make rather than a disconnect. #}
-            <fastmon-collector-connection-provisioning
-                v-else-if="!isProvisioned || needsRelink"
-                :status="status"
-                @linked="onLinked"
-                @error="applyFastmonError"
-            />
-
-            {# Connected and linked. The domains fastmon has actually seen are the honest
-               answer to "is it collecting?" in a way an id and a checkmark are not. #}
             <template v-else>
-                <p class="fastmon-collector-connection__label">
-                    {{ $tc('fastmon-collector.summary.sites') }}
-                </p>
+                {# A notice, not a state: it stacks above whatever the panel is showing
+                   rather than taking its place. #}
+                <mt-banner v-if="missingScopes.length" variant="attention">
+                    {{ $t('fastmon-collector.connect.missingScopes', { scopes: missingScopes.join(', ') }) }}
+                </mt-banner>
 
-                <ul v-if="sites.length" class="fastmon-collector-connection__list">
-                    <li
-                        v-for="site in sites"
-                        :key="site.id"
-                        class="fastmon-collector-connection__item"
-                    >
-                        <strong>{{ site.domain }}</strong>
-                    </li>
-                </ul>
+                {# Connected, but no usable application: the credential is good, so this
+                   is a choice to make rather than a disconnect. #}
+                <fastmon-collector-connection-provisioning
+                    v-if="!isProvisioned || needsRelink"
+                    :status="status"
+                    @linked="onLinked"
+                    @error="applyFastmonError"
+                />
 
-                <p v-else class="fastmon-collector-connection__hint">
-                    {{ $tc('fastmon-collector.summary.noSites') }}
-                </p>
+                {# Connected and linked. The domains fastmon has actually seen are the
+                   honest answer to "is it collecting?" in a way an id and a checkmark are
+                   not. #}
+                <template v-else>
+                    <p class="fastmon-collector-connection__label">
+                        {{ $t('fastmon-collector.summary.sites') }}
+                    </p>
 
-                {# Ids belong here and not on the surface: nobody acts on them, and
-                   support asks for them roughly once a year. #}
-                <details class="fastmon-collector-connection__debug">
-                    <summary>{{ $tc('fastmon-collector.summary.debug') }}</summary>
-                    <dl class="fastmon-collector-connection__summary">
-                        <dt>{{ $tc('fastmon-collector.summary.application') }}</dt>
-                        <dd><code>{{ status.applicationId }}</code></dd>
-                        <dt>{{ $tc('fastmon-collector.summary.trackerId') }}</dt>
-                        <dd><code>{{ status.trackerId }}</code></dd>
-                        <dt>{{ $tc('fastmon-collector.summary.pixelId') }}</dt>
-                        <dd><code>{{ status.pixelId || '-' }}</code></dd>
-                    </dl>
-                </details>
+                    <ul v-if="sites.length" class="fastmon-collector-connection__domains">
+                        <li
+                            v-for="site in sites"
+                            :key="site.id"
+                            class="fastmon-collector-connection__domain"
+                        >
+                            {{ site.domain }}
+                        </li>
+                    </ul>
+
+                    <p v-else class="fastmon-collector-connection__hint">
+                        {{ $t('fastmon-collector.summary.noSites') }}
+                    </p>
+
+                    {# Ids belong here and not on the surface: nobody acts on them, and
+                       support asks for them roughly once a year. #}
+                    <details class="fastmon-collector-connection__debug">
+                        <summary>{{ $t('fastmon-collector.summary.debug') }}</summary>
+                        <dl class="fastmon-collector-connection__summary">
+                            <dt>{{ $t('fastmon-collector.summary.application') }}</dt>
+                            <dd><code>{{ status.applicationId }}</code></dd>
+                            <dt>{{ $t('fastmon-collector.summary.sourceHash') }}</dt>
+                            <dd><code>{{ status.sourceHash }}</code></dd>
+                            <dt>{{ $t('fastmon-collector.summary.collectorHash') }}</dt>
+                            <dd><code>{{ status.collectorHash || '-' }}</code></dd>
+                        </dl>
+                    </details>
+                </template>
             </template>
 
             <div class="fastmon-collector-connection__actions">
-                <mt-button
-                    v-if="isLinked"
-                    variant="secondary"
-                    :disabled="isBusy"
-                    @click="refreshApplication"
-                >
-                    {{ $tc('fastmon-collector.summary.refresh') }}
-                </mt-button>
-
                 <mt-button
                     variant="critical"
                     :disabled="isBusy"
                     @click="disconnect"
                 >
-                    {{ $tc('fastmon-collector.disconnect') }}
+                    {{ $t('fastmon-collector.disconnect') }}
                 </mt-button>
             </div>
 
             <p class="fastmon-collector-connection__hint">
-                {{ $tc('fastmon-collector.disconnectHint') }}
+                {{ $t(status.connectionKind === 'app' ? 'fastmon-collector.disconnectHint' : 'fastmon-collector.disconnectHintToken') }}
             </p>
         </template>
     </template>

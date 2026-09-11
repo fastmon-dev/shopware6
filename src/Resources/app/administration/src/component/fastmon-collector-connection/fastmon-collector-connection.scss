@@ -17,6 +17,14 @@
         margin: 0 0 12px;
     }
 
+    // The two ways out of this panel and into fastmon, side by side.
+    &__links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin: 0 0 16px;
+    }
+
     &__label {
         font-size: 13px;
         font-weight: 600;
@@ -29,20 +37,20 @@
         padding-top: 16px;
     }
 
-    // The user code is read off the screen and typed into another device, so it is set
-    // in a monospace face at a size that survives being read from a metre away.
-    &__code {
-        background: $color-gray-50;
-        border: 1px solid $color-gray-300;
-        border-radius: 4px;
-        display: inline-block;
-        font-family: "SFMono-Regular", Consolas, monospace;
-        font-size: 26px;
-        letter-spacing: 4px;
-        margin: 4px 0 12px;
-        padding: 10px 18px;
+    // The domains fastmon has seen are an enumeration, not a row of actions: bullets,
+    // so a shop with exactly one domain still reads as one entry of a list rather than
+    // as a stray line of text under the heading.
+    &__domains {
+        list-style: disc;
+        margin: 0 0 12px;
+        padding-left: 20px;
     }
 
+    &__domain {
+        padding: 2px 0;
+    }
+
+    // Rows that carry an action on the right, which is why they are not bulleted.
     &__list {
         list-style: none;
         margin: 0 0 12px;

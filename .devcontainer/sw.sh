@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fastmon-sw — run Shopware's bin/console inside the sibling shop container.
+# fastmon-sw: run Shopware's bin/console inside the sibling shop container.
 #
 #     fastmon-sw plugin:refresh
 #     fastmon-sw plugin:install --activate FastmonCollector

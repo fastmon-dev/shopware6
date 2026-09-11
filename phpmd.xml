@@ -45,7 +45,8 @@
     <rule ref="rulesets/naming.xml">
         <!-- $r in a one-line closure, $a/$b in a comparator. -->
         <exclude name="ShortVariable"/>
-        <!-- $verificationUriComplete is RFC 8628's own name for it. -->
+        <!-- $authorizationEndpoint is RFC 8414's own name for the field, and
+             $scheduledTaskRepository is what Shopware calls the constructor argument. -->
         <exclude name="LongVariable"/>
         <!-- ok() next to error(). -->
         <exclude name="ShortMethodName"/>
@@ -54,7 +55,10 @@
     <rule ref="rulesets/unusedcode.xml"/>
 
     <rule ref="rulesets/controversial.xml">
-        <!-- $_SERVER for the per-node environment overrides, where a setting cannot work. -->
+        <!-- Only the tests still need this: they arrange the environment by setting
+             $_SERVER, which is the only way to reach code that reads one. Production code
+             goes through Shopware's EnvironmentHelper, and PHPMD cannot scope a rule to
+             one of the two paths it is given. -->
         <exclude name="Superglobals"/>
     </rule>
 </ruleset>

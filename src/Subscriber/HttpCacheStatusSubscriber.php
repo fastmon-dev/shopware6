@@ -11,9 +11,9 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Records what Shopware's HTTP cache did with this request.
  *
  * Both verdicts have to be captured as they happen, because neither is readable
- * afterwards. On a hit the inner kernel never runs and the response that goes out is the
- * stored one, carrying no marker of where it came from. On a miss the response looks
- * identical whether it was stored or not.
+ * afterwards: a stored response carries no marker of where it came from, and a miss
+ * looks identical whether it was stored or not. Why a hit is invisible to a listener in
+ * the kernel at all is at `ServerTimingSubscriber`.
  *
  * ## Why not read it off Cache-Control
  *

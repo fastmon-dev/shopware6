@@ -2,6 +2,8 @@
 
 namespace Fastmon\Collector\ServerTiming;
 
+use Shopware\Core\DevOps\Environment\EnvironmentHelper;
+
 /**
  * Which machine answered this request.
  *
@@ -9,20 +11,15 @@ namespace Fastmon\Collector\ServerTiming;
  * node slower than the others", and that is invisible unless the response says which node
  * it came from.
  *
- * ## Why this is not a setting
+ * Whether it is sent is a setting (`serverTimingHost`, off by default), what it says
+ * cannot be: plugin configuration lives in the database every node shares, so a
+ * configured name would be identical on all of them. The value has to come from the
+ * machine that answered, which is why `FASTMON_SERVER_NAME` overrides it and no field
+ * does. On Kubernetes that variable is the right answer anyway, because the hostname is
+ * a pod name that changes every deploy.
  *
- * Because a setting could not work. Plugin configuration lives in `system_config`, in the
- * database every node of the cluster shares - so a configured name would be the *same* on
- * all of them, which is precisely the opposite of what this is for. The value has to come
- * from the machine that answered.
- *
- * `gethostname()` is that value, and it is right on a fixed fleet. On an orchestrated one
- * it is the pod name: it changes on every deploy, so it groups nothing, and it is long
- * and random enough to be discarded outright - fastmon drops a `desc` of 24 characters or
- * more that is mostly hex-ish as an identifier, which `shopware-web-7d9f8b6c4d-x2k9p` is.
- * `FASTMON_SERVER_NAME` in the environment overrides it, because an environment variable
- * is per node the way a database row can never be: set it to `web-01` from the same
- * manifest that decides which node this is.
+ * Only the first label of the hostname: an FQDN would disclose domain structure and
+ * internal naming, `web-01` discloses that the servers are called `web-01`.
  */
 final class ServerIdentity
 {
@@ -49,12 +46,13 @@ final class ServerIdentity
 
     private function resolve(): string
     {
-        $configured = $_SERVER[self::ENV] ?? getenv(self::ENV);
+        $configured = EnvironmentHelper::getVariable(self::ENV, '');
         $name = \is_string($configured) ? trim($configured) : '';
 
         if ($name === '') {
             $hostname = gethostname();
-            $name = \is_string($hostname) ? $hostname : '';
+            $label = \is_string($hostname) ? strtok($hostname, '.') : '';
+            $name = \is_string($label) ? $label : '';
         }
 
         // Anything outside the accepted set becomes a dash rather than being dropped:

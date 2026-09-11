@@ -1,5 +1,5 @@
 # Dev Container stack for the fastmon Shopware plugin, in Compose form so the
-# whole monorepo uses one consistent mechanism (services-as-containers) —
+# whole monorepo uses one consistent mechanism (services-as-containers),
 # matching backend/ and frontend/.
 #
 # Two services:
@@ -13,8 +13,8 @@
 # to the shop over dockware's built-in SSH (see /usr/local/bin/fastmon-sw).
 #
 # This base file defines the CLONE MODE workspace (named volume shared by both
-# containers, bootstrapped by `fastmon-shopware-plugin-bootstrap`). MOUNT MODE —
-# the default — overlays docker-compose.mount.yml to bind your host checkout
+# containers, bootstrapped by `fastmon-shopware-plugin-bootstrap`). MOUNT MODE,
+# the default, overlays docker-compose.mount.yml to bind your host checkout
 # into both containers instead (see devcontainer.json).
 services:
   plugin:
@@ -47,14 +47,20 @@ services:
       GIT_CONFIG_KEY_1: user.signingkey
       GIT_CONFIG_VALUE_1: /home/dev/.ssh/id_fastmon_signing.pub
       GIT_CONFIG_KEY_2: user.email
-      # Per-developer — set FASTMON_GIT_EMAIL in your host shell. Empty fallback
+      # Per-developer: set FASTMON_GIT_EMAIL in your host shell. Empty fallback
       # is intentional: unset surfaces as a git config error rather than silently
       # attributing commits to someone else.
       GIT_CONFIG_VALUE_2: ${FASTMON_GIT_EMAIL:-}
       GIT_CONFIG_KEY_3: commit.gpgsign
       GIT_CONFIG_VALUE_3: "true"
+      # GitHub token for the gh CLI (issues, PRs). gh reads GH_TOKEN directly,
+      # no `gh auth login` needed. Per-developer: export FASTMON_GH_TOKEN in
+      # your host shell (fine-grained PAT scoped to this repo with Issues,
+      # Pull requests and Contents read/write). Empty fallback is intentional:
+      # unset surfaces as a gh auth error instead of a compose warning.
+      GH_TOKEN: ${FASTMON_GH_TOKEN:-}
     volumes:
-      # Workspace on a named volume — the CLONE MODE fallback, overridden by the
+      # Workspace on a named volume: the CLONE MODE fallback, overridden by the
       # docker-compose.mount.yml bind mount in the default MOUNT mode. The SAME
       # volume is mounted into the shop container below, so the shop always sees
       # the checkout you are editing, in either mode.
@@ -62,13 +68,13 @@ services:
       # vendor/ on its own volume in BOTH modes: `composer install` here pulls
       # the full shopware/core + storefront (for phpunit/phpstan against the real
       # classes, no kernel needed). Keeps that Linux install off virtiofs and
-      # separate from any host copy. NOT the same volume the shop sees — see the
+      # separate from any host copy. NOT the same volume the shop sees: see the
       # shopware service.
       - fastmon-shopware-plugin-vendor:/workspaces/shopware_plugin/vendor
       - fastmon-shopware-plugin-composer-cache:/home/dev/.cache/composer
       # Sibling fastmon backend, read-only: the tracker source (tracker/), the
       # collector (/c/) and source (/s/) routes the plugin's snippets talk to,
-      # and the beacon schema — grep-able without leaving the container.
+      # and the beacon schema: grep-able without leaving the container.
       - ../../backend:/workspaces/backend:ro
       # The two reference implementations this plugin draws on, read-only:
       # the Shopware *app* (manifest + Twig snippets + app server) and the
@@ -93,12 +99,12 @@ services:
   # pinned against tag re-pushes; bump deliberately via
   # `docker pull dockware/shopware:<tag>` + inspect, or set FASTMON_SHOPWARE_TAG
   # in your host shell to test against another release (drops the digest pin).
-  # dockware/dev is the legacy image for < 6.7 — do not use it for 6.7+.
+  # dockware/dev is the legacy image for < 6.7: do not use it for 6.7+.
   #
   # Defaults inside: admin http://localhost/admin (admin / shopware), MySQL
   # root/root, SSH dockware/dockware on :22 (used by fastmon-sw), Mailcatcher
   # on :1080. The image has a built-in healthcheck that turns healthy once the
-  # boot scripts finish — `docker compose up --wait` blocks on it.
+  # boot scripts finish: `docker compose up --wait` blocks on it.
   shopware:
     image: ${FASTMON_SHOPWARE_IMAGE:-dockware/shopware:6.7.13.1@sha256:f69731eea1cdd023f0086322e4eaa115a8b2597a31909e654b768601c2747ead}
     container_name: fastmon-shopware
@@ -112,7 +118,7 @@ services:
       # boot, point the sales channel at it:
       #   fastmon-sw sales-channel:update:domain http://localhost:8090
       - "${FASTMON_SHOP_PORT:-80}:80"
-      # Mailcatcher UI — every mail the shop sends (order confirmations, …).
+      # Mailcatcher UI: every mail the shop sends (order confirmations, …).
       - "${FASTMON_SHOP_MAIL_PORT:-1080}:1080"
     environment:
       XDEBUG_ENABLED: "0"
@@ -123,12 +129,12 @@ services:
       # for the host bind (mount mode). The directory name MUST equal the
       # plugin's technical name (the class name in composer.json's
       # shopware-plugin-class). FastmonCollector is a placeholder until the
-      # plugin is named — override with FASTMON_PLUGIN_NAME in your host shell,
+      # plugin is named: override with FASTMON_PLUGIN_NAME in your host shell,
       # here and in docker-compose.mount.yml it is used via interpolation.
       - fastmon-shopware-plugin-src:/var/www/html/custom/plugins/${FASTMON_PLUGIN_NAME:-FastmonCollector}
       # SHADOW the plugin's vendor/ with an empty volume inside the shop. The dev
       # container's vendor/ will contain a full second copy of shopware/core (dev
-      # dependency for phpunit/phpstan) — if the shop's autoloader ever saw it,
+      # dependency for phpunit/phpstan): if the shop's autoloader ever saw it,
       # classes would be defined twice. Runtime deps the plugin really needs at
       # shop level go through Shopware's own composer, not this directory.
       - fastmon-shopware-plugin-shop-vendor:/var/www/html/custom/plugins/${FASTMON_PLUGIN_NAME:-FastmonCollector}/vendor

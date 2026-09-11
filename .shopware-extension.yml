@@ -3,6 +3,20 @@
 # compatibility_date pins which generation of validation rules applies; bump it deliberately.
 compatibility_date: "2026-08-30"
 
+# The one finding the store validator reports, silenced on purpose and scoped to the one
+# file, so the check stays at zero and the next finding is visible instead of being read
+# as the usual noise.
+#
+# `twig-linter/image-empty-alt` fires on the no-JS pixel in base.html.twig. Its own
+# message names the case: an empty `alt` is what a decorative image is supposed to carry,
+# and a 1x1 beacon carrying no content is as decorative as an image gets. The rule cannot
+# tell that from an image whose description was forgotten. Satisfying it would mean
+# describing a tracking pixel to a screen reader, which is worse markup, not better.
+validation:
+    ignore:
+        - identifier: "twig-linter/image-empty-alt"
+          path: "src/Resources/views/storefront/base.html.twig"
+
 build:
     zip:
         composer:

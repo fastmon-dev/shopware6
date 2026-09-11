@@ -4,3 +4,17 @@ parameters:
         - src
         - tests
     treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # `EntitySearchResult` is annotated deprecated for one reason: on 6.8 it stops
+        # extending EntityCollection and keeps extending Struct. That makes every call on
+        # it, `getEntities()` included, a deprecated-class call, and `search()` has no
+        # other return type - so this fires for any DAL read in any plugin. The method
+        # itself survives the change. Reported by `shopware-cli extension validate
+        # --check-against highest`, not by this configuration, hence reportUnmatched.
+        -
+            identifier: method.deprecatedClass
+            message: '#Shopware\\Core\\Framework\\DataAbstractionLayer\\Search\\EntitySearchResult#'
+            paths:
+                - src/Connection/ConnectionStore.php
+                - tests
+            reportUnmatched: false

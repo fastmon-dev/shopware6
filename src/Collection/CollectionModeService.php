@@ -3,7 +3,7 @@
 namespace Fastmon\Collector\Collection;
 
 use Fastmon\Collector\Api\FastmonClient;
-use Fastmon\Collector\Connection\ConnectionService;
+use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
@@ -34,7 +34,7 @@ final class CollectionModeService
 {
     public function __construct(
         private readonly FastmonClient $client,
-        private readonly ConnectionService $connection,
+        private readonly AccessTokenProvider $tokens,
         private readonly ConnectionStore $store,
         private readonly ConfigResolver $config,
         private readonly EndpointChecker $checker,
@@ -53,6 +53,12 @@ final class CollectionModeService
      */
     public function describe(?CollectionMode $probeMode = null, string $customDomain = ''): array
     {
+        // Before anything is read locally: fastmon owns where the beacon goes. The
+        // endpoint is baked into the bundle it serves, so a mode changed in the dashboard
+        // has already taken effect in every browser, and a panel reporting the shop's
+        // stored value would be describing a setup that no longer exists.
+        $this->pullFromFastmon();
+
         $storefront = $this->config->storefront(null);
         $connection = $this->store->load();
 
@@ -95,11 +101,11 @@ final class CollectionModeService
     {
         $applicationId = $this->requireApplicationId();
 
-        $secret = $this->client->rotateProxySecret(
+        $secret = $this->tokens->call(fn (string $token): string => $this->client->rotateProxySecret(
             $this->config->apiBaseUrl(),
-            $this->connection->requireToken(),
+            $token,
             $applicationId
-        );
+        ));
 
         $this->logger->info('fastmon: proxy secret generated for application ' . $applicationId);
 
@@ -118,7 +124,6 @@ final class CollectionModeService
         // checker would answer with an empty list - and an empty list surfaces as a
         // not-ready refusal naming no origin at all, which tells the merchant nothing.
         $applicationId = $this->requireApplicationId();
-        $token = $this->connection->requireToken();
 
         $endpoint = '';
 
@@ -142,18 +147,82 @@ final class CollectionModeService
 
         // fastmon first: it owns where the beacon goes, and a failure there must not leave
         // the storefront emitting a script URL for a mode the bundle knows nothing about.
-        $this->client->setCollectorMode(
+        $this->tokens->call(fn (string $token): array => $this->client->setCollectorMode(
             $this->config->apiBaseUrl(),
             $token,
             $applicationId,
             $mode->value,
             $mode === CollectionMode::CUSTOM ? $endpoint : null,
-        );
+        ));
 
+        $this->store($mode, $endpoint);
+    }
+
+    /**
+     * Take fastmon's collector settings and make them the shop's.
+     *
+     * One way only, and deliberately: the merchant can change the mode in either place,
+     * but only fastmon's copy decides where the served bundle posts. Writing the other
+     * direction here would silently undo a change made in the dashboard.
+     *
+     * A failure is not worth failing the panel over. The stored values are what the
+     * storefront is already emitting, so reporting them while fastmon is unreachable is
+     * the honest answer rather than a stale one.
+     */
+    private function pullFromFastmon(): void
+    {
+        $applicationId = $this->store->load()->applicationId;
+
+        if ($applicationId === '') {
+            return;
+        }
+
+        try {
+            $application = $this->tokens->call(fn (string $token): array => $this->client->fetchApplication(
+                $this->config->apiBaseUrl(),
+                $token,
+                $applicationId
+            ));
+        } catch (\Throwable $e) {
+            $this->logger->warning('fastmon: could not read the collector mode: ' . $e->getMessage());
+
+            return;
+        }
+
+        $mode = CollectionMode::tryFrom($application['collectorMode']);
+
+        if ($mode === null) {
+            // A mode this release does not know. Leaving the shop on what it has beats
+            // guessing, and the storefront keeps emitting something that works.
+            return;
+        }
+
+        $endpoint = $mode === CollectionMode::CUSTOM ? $application['collectorEndpoint'] : '';
+        $storefront = $this->config->storefront(null);
+
+        if ($storefront->collectionMode === $mode && $storefront->customDomain === $endpoint) {
+            return;
+        }
+
+        $this->store($mode, $endpoint);
+    }
+
+    /**
+     * Write the mode and the endpoint the storefront templates read.
+     *
+     * The pair is written together because it is one decision: a mode change that left a
+     * stale endpoint behind would point every beacon at the wrong host.
+     */
+    private function store(CollectionMode $mode, string $endpoint): void
+    {
+        // Both decide the `<script src>` the templates render, so Shopware invalidating
+        // the pages that carry it is the point, not a side effect to avoid.
         $this->systemConfigService->set(ConfigResolver::DOMAIN . 'collectionMode', $mode->value);
         $this->systemConfigService->set(ConfigResolver::DOMAIN . 'customCollectorDomain', $endpoint);
 
-        $this->logger->info('fastmon: collection mode set to ' . $mode->value . ($endpoint !== '' ? ' (' . $endpoint . ')' : ''));
+        $this->logger->info(
+            'fastmon: collection mode is now ' . $mode->value . ($endpoint !== '' ? ' (' . $endpoint . ')' : '')
+        );
     }
 
     /**

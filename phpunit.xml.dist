@@ -14,7 +14,11 @@
         <!-- The storefront domain the test database is installed with, and the host
              every storefront request in the integration suite is sent to. -->
         <env name="APP_URL" value="http://localhost:8000"/>
-        <env name="APP_SECRET" value="s$cretf0rt3st"/>
+        <!-- At least 32 bytes: 6.7 signs the admin API's JWTs with an HMAC over this
+             value, and lcobucci/jwt refuses a key shorter than 256 bits. In CI the
+             workflow's own APP_SECRET wins, because env here does not override one
+             that is already set. -->
+        <env name="APP_SECRET" value="s$cretf0rt3st-and-256-bits-of-it"/>
         <env name="SHELL_VERBOSITY" value="-1"/>
         <env name="SYMFONY_DEPRECATIONS_HELPER" value="disabled"/>
     </php>

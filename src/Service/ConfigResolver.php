@@ -5,7 +5,7 @@ namespace Fastmon\Collector\Service;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Dto\ServerTimingConfig;
 use Fastmon\Collector\Dto\StorefrontConfig;
-use Fastmon\Collector\ServerTiming\ServerTimingHeaderBuilder;
+use Shopware\Core\DevOps\Environment\EnvironmentHelper;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /**
@@ -40,6 +40,17 @@ final class ConfigResolver
 
     private const API_BASE_URL_ENV = 'FASTMON_API_BASE_URL';
 
+    /**
+     * The fastmon dashboard, which is a different host from the API and cannot be derived
+     * from it. Not a setting, for the same reason the API base is not: there is one
+     * production fastmon, and a wrong value here is a link that goes nowhere.
+     *
+     * `FASTMON_APP_BASE_URL` overrides it, for developing against a local dashboard.
+     */
+    public const APP_BASE_URL = 'https://app.fastmon.eu';
+
+    private const APP_BASE_URL_ENV = 'FASTMON_APP_BASE_URL';
+
     public function __construct(
         private readonly SystemConfigService $systemConfigService,
     ) {
@@ -54,8 +65,8 @@ final class ConfigResolver
 
         return new StorefrontConfig(
             active: $this->bool('active', $salesChannelId, true),
-            trackerId: $this->string('trackerId', null),
-            pixelId: $this->string('pixelId', null),
+            sourceHash: $this->string('sourceHash', null),
+            collectorHash: $this->string('collectorHash', null),
             scriptBaseUrl: $this->scriptBaseUrl($mode, $customDomain),
             errorBootstrap: $this->bool('enableErrorBootstrap', $salesChannelId, true),
             pixel: $this->bool('enablePixel', $salesChannelId, true),
@@ -86,23 +97,32 @@ final class ConfigResolver
     {
         return new ServerTimingConfig(
             enabled: $this->bool('serverTiming', $salesChannelId, true),
-            reportTotal: $this->bool('serverTimingTotal', $salesChannelId, true),
-            reportCacheStatus: $this->bool('serverTimingCacheStatus', $salesChannelId, true),
-            reportPageType: $this->bool('serverTimingPageType', $salesChannelId, true),
-            reportRender: $this->bool('serverTimingRender', $salesChannelId, true),
-            reportServer: $this->bool('serverTimingServer', $salesChannelId, true),
+            reportHost: $this->bool('serverTimingHost', $salesChannelId, false),
             reportLoggedIn: $this->bool('serverTimingLoggedIn', $salesChannelId, false),
-            blockedLayers: $this->blockedLayers($salesChannelId),
         );
     }
 
     public function apiBaseUrl(): string
     {
-        $override = $_SERVER[self::API_BASE_URL_ENV] ?? getenv(self::API_BASE_URL_ENV);
+        return $this->baseUrl(self::API_BASE_URL_ENV, self::API_BASE_URL);
+    }
 
-        return \is_string($override) && trim($override) !== ''
-            ? rtrim(trim($override), '/')
-            : self::API_BASE_URL;
+    /** Where the merchant reads what this shop is collecting. */
+    public function appBaseUrl(): string
+    {
+        return $this->baseUrl(self::APP_BASE_URL_ENV, self::APP_BASE_URL);
+    }
+
+    private function baseUrl(string $variable, string $default): string
+    {
+        // Through Shopware's helper rather than the superglobal: it reads `$_SERVER` and
+        // `$_ENV`, and it is the one place core lets an installation rewrite what an
+        // environment variable means.
+        $override = EnvironmentHelper::getVariable($variable, '');
+
+        return \is_scalar($override) && trim((string) $override) !== ''
+            ? rtrim(trim((string) $override), '/')
+            : $default;
     }
 
     /**
@@ -125,26 +145,4 @@ final class ConfigResolver
         return \is_scalar($value) ? trim((string) $value) : '';
     }
 
-    /**
-     * Comma separated in the admin. A value that was never written falls back to the
-     * built-in list, so a plugin update can extend the defaults; an explicitly emptied
-     * field means the shop wants every layer in the header, `unknown` included.
-     *
-     * @return string[]
-     */
-    private function blockedLayers(?string $salesChannelId): array
-    {
-        $configured = $this->systemConfigService->get(self::DOMAIN . 'blockedServerTimingLayers', $salesChannelId);
-
-        if (!\is_string($configured)) {
-            return ServerTimingHeaderBuilder::DEFAULT_BLOCKED_LAYERS;
-        }
-
-        $names = array_map(
-            static fn (string $name): string => mb_strtolower(trim($name)),
-            explode(',', $configured)
-        );
-
-        return array_values(array_filter($names, static fn (string $name): bool => $name !== ''));
-    }
 }

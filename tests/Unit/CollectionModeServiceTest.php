@@ -4,26 +4,28 @@ namespace Fastmon\Collector\Tests\Unit;
 
 use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
+use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Collection\CollectionModeService;
 use Fastmon\Collector\Collection\CollectionNotReadyException;
 use Fastmon\Collector\Collection\DomainCheckResult;
 use Fastmon\Collector\Collection\EndpointChecker;
-use Fastmon\Collector\Connection\ConnectionService;
+use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
-use Fastmon\Collector\Connection\DeviceAuthorizationSession;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 class CollectionModeServiceTest extends TestCase
 {
-    /** @var array<string, mixed> */
-    private array $stored = [];
+    use StoresConnection;
+
 
     /** @var list<string> */
     private array $calls = [];
@@ -101,8 +103,8 @@ class CollectionModeServiceTest extends TestCase
         // Without an application there are no hashes to probe for. The checker would
         // answer with an empty list, and that would surface as "not ready" naming no
         // origin at all - so the clear message has to come first.
-        $this->stored[ConfigResolver::DOMAIN . 'applicationId'] = '';
-        $this->stored[ConfigResolver::DOMAIN . 'trackerId'] = '';
+        $this->row['applicationId'] = '';
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = '';
         $service = $this->service(['https://shop.example' => true]);
 
         try {
@@ -154,9 +156,47 @@ class CollectionModeServiceTest extends TestCase
         self::assertTrue($probed['ready']);
     }
 
+    public function testAModeChangedInFastmonIsAdoptedRatherThanIgnored(): void
+    {
+        // fastmon owns where the beacon goes: the endpoint is baked into the bundle it
+        // serves, so a mode switched in the dashboard has already taken effect in every
+        // browser. A panel reporting the shop's stored value would describe a setup that
+        // no longer exists, and the storefront would keep loading the script from the
+        // wrong host.
+        $service = $this->service(['https://shop.example' => true], collectorMode: 'relative');
+
+        self::assertSame('relative', $service->describe()['mode']);
+        self::assertSame('relative', $this->storedValue('collectionMode'));
+    }
+
+    public function testACustomEndpointComesAcrossWithTheMode(): void
+    {
+        // The pair is one decision. A mode adopted without its endpoint would point every
+        // beacon at the wrong host.
+        $service = $this->service(
+            ['https://shop.example' => true],
+            collectorMode: 'custom',
+            collectorEndpoint: 'https://metrics.example.com'
+        );
+
+        self::assertSame('custom', $service->describe()['mode']);
+        self::assertSame('https://metrics.example.com', $this->storedValue('customCollectorDomain'));
+    }
+
+    public function testAModeThisReleaseDoesNotKnowLeavesTheShopAlone(): void
+    {
+        // Guessing would be worse than staying: what is stored is what the storefront is
+        // already emitting, and it works.
+        $this->config[ConfigResolver::DOMAIN . 'collectionMode'] = 'default';
+        $service = $this->service(['https://shop.example' => true], collectorMode: 'something-new');
+
+        self::assertSame('default', $service->describe()['mode']);
+        self::assertSame('default', $this->storedValue('collectionMode'));
+    }
+
     private function storedValue(string $key): mixed
     {
-        return $this->stored[ConfigResolver::DOMAIN . $key] ?? null;
+        return $this->config[ConfigResolver::DOMAIN . $key] ?? null;
     }
 
     /**
@@ -168,26 +208,22 @@ class CollectionModeServiceTest extends TestCase
      *
      * @param array<string, bool> $origins origin => whether both probe paths answer there
      */
-    private function service(array $origins): CollectionModeService
+    private function service(array $origins, string $collectorMode = 'default', ?string $collectorEndpoint = null): CollectionModeService
     {
-        $this->stored += [
-            ConfigResolver::DOMAIN . 'apiToken' => 'fm_token',
-            ConfigResolver::DOMAIN . 'applicationId' => 'app-1',
-            ConfigResolver::DOMAIN . 'trackerId' => 'srchash',
-            ConfigResolver::DOMAIN . 'pixelId' => 'colhash',
-        ];
+        $this->row += ['manualToken' => 'fm_token', 'applicationId' => 'app-1'];
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'srchash';
+        $this->config[ConfigResolver::DOMAIN . 'collectorHash'] = 'colhash';
 
-        $systemConfig = $this->createMock(SystemConfigService::class);
-        $systemConfig->method('get')->willReturnCallback(fn (string $k): mixed => $this->stored[$k] ?? null);
-        $systemConfig->method('set')->willReturnCallback(function (string $k, mixed $v): void {
-            $this->stored[$k] = $v;
-        });
+        $database = $this->createMock(DbalConnection::class);
+        $database->method('fetchFirstColumn')->willReturn(array_keys($origins));
+
+        $systemConfig = $this->systemConfig();
 
         // One client serves both fastmon's API and the probed origins, told apart by path:
         // `/v1/…` is fastmon, `/s/…` and `/c/…` are the proxy paths on a storefront.
         $httpClient = new MockHttpClient(
             /** @param array<string, mixed> $options */
-            function (string $method, string $url, array $options) use ($origins): MockResponse {
+            function (string $method, string $url, array $options) use ($origins, $collectorMode, $collectorEndpoint): MockResponse {
                 $path = (string) parse_url($url, \PHP_URL_PATH);
 
                 if (str_starts_with($path, '/v1/')) {
@@ -199,6 +235,7 @@ class CollectionModeServiceTest extends TestCase
                     return new MockResponse(json_encode([
                         'id' => 'app-1', 'name' => 'Shopware', 'source_hash' => 'srchash',
                         'collector_hash' => 'colhash', 'environment' => 'prod', 'site_count' => 1,
+                        'collector_mode' => $collectorMode, 'collector_endpoint' => $collectorEndpoint,
                     ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
                 }
 
@@ -219,15 +256,20 @@ class CollectionModeServiceTest extends TestCase
         );
 
         $client = new FastmonClient($httpClient);
-        $store = new ConnectionStore($systemConfig);
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
-
-        $database = $this->createMock(DbalConnection::class);
-        $database->method('fetchFirstColumn')->willReturn(array_keys($origins));
 
         return new CollectionModeService(
             $client,
-            new ConnectionService($client, $store, new DeviceAuthorizationSession($systemConfig), $config, new NullLogger()),
+            // A pasted key is the simplest credential to run these against: it needs no
+            // token endpoint, so every response below is one this service asked for.
+            new AccessTokenProvider(
+                new FastmonOAuthClient($httpClient),
+                $store,
+                $config,
+                new LockFactory(new InMemoryStore()),
+                new NullLogger(),
+            ),
             $store,
             $config,
             new EndpointChecker($httpClient, $store, $database),

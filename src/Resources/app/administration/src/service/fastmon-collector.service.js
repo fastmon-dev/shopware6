@@ -19,12 +19,12 @@ class FastmonCollectorService extends ApiService {
         return this.read('/status', { verify: verify ? 1 : 0 });
     }
 
-    startDeviceAuthorization() {
-        return this.write('/connect/device');
+    startAuthorization(redirectUri) {
+        return this.write('/connect/start', { redirectUri });
     }
 
-    pollDeviceAuthorization(handle) {
-        return this.write('/connect/device/poll', { handle });
+    completeAuthorization({ code, state, error }) {
+        return this.write('/connect/callback', { code, state, error });
     }
 
     connectWithToken(token) {
@@ -53,10 +53,6 @@ class FastmonCollectorService extends ApiService {
 
     getSites() {
         return this.read('/sites');
-    }
-
-    refreshApplication() {
-        return this.write('/applications/refresh');
     }
 
     getCollectionStatus(probeMode = null, domain = '') {
@@ -101,6 +97,7 @@ class FastmonCollectorService extends ApiService {
             error.pendingApproval = data.pendingApproval === true;
             error.permission = typeof data.permission === 'string' ? data.permission : '';
             error.notReady = data.notReady === true;
+            error.unsupported = data.unsupported === true;
             error.domains = data.domains || [];
 
             return Promise.reject(error);

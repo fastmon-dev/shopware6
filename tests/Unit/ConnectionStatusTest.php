@@ -1,0 +1,241 @@
+<?php declare(strict_types=1);
+
+namespace Fastmon\Collector\Tests\Unit;
+
+use DateTimeImmutable;
+use Fastmon\Collector\Api\FastmonClient;
+use Fastmon\Collector\Api\FastmonOAuthClient;
+use Fastmon\Collector\Connection\AccessTokenProvider;
+use Fastmon\Collector\Connection\ConnectionStatus;
+use Fastmon\Collector\Connection\ConnectionStore;
+use Fastmon\Collector\Service\ConfigResolver;
+use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
+use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+
+/**
+ * What the panel is told, which is a different question from how the shop connects.
+ */
+class ConnectionStatusTest extends TestCase
+{
+    use StoresConnection;
+
+    private const BASE = 'https://api.fastmon.eu';
+    private const ADMIN = 'https://shop.example.com/admin';
+
+    public function testTheStatusNeverReturnsTheCredential(): void
+    {
+        $this->connected();
+
+        $status = $this->reporter()->describe();
+
+        self::assertTrue($status['connected']);
+        self::assertTrue($status['provisioned']);
+        self::assertSame('app', $status['connectionKind']);
+        self::assertContains('app:write', $status['scopes']);
+        self::assertSame([], $status['missingScopes']);
+        self::assertNotContains('fmt_live', $status, 'a stored credential must not be readable through the admin API');
+        self::assertNotContains('fmr_live', $status);
+    }
+
+    public function testThePanelIsGivenAWayIntoFastmonItself(): void
+    {
+        // Assembled on this side, so the dashboard's routes are written down once. The
+        // panel deliberately shows no measurements, so the link is how a merchant gets
+        // to them.
+        $this->connected();
+
+        $status = $this->reporter()->describe();
+
+        self::assertSame('https://app.fastmon.eu/org/org-7/dashboard', $status['dashboardUrl']);
+        self::assertSame('https://app.fastmon.eu/org/org-7/applications', $status['applicationsUrl']);
+    }
+
+    public function testWithoutAnOrganizationThereIsNoLinkToOffer(): void
+    {
+        // Both pages live under an organization. A link to nothing is worse than none.
+        $this->row = ['manualToken' => 'fmo_key'];
+
+        $status = $this->reporter()->describe();
+
+        self::assertSame('', $status['dashboardUrl']);
+        self::assertSame('', $status['applicationsUrl']);
+    }
+
+    public function testAScopeTheApproverDidNotTickIsNamedBeforeItFails(): void
+    {
+        // The approver may grant less than was asked for, and their role cuts the list
+        // again. Without this the merchant meets it as an API error on whichever button
+        // needed the permission.
+        $this->connected();
+        $this->row['scopes'] = 'org:read app:write site:read';
+
+        self::assertSame(['app:read'], $this->reporter()->describe()['missingScopes']);
+    }
+
+    public function testAPastedKeyIsNotReportedAsMissingEverything(): void
+    {
+        // A key carries its permissions on fastmon's side and never tells the shop what
+        // they are, so an empty scope list is "unknown", not "none".
+        $this->row = ['manualToken' => 'fmo_key'];
+
+        $status = $this->reporter()->describe();
+
+        self::assertSame('token', $status['connectionKind']);
+        self::assertSame([], $status['missingScopes']);
+    }
+
+    public function testARejectedCredentialIsReportedAsSuchRatherThanAsDisconnected(): void
+    {
+        $this->connected();
+
+        $status = $this->reporter(api: [new MockResponse('', ['http_code' => 401])], oauth: [
+            // The retry after a 401: the token is refreshed once before giving up.
+            $this->discovery(),
+            new MockResponse(json_encode(['error' => 'invalid_grant'], \JSON_THROW_ON_ERROR), ['http_code' => 400]),
+        ])->describe(verify: true);
+
+        self::assertTrue($status['connected']);
+        self::assertFalse($status['tokenValid']);
+        self::assertNotSame('', $status['error']);
+    }
+
+    public function testATransientFailureDoesNotInvalidateAWorkingConnection(): void
+    {
+        // Telling a merchant to reconnect because fastmon was briefly unreachable would
+        // cost them a connection that is fine.
+        $this->connected();
+
+        $status = $this->reporter(api: [new MockResponse('', ['http_code' => 503])])->describe(verify: true);
+
+        self::assertTrue($status['connected']);
+        self::assertNull($status['tokenValid']);
+        self::assertNotSame('', $status['error']);
+    }
+
+    public function testAConnectionThatNoLongerReachesTheOrganizationIsNotReportedAsHealthy(): void
+    {
+        // It keeps working for everything except this shop's data, which would look like
+        // a healthy connection collecting nothing.
+        $this->connected();
+
+        $status = $this->reporter(api: [
+            $this->organizations([['id' => 'org-other', 'name' => 'Somebody else']]),
+        ])->describe(verify: true);
+
+        self::assertFalse($status['tokenValid']);
+        self::assertStringContainsString('no longer reaches', $status['error']);
+    }
+
+    public function testAnApplicationThatIsNotThereIsReported(): void
+    {
+        // A working credential says nothing about the application still existing. It can
+        // be deleted in the dashboard, or refer to an id from a different fastmon
+        // instance - and the storefront then keeps serving a snippet that collects
+        // nothing.
+        $this->connected(applicationId: 'app-gone');
+
+        $status = $this->reporter(api: [
+            $this->organizations([['id' => 'org-7', 'name' => 'Acme']]),
+            new MockResponse(json_encode(
+                ['error' => ['code' => 'resource_not_found', 'message' => 'No such application']],
+                \JSON_THROW_ON_ERROR
+            ), ['http_code' => 404]),
+        ])->describe(verify: true);
+
+        self::assertTrue($status['tokenValid']);
+        self::assertFalse($status['applicationValid']);
+        self::assertStringContainsString('could not be found', $status['error']);
+    }
+
+    public function testARotatedSourceHashIsAdoptedRatherThanReported(): void
+    {
+        // Rotating in the dashboard invalidates the embed everywhere it is deployed, so a
+        // shop still serving the old id collects nothing while looking perfectly fine.
+        // fastmon owns the hashes: the shop takes what it is told, instead of asking the
+        // merchant to resolve a disagreement they did not cause.
+        $this->connected(applicationId: 'app-1');
+
+        $status = $this->reporter(api: [
+            $this->organizations([['id' => 'org-7', 'name' => 'Acme']]),
+            new MockResponse(json_encode([
+                'id' => 'app-1', 'name' => 'Shopware',
+                'source_hash' => 'newhash', 'collector_hash' => 'newpixel',
+            ], \JSON_THROW_ON_ERROR), ['http_code' => 200]),
+        ])->describe(verify: true);
+
+        self::assertTrue($status['applicationValid']);
+        self::assertSame('', $status['error']);
+
+        // And the storefront is emitting the new ones from here on. These two are the
+        // values the pages render, which is why they are the pair that stayed in
+        // `system_config`: Shopware dropping the cached pages that still carry the old
+        // id is the point rather than a side effect to avoid.
+        self::assertSame('newhash', $this->config[ConfigResolver::DOMAIN . 'sourceHash']);
+        self::assertSame('newpixel', $this->config[ConfigResolver::DOMAIN . 'collectorHash']);
+        self::assertSame('newhash', $status['sourceHash']);
+    }
+
+    private function connected(string $applicationId = ''): void
+    {
+        $this->row = [
+            'clientId' => 'dyn_1',
+            'redirectUri' => self::ADMIN,
+            'refreshToken' => 'fmr_live',
+            'scopes' => 'org:read app:read app:write site:read',
+            'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + 600)),
+            'accessToken' => 'fmt_live',
+            'accountEmail' => 'merchant@example.com',
+            'organizationId' => 'org-7',
+            'organizationName' => 'Acme',
+            'applicationId' => $applicationId,
+        ];
+        $this->config[ConfigResolver::DOMAIN . 'sourceHash'] = 'src123';
+    }
+
+    private function discovery(): MockResponse
+    {
+        return new MockResponse(json_encode([
+            'issuer' => self::BASE,
+            'authorization_endpoint' => self::BASE . '/auth/app/authorize',
+            'token_endpoint' => self::BASE . '/auth/app/token',
+            'registration_endpoint' => self::BASE . '/auth/app/register',
+            'revocation_endpoint' => self::BASE . '/auth/app/revoke',
+        ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
+    }
+
+    /**
+     * @param list<array{id: string, name: string}> $organizations
+     */
+    private function organizations(array $organizations): MockResponse
+    {
+        return new MockResponse(
+            json_encode(['data' => $organizations], \JSON_THROW_ON_ERROR),
+            ['http_code' => 200]
+        );
+    }
+
+    /**
+     * @param list<MockResponse> $api
+     * @param list<MockResponse> $oauth
+     */
+    private function reporter(array $api = [], array $oauth = []): ConnectionStatus
+    {
+        $systemConfig = $this->systemConfig();
+        $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
+        $config = new ConfigResolver($systemConfig);
+        $oauthClient = new FastmonOAuthClient(new MockHttpClient($oauth));
+
+        return new ConnectionStatus(
+            new FastmonClient(new MockHttpClient($api)),
+            $store,
+            new AccessTokenProvider($oauthClient, $store, $config, new LockFactory(new InMemoryStore()), new NullLogger()),
+            $config,
+            new NullLogger(),
+        );
+    }
+}
