@@ -29,24 +29,31 @@ so there is nothing to add by hand and nothing to revisit when a domain is added
 
 ## Installation
 
-With Composer:
+With Composer. The build in the middle is not optional: the package carries no built
+administration assets, because they are generated rather than committed, and without
+them the configuration page has no panel at all rather than an old one.
 
 ```bash
 composer require fastmon/shopware-collector
 bin/console plugin:refresh
 bin/console plugin:install --activate FastmonCollector
+
+bin/console bundle:dump
+bin/build-administration.sh          # or `composer run build:js` on 6.7
+bin/console assets:install
+
 bin/console cache:clear
 ```
 
-The Composer package carries no built administration assets, because they are generated
-and not committed. Run the project's own JS build after installing
-(`bin/build-administration.sh`, or `composer run build:js` on 6.7).
+Only the administration is built. The storefront side of this plugin is Twig, so there
+is nothing to compile there.
 
 Or as a zip, for a shop that is not deployed with Composer: download
 `FastmonCollector-X.Y.Z.zip` from the
 [releases](https://github.com/fastmon-dev/shopware6/releases), upload it under *Extensions
--> My extensions -> Upload extension*, and run the same three console lines. The zip
-carries the built administration, so there is no build step.
+-> My extensions -> Upload extension*, then `plugin:refresh`, `plugin:install --activate`
+and `cache:clear` as above. The zip carries the built administration, so the three build
+lines fall away.
 
 Then open *Extensions -> My extensions -> fastmon.eu -> Configure* and press **Connect to
 fastmon**.
