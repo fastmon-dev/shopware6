@@ -14,6 +14,7 @@ Every change passes `composer ci` before it is committed. No exceptions, no `--n
 | `composer test-integration` | integration suite, boots Shopware, needs a project (see README, *Development*) | before opening a PR that touches anything Shopware-facing |
 | `composer cs-fix` | apply the style fixes `cs-check` reported | as needed |
 | `shopware-cli extension validate --full .` | the store validator | before a release |
+| `.github/workflows/release.yml` | the tag guard, the gates, the zip, the Release, Packagist | on a `v*` tag, see *Releasing* |
 
 CI (`.github/workflows/ci.yml`) runs the same gates on PHP 8.2 to 8.5 against Shopware 6.6 and 6.7. A
 red leg is a bug in the change, not in the matrix.
@@ -60,3 +61,34 @@ red leg is a bug in the change, not in the matrix.
   too long to live in a class header: a decision spanning several classes, or one that reads
   as an oversight from any single one of them. The class keeps a short pointer, so rule 6
   still holds where it matters. User documentation lives in the README until it outgrows it.
+
+## Releasing
+
+The version lives in `composer.json` and nowhere else, and it is bumped **last**: a
+release PR `chore(release): X.Y.Z` changes that field and nothing unrelated to the
+release. Between releases `main` carries the version that was last released, so no PR is
+ever blocked on nobody having bumped after the previous one. CI checks that the new value
+is higher than the base branch and not already tagged.
+
+Then:
+
+```bash
+git tag vX.Y.Z <merge commit>
+git push origin vX.Y.Z
+```
+
+`release.yml` takes it from there: it refuses a tag that disagrees with `composer.json`,
+runs the same gates a pull request runs, builds and validates the zip, creates the GitHub
+Release with it attached, and tells Packagist. Watch the run, then check both ends: the
+zip on the [releases page](https://github.com/fastmon-dev/shopware6/releases) and the
+version on
+[packagist.org](https://packagist.org/packages/fastmon/shopware-collector).
+
+**When the guard refuses the tag**, delete it (`git push origin :refs/tags/vX.Y.Z`), fix
+`composer.json` on `main`, and tag again. **A tag that has been published is never moved
+or reused.** Packagist and the Composer caches keep the tree they saw first, so a
+corrected tag of the same name is a version that is one thing here and another thing
+everywhere else. Release the next patch instead.
+
+A tag of the shape `vX.Y.Z-rc.N` becomes a GitHub pre-release, and Composer resolves it
+only for someone who asked for it by constraint.

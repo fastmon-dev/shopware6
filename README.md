@@ -8,7 +8,8 @@ visitors and reports them to [fastmon.eu](https://fastmon.eu). EU-hosted, cookie
 | Shopware | 6.6.x or 6.7.x |
 | PHP | 8.2 or newer |
 | Licence | MIT |
-| Support | [fastmon.eu/support](https://fastmon.eu/support) for the service, this repository's issues for the plugin |
+| Support | [fastmon.eu/en/contact](https://fastmon.eu/en/contact/) for the service, this repository's issues for the plugin |
+| Download | [releases](https://github.com/fastmon-dev/shopware6/releases) for the zip, [packagist](https://packagist.org/packages/fastmon/shopware-collector) for Composer |
 | Multi-node shops | a shared lock store in `LOCK_DSN`, see *Connecting* |
 | Per-layer backend timings (optional) | Tideways PHP extension 5.23 or newer; nothing else here needs an extension |
 
