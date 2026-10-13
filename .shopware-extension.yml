@@ -41,3 +41,7 @@ build:
                     - phpstan.neon.dist
                     - phpunit.xml.dist
                     - renovate.json
+                    - .gitattributes
+                    # Source maps of a storefront bundle the plugin does not have: its
+                    # storefront side is Twig, and the asset build leaves only the maps.
+                    - src/Resources/public/static

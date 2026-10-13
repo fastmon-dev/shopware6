@@ -116,6 +116,29 @@ jobs:
             exit 1
           fi
 
+      # Composer does not get this zip. Packagist hands out GitHub's zipball of the tag,
+      # which is `git archive`, and what it leaves out is decided by export-ignore in
+      # .gitattributes, a second list next to the excludes in .shopware-extension.yml. Two
+      # lists drift, so the two packages are compared file by file. The zip may carry what
+      # only packing produces: the built bundle under public/ and checksum.json. Anything
+      # else on one side only is a list that missed a file.
+      - name: Composer gets what the store gets
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive="dist/FastmonCollector-${version}.zip"
+
+          unzip -Z1 "$archive" \
+            | grep -v '/$' \
+            | sed 's|^FastmonCollector/||' \
+            | grep -v -e '^src/Resources/public/' -e '^checksum\.json$' \
+            | sort > store.txt
+          git archive "$GITHUB_REF_NAME" | tar -t | grep -v '/$' | sort > composer.txt
+
+          if ! diff store.txt composer.txt; then
+            echo "::error::The Composer package and the store zip differ (< store only, > Composer only). Bring export-ignore in .gitattributes and build.zip.pack.excludes in .shopware-extension.yml back in line."
+            exit 1
+          fi
+
       # gh is on the runner, so this needs no third-party action to keep pinned. A version
       # with a suffix (v0.2.0-rc.1) becomes a pre-release: GitHub marks it, and Composer
       # resolves it only for someone who asked for it by constraint.
