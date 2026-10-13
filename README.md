@@ -29,18 +29,23 @@ so there is nothing to add by hand and nothing to revisit when a domain is added
 
 ## Installation
 
-With Composer. The build in the middle is not optional: the package carries no built
-administration assets, because they are generated rather than committed, and without
-them the configuration page has no panel at all rather than an old one.
+With Composer:
 
 ```bash
 composer require fastmon/shopware-collector
 bin/console plugin:refresh
 bin/console plugin:install --activate FastmonCollector
-
-shopware-cli project admin-build . --only-extensions FastmonCollector
-
 bin/console cache:clear
+```
+
+Every release tag carries the built administration, the same bundle as the zip, so there
+is nothing to build. Two installs are the exception: `0.1.0` and `0.1.1`, released before
+the bundle went into the tag, and `dev-main`, which is the branch and never carries it.
+Without the bundle the configuration page has no panel at all rather than an old one, so
+those need the build:
+
+```bash
+shopware-cli project admin-build . --only-extensions FastmonCollector
 ```
 
 [shopware-cli](https://developer.shopware.com/docs/products/tools/cli/) is one binary and
@@ -48,17 +53,14 @@ it is what builds the released zip, so it is the same build a merchant gets from
 download. It installs the assets itself, and `--only-extensions` keeps it from rebuilding
 the whole administration for one plugin. Without it, the stock route is `bin/console
 bundle:dump`, then `bin/build-administration.sh` (`composer run build:js` on 6.7), then
-`bin/console assets:install`.
-
-Only the administration is built either way. The storefront side of this plugin is Twig,
-so there is nothing to compile there.
+`bin/console assets:install`. Only the administration is built either way. The storefront
+side of this plugin is Twig, so there is nothing to compile there.
 
 Or as a zip, for a shop that is not deployed with Composer: download
 `FastmonCollector-X.Y.Z.zip` from the
 [releases](https://github.com/fastmon-dev/shopware6/releases), upload it under *Extensions
 -> My extensions -> Upload extension*, then `plugin:refresh`, `plugin:install --activate`
-and `cache:clear` as above. The zip carries the built administration, so the build step
-falls away.
+and `cache:clear` as above.
 
 Then open *Extensions -> My extensions -> fastmon.eu -> Configure* and press **Connect to
 fastmon**.
