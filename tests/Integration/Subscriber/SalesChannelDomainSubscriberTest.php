@@ -79,9 +79,11 @@ final class SalesChannelDomainSubscriberTest extends TestCase
         // backslash is written twice, and each of those needs escaping again for LIKE.
         $type = '"type":"' . str_replace('\\', '\\\\\\\\', SyncSitesMessage::class) . '"';
 
-        return (int) $this->database->fetchOne(
+        $count = $this->database->fetchOne(
             'SELECT COUNT(*) FROM messenger_messages WHERE headers LIKE :type',
             ['type' => '%' . $type . '%']
         );
+
+        return is_numeric($count) ? (int) $count : 0;
     }
 }

@@ -45,7 +45,8 @@ final class SalesChannelDomainSubscriber implements EventSubscriberInterface
     public function onSalesChannelWritten(EntityWrittenEvent $event): void
     {
         foreach ($event->getPayloads() as $payload) {
-            if (($payload['active'] ?? false) === true) {
+            // 6.6 types the payloads looser than 6.7; the check is the same either way.
+            if (\is_array($payload) && ($payload['active'] ?? false) === true) {
                 $this->bus->dispatch(new SyncSitesMessage());
 
                 return;
