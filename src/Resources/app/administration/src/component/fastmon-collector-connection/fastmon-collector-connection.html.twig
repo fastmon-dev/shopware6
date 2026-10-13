@@ -94,9 +94,9 @@
                     @error="applyFastmonError"
                 />
 
-                {# Connected and linked. The domains fastmon has actually seen are the
-                   honest answer to "is it collecting?" in a way an id and a checkmark are
-                   not. #}
+                {# Connected and linked. The domains are read back from fastmon rather
+                   than from the sales channels, so the list is what fastmon will
+                   collect for, not what the shop thinks it told fastmon. #}
                 <template v-else>
                     <p class="fastmon-collector-connection__label">
                         {{ $t('fastmon-collector.summary.sites') }}

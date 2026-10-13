@@ -18,7 +18,7 @@
             "useToken": "Stattdessen mit einem API-Key verbinden",
             "tokenLabel": "fastmon-API-Key",
             "saveToken": "Key speichern",
-            "tokenScopes": "Der Key benötigt die Berechtigungen \"app:read\", \"app:write\", \"site:read\" und \"org:read\" und muss an die Organisation gebunden sein, an die dieser Shop melden soll. Dafür braucht es die Rolle Owner oder Member, denn ein Viewer kann keine Applications anlegen.",
+            "tokenScopes": "Der Key benötigt die Berechtigungen \"app:read\", \"app:write\", \"site:read\", \"site:write\" und \"org:read\" und muss an die Organisation gebunden sein, an die dieser Shop melden soll. Dafür braucht es die Rolle Owner oder Member, denn ein Viewer kann keine Applications anlegen.",
             "missingPermission": "Der Verbindung fehlt die Berechtigung \"{permission}\". Verbinde dich neu und gib sie frei, oder nutze ein Konto mit der Rolle Owner oder Member.",
             "missingScopes": "Diese Verbindung hat nicht alle Berechtigungen, die das Plugin braucht. Es fehlt: {scopes}. Verbinde dich neu und gib sie auf dem Freigabe-Bildschirm mit frei."
         },
@@ -34,7 +34,7 @@
             "environment": "Umgebung",
             "preset": "Datenumfang",
             "create": "Anlegen und verknüpfen",
-            "autoSites": "Eine Application deckt alle Verkaufskanäle ab. Jede Domain, unter der die Storefront läuft, meldet sich beim ersten Seitenaufruf selbst in fastmon an. Von Hand einzutragen ist nichts.",
+            "autoSites": "Eine Application deckt alle Verkaufskanäle ab. Lass nach dem Verknüpfen in der Karte Datenerfassung die Einrichtung prüfen: Jede Domain, auf der das Snippet gefunden wird, wird in fastmon eingetragen.",
             "pendingApproval": "Diese fastmon-Organisation wartet noch auf die Freigabe. fastmon prüft neue Konten, bevor sie Daten erfassen dürfen. Sobald die Organisation freigegeben ist, lassen sich Applications anlegen; das passiert auch automatisch mit der ersten erfolgreichen Zahlung. Die Verbindung selbst ist in Ordnung, komm danach einfach auf diese Seite zurück.",
             "relink": "Die verknüpfte Application gibt es in fastmon nicht mehr, oder ihre IDs haben sich geändert. Die Verbindung selbst ist in Ordnung: Wähle unten eine Application aus.",
             "createOnlyTitle": "Application anlegen",
@@ -44,8 +44,8 @@
             "application": "Application",
             "sourceHash": "source_hash",
             "collectorHash": "collector_hash",
-            "sites": "Domains, die fastmon gesehen hat",
-            "noSites": "Noch keine. Jede Domain meldet sich beim ersten Seitenaufruf selbst an, hier bleibt es also leer, bis die Storefront Besucher bekommt.",
+            "sites": "Domains in fastmon",
+            "noSites": "Noch keine. Lass in der Karte Datenerfassung die Einrichtung prüfen: Jede Domain, auf der das Snippet gefunden wird, wird hier eingetragen.",
             "debug": "Debug-Informationen"
         },
         "environment": {
@@ -89,12 +89,26 @@
             "secret": "Proxy-Secret erzeugen",
             "blocked": "\"{mode}\" lässt sich noch nicht aktivieren: Auf den oben als nicht eingerichtet gemeldeten Domains würde der Tracker zwar laden, seine Daten kämen aber nicht an. Richte die Weiterleitung dort ein und prüfe erneut.",
             "allReady": "Alle Domains antworten. \"{mode}\" lässt sich jetzt aktivieren.",
+            "checkHint": "Ruft von jeder Storefront-Domain eine Seite ab und sucht darin das fastmon-Snippet; eine Domain, die es ausliefert, wird in fastmon eingetragen. In den beiden Proxy-Modi wird außerdem die Weiterleitung geprüft.",
+            "sites": "Domains in fastmon",
+            "sitesHint": "Entfernt wird hier nichts: Eine Domain, die du nicht mehr brauchst, legst du im fastmon-Dashboard still.",
+            "noSitesChecked": "Keine Storefront-Domain konnte geprüft werden. Trag eine Domain in einen aktiven Storefront-Verkaufskanal ein und prüfe erneut.",
+            "snippetMissing": "Snippet nicht gefunden",
+            "siteRefused": "fastmon hat diese Domain nicht angenommen: {detail}",
+            "site": {
+                "created": "gerade eingetragen",
+                "existing": "eingetragen",
+                "failed": "nicht eingetragen"
+            },
             "reason": {
                 "script_status": "Das Tracker-Skript wird hier nicht ausgeliefert: /s/ antwortet mit HTTP {detail} statt mit dem fastmon-Bundle. Dieser Pfad wird noch nicht an fastmon weitergeleitet.",
                 "script_foreign": "Auf /s/ antwortet zwar etwas, aber nicht das fastmon-Bundle dieser Application. Vermutlich fängt eine andere Regel den Pfad vorher ab.",
                 "script_unreachable": "Diese Domain war vom Shop-Server aus nicht erreichbar ({detail}).",
                 "collector_status": "Der Tracker würde laden, seine Daten gingen aber ins Leere: /c/ antwortet mit HTTP {detail}, statt fastmon zu erreichen.",
-                "collector_unreachable": "Der Beacon-Pfad /c/ war vom Shop-Server aus nicht erreichbar ({detail})."
+                "collector_unreachable": "Der Beacon-Pfad /c/ war vom Shop-Server aus nicht erreichbar ({detail}).",
+                "page_status": "Die Seite antwortet mit HTTP {detail} statt mit einer Storefront-Seite, es gibt also nichts, worin das Snippet stehen könnte. Mach die Domain vom Shop-Server aus erreichbar und prüfe erneut.",
+                "page_unreachable": "Diese Domain ist vom Shop-Server aus nicht erreichbar ({detail}).",
+                "page_no_snippet": "Die Seite wird ausgeliefert, aber das fastmon-Snippet steht nicht darin. Stell sicher, dass das Plugin für diesen Verkaufskanal aktiv ist und das Theme die Head-Blöcke behält, leere den Cache und prüfe erneut."
             }
         }
     }

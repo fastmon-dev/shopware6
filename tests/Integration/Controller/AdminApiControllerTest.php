@@ -26,6 +26,7 @@ final class AdminApiControllerTest extends TestCase
     private const APPLICATIONS = '/api/_action/fastmon-collector/applications';
     private const ATTACH = '/api/_action/fastmon-collector/applications/attach';
     private const SITES = '/api/_action/fastmon-collector/sites';
+    private const COLLECTION_CHECK = '/api/_action/fastmon-collector/collection/check';
     private const SECRET = '/api/_action/fastmon-collector/collection/secret';
     private const SERVER_TIMING = '/api/_action/fastmon-collector/server-timing';
 
@@ -53,6 +54,7 @@ final class AdminApiControllerTest extends TestCase
         self::APPLICATIONS,
         self::ATTACH,
         self::COLLECTION,
+        self::COLLECTION_CHECK,
         self::SECRET,
     ];
 
@@ -60,11 +62,8 @@ final class AdminApiControllerTest extends TestCase
     {
         $browser = $this->getBrowser(true, [], ['product:read']);
 
-        $browser->request('GET', self::STATUS);
-        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
-
-        $browser->request('POST', self::DISCONNECT);
-        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
+        self::assertSame(Response::HTTP_FORBIDDEN, $this->statusOf($browser, 'GET', self::STATUS));
+        self::assertSame(Response::HTTP_FORBIDDEN, $this->statusOf($browser, 'POST', self::DISCONNECT));
     }
 
     public function testReadingNeedsReadAndWritingNeedsUpdate(): void
@@ -80,16 +79,12 @@ final class AdminApiControllerTest extends TestCase
 
         // Read does not imply write: the credential is exactly as sensitive as the
         // payment credentials next to it.
-        $browser->request('POST', self::DISCONNECT);
-        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
+        self::assertSame(Response::HTTP_FORBIDDEN, $this->statusOf($browser, 'POST', self::DISCONNECT));
 
         // Starting a connection registers this shop with fastmon and writes a client id,
         // so it belongs on the same side of the gate.
-        $browser->request('POST', self::CONNECT_START);
-        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
-
-        $browser->request('POST', self::CONNECT_CALLBACK);
-        self::assertSame(Response::HTTP_FORBIDDEN, $browser->getResponse()->getStatusCode());
+        self::assertSame(Response::HTTP_FORBIDDEN, $this->statusOf($browser, 'POST', self::CONNECT_START));
+        self::assertSame(Response::HTTP_FORBIDDEN, $this->statusOf($browser, 'POST', self::CONNECT_CALLBACK));
     }
 
     public function testTheUpdatePrivilegeOpensTheWriteRoutes(): void
@@ -152,6 +147,22 @@ final class AdminApiControllerTest extends TestCase
 
         $this->post($browser, self::ATTACH, ['organizationId' => 'org-7', 'applicationId' => 'app-1']);
         $this->assertReconnect($browser, self::ATTACH);
+    }
+
+    public function testCheckingTheSetupWithoutALinkIsARefusalNotAFault(): void
+    {
+        // Nothing to look for on the pages and nothing to register a domain on. Said as
+        // a sentence, not as a reconnect: the credential may be fine, and no request
+        // leaves the shop before the refusal.
+        $browser = $this->getBrowser(true, [], ['system_config:read', 'system_config:update']);
+
+        $this->post($browser, self::COLLECTION_CHECK, ['mode' => 'default']);
+
+        self::assertSame(Response::HTTP_OK, $browser->getResponse()->getStatusCode());
+        $body = $this->json($browser);
+        self::assertFalse($body['success']);
+        self::assertArrayNotHasKey('reconnect', $body);
+        self::assertNotSame('', $body['error']);
     }
 
     public function testWhatNeedsNoCredentialAnswersWithoutOne(): void
@@ -257,6 +268,19 @@ final class AdminApiControllerTest extends TestCase
         $body = $this->json($browser);
         self::assertFalse($body['success'], $route);
         self::assertTrue($body['reconnect'] ?? false, $route);
+    }
+
+    /**
+     * The status of the request this call sends. Several requests in a row on one browser
+     * read `getResponse()->getStatusCode()` as the same expression each time, and PHPStan
+     * carries its value across the `request()` in between, so a second identical status
+     * would be reported as already known. Tied to its own request it is not.
+     */
+    private function statusOf(TestBrowser $browser, string $method, string $route): int
+    {
+        $browser->request($method, $route);
+
+        return $browser->getResponse()->getStatusCode();
     }
 
     /**

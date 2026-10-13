@@ -43,12 +43,13 @@ final class ConnectionService
      *   panel verifies a live credential with.
      * - `app:read` and `app:write` list, create and configure the application; the
      *   collection mode and the proxy secret are both writes on it.
-     * - `site:read` reads the domains fastmon has actually seen, which is the honest
-     *   answer to "is it collecting?".
+     * - `site:read` lists the application's domains, which is what the panel shows and
+     *   what the setup check compares the storefront domains against.
+     * - `site:write` registers a storefront domain the setup check found the snippet on.
      *
      * No `analytics:read`: the shop never queries measurements, it only produces them.
      */
-    public const SCOPES = 'org:read app:read app:write site:read';
+    public const SCOPES = 'org:read app:read app:write site:read site:write';
 
     /**
      * How this installation appears in fastmon's connection list. The shop's own host is

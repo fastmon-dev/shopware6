@@ -55,10 +55,15 @@ class FastmonCollectorService extends ApiService {
         return this.read('/sites');
     }
 
-    getCollectionStatus(probeMode = null, domain = '') {
-        // `check` names the mode being considered, not a boolean: a probe result only
-        // counts for the mode it was taken against.
-        return this.read('/collection', { check: probeMode || '', domain });
+    getCollectionStatus() {
+        return this.read('/collection');
+    }
+
+    checkCollection(mode, domain = '') {
+        // A write: besides probing, the check registers every domain it finds the
+        // snippet on as a Site in fastmon. `mode` is the one being considered, and a
+        // result only counts for the mode it was taken against.
+        return this.write('/collection/check', { mode, domain });
     }
 
     applyCollectionMode(mode, domain = '') {

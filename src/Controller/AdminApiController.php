@@ -207,9 +207,8 @@ final class AdminApiController extends AbstractController
     )]
     public function sites(): JsonResponse
     {
-        // The domains fastmon has actually seen. With site_policy: auto they appear on
-        // their own, so an empty list on a live shop is the clearest signal there is that
-        // the snippet is reaching nobody.
+        // The domains fastmon knows for this application, read back rather than taken
+        // from the sales channels, so the panel shows what fastmon will collect for.
         return $this->guard(fn (): array => ['sites' => $this->provisioner->sites()]);
     }
 
@@ -219,14 +218,30 @@ final class AdminApiController extends AbstractController
         defaults: self::READ,
         methods: [Request::METHOD_GET]
     )]
-    public function collectionStatus(Request $request): JsonResponse
+    public function collectionStatus(): JsonResponse
     {
-        // The probe reaches out to real origins, so it runs when the merchant asks and
-        // against the mode they are considering - not the one currently stored.
-        $probe = CollectionMode::tryFrom((string) $request->query->get('check', ''));
-        $domain = (string) $request->query->get('domain', '');
+        return $this->guard(fn (): array => $this->collection->describe());
+    }
 
-        return $this->guard(fn (): array => $this->collection->describe($probe, $domain));
+    #[Route(
+        path: '/api/_action/fastmon-collector/collection/check',
+        name: 'api.action.fastmon_collector.collection.check',
+        defaults: self::WRITE,
+        methods: [Request::METHOD_POST]
+    )]
+    public function checkCollection(Request $request): JsonResponse
+    {
+        // A write, although it stores nothing here: the check registers every domain it
+        // finds the snippet on as a Site in fastmon. It runs when the merchant asks and
+        // against the mode they are considering, not the one currently stored.
+        $body = $this->body($request);
+        $mode = CollectionMode::tryFrom($body['mode']);
+
+        if ($mode === null) {
+            return $this->error('Unknown collection mode.');
+        }
+
+        return $this->guard(fn (): array => $this->collection->check($mode, $body['domain']));
     }
 
     #[Route(

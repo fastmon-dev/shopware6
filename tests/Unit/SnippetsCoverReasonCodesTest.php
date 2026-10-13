@@ -3,6 +3,7 @@
 namespace Fastmon\Collector\Tests\Unit;
 
 use Fastmon\Collector\Collection\DomainCheckResult;
+use Fastmon\Collector\Collection\SiteCheckResult;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -50,6 +51,24 @@ class SnippetsCoverReasonCodesTest extends TestCase
         }
     }
 
+    public function testEverySiteStateHasASnippetInEveryLocale(): void
+    {
+        // Same seam, other half of the check: what became of a domain in fastmon is a
+        // code too, and the administration turns it into a word next to the domain.
+        $states = $this->constants(SiteCheckResult::class, 'SITE_');
+        self::assertNotEmpty($states);
+
+        foreach (self::LOCALES as $locale) {
+            $texts = $this->section($locale, 'fastmon-collector', 'collection', 'site');
+
+            foreach ($states as $state) {
+                self::assertArrayHasKey($state, $texts, sprintf('%s has no text for the site state "%s"', $locale, $state));
+            }
+
+            self::assertSame([], array_diff(array_keys($texts), $states), 'stale site state snippets in ' . $locale);
+        }
+    }
+
     public function testTheTwoLocalesDescribeTheSameCases(): void
     {
         $de = array_keys($this->section('de-DE', 'fastmon-collector', 'collection', 'reason'));
@@ -66,10 +85,20 @@ class SnippetsCoverReasonCodesTest extends TestCase
      */
     private function reasonCodes(): array
     {
+        return [...$this->constants(DomainCheckResult::class, 'REASON_'), ...$this->constants(SiteCheckResult::class, 'REASON_')];
+    }
+
+    /**
+     * @param class-string $class
+     *
+     * @return list<string>
+     */
+    private function constants(string $class, string $prefix): array
+    {
         $codes = [];
 
-        foreach ((new ReflectionClass(DomainCheckResult::class))->getConstants() as $name => $value) {
-            if (str_starts_with($name, 'REASON_') && \is_string($value)) {
+        foreach ((new ReflectionClass($class))->getConstants() as $name => $value) {
+            if (str_starts_with($name, $prefix) && \is_string($value)) {
                 $codes[] = $value;
             }
         }

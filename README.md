@@ -114,10 +114,10 @@ review. Approval comes from an admin decision, a partner provisioning the client
 first successful payment. The plugin renders this as a waiting state and keeps the
 credential, because there is nothing for the merchant to fix or retry.
 
-The connection asks for **`org:read`**, **`app:read`**, **`app:write`** and
-**`site:read`**: what the panel needs to name the organisation, list and configure an
-application, and show the domains fastmon has actually seen. The shop produces
-measurements and never queries them, so there is no `analytics:read`. The approver may
+The connection asks for **`org:read`**, **`app:read`**, **`app:write`**, **`site:read`**
+and **`site:write`**: what the panel needs to name the organisation, list and configure an
+application, and to list and register its domains. The shop produces measurements and
+never queries them, so there is no `analytics:read`. The approver may
 narrow that list, and the panel reads back what was actually granted rather than assuming,
 so a connection without `app:write` is flagged before the first write fails on it.
 
@@ -128,7 +128,6 @@ link an existing application or create one. Creating one sets:
 
 | | |
 |---|---|
-| `site_policy` | `auto`: every new domain becomes a Site on its first beacon |
 | `pagetype_ruleset` | `shopware6`: page types classified from the storefront's body classes |
 | `environment` | your choice; `dev` applications are not billed |
 | `preset` | data scope: `minimal`, `standard` (default) or `full` |
@@ -136,6 +135,28 @@ link an existing application or create one. Creating one sets:
 `standard` is the PII-free posture: pseudonymous stitch, fetch/XHR aggregates, query key
 names and error stack frames, but no message text, no query values and no session write.
 There is no plan limit on applications.
+
+### Domains
+
+fastmon keeps data per domain (a *Site* of the application), and under its default site
+policy a domain it has not been told about goes on a suggestion list in the dashboard
+instead of into the data. The plugin registers the domains itself, and it does so at the
+one moment it has proof: the setup check in the *Data collection* card fetches a page of
+every active storefront sales channel domain and looks for this application's snippet in
+it. A domain that carries the snippet is registered as a Site right there; one that does
+not is listed with the reason (the page answered with a status, could not be reached, or
+is served without the snippet), because that is the setup fault to fix first.
+
+The check runs in every collection mode, fastmon's own included: whether the page carries
+the snippet has nothing to do with where the beacon goes. In the two proxy modes the same
+check also proves the forwarding, as before, and neither result gates the other.
+
+Nothing registers a domain on a link, on a sales channel save or on a timer, because none
+of those has seen a page. And the check only adds: a domain that left the shop may carry
+history worth keeping, so retiring one stays a decision taken in the dashboard. Domains
+fastmon will not take (an IP address, say) are listed with fastmon's reason and do not stop
+the others. The dashboard's suggestion list keeps its purpose: hostnames the shop never
+configured, which is exactly the set worth a look by hand.
 
 The panel verifies the credential **and** the linked application when it opens. An
 application deleted in the dashboard, or one whose hashes were rotated, leaves the

@@ -43,14 +43,14 @@ final class ApplicationProvisionerTest extends TestCase
 
         self::assertSame('app-1', $application['id']);
 
-        // What fastmon was asked for: the shop's name, production, the PII-free preset,
-        // and the two settings that make one application cover every sales channel.
+        // What fastmon was asked for: the shop's name, production, the PII-free preset
+        // and the Shopware ruleset. The site policy is left to fastmon's default.
         $body = $this->json($this->sent[0]);
         self::assertStringEndsWith('/v1/organizations/org-7/applications', $this->sent[0]->getRequestUrl());
         self::assertSame(ApplicationProvisioner::DEFAULT_NAME, $body['name']);
         self::assertSame('prod', $body['environment']);
         self::assertSame(ApplicationProvisioner::DEFAULT_PRESET, $body['preset']);
-        self::assertSame('auto', $body['site_policy']);
+        self::assertArrayNotHasKey('site_policy', $body);
         self::assertSame('shopware6', $body['pagetype_ruleset']);
 
         // And what the storefront renders from here on.

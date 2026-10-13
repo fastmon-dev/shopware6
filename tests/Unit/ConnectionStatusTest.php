@@ -72,7 +72,7 @@ class ConnectionStatusTest extends TestCase
         // again. Without this the merchant meets it as an API error on whichever button
         // needed the permission.
         $this->connected();
-        $this->row['scopes'] = 'org:read app:write site:read';
+        $this->row['scopes'] = 'org:read app:write site:read site:write';
 
         self::assertSame(['app:read'], $this->reporter()->describe()['missingScopes']);
     }
@@ -186,7 +186,7 @@ class ConnectionStatusTest extends TestCase
             'clientId' => 'dyn_1',
             'redirectUri' => self::ADMIN,
             'refreshToken' => 'fmr_live',
-            'scopes' => 'org:read app:read app:write site:read',
+            'scopes' => 'org:read app:read app:write site:read site:write',
             'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + 600)),
             'accessToken' => 'fmt_live',
             'accountEmail' => 'merchant@example.com',

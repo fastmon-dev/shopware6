@@ -20,7 +20,7 @@ services:
             - '../../Dto/'
             - '../../Api/{OAuthMetadata,OAuthTokens,Pkce,ReadsJsonResponses}.php'
             - '../../Api/*Exception.php'
-            - '../../Collection/{CollectionMode,CollectionNotReadyException,DomainCheckResult}.php'
+            - '../../Collection/{CollectionMode,CollectionNotReadyException,DomainCheckResult,SiteCheckResult}.php'
             - '../../Connection/{Authorization,Connection,ConnectionKind,Credentials}.php'
             # The entity and its collection are hydrated by the DAL, not constructed by
             # the container. ConnectionDefinition stays: autoconfigure tags it, and that

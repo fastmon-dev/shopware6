@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Collection\CollectionMode;
 use Fastmon\Collector\Collection\DomainCheckResult;
 use Fastmon\Collector\Collection\EndpointChecker;
+use Fastmon\Collector\Collection\SiteCheckResult;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\Service\ConfigResolver;
 use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
@@ -152,6 +153,83 @@ class EndpointCheckerTest extends TestCase
         self::assertSame('https://metrics.example.com', $checker->normaliseOrigin('https://metrics.example.com/path/'));
         self::assertSame('http://localhost:8080', $checker->normaliseOrigin('http://localhost:8080'));
         self::assertSame('', $checker->normaliseOrigin('   '));
+    }
+
+    public function testAPageCarryingTheSnippetProvesTheDomain(): void
+    {
+        $checker = $this->checker(['https://shop.example/de', 'https://shop.example/en'], [
+            new MockResponse('<html><head><script defer src="/s/srchash.js"></script></head></html>', ['http_code' => 200]),
+        ]);
+
+        $results = $checker->checkSnippets();
+
+        self::assertCount(1, $results);
+        self::assertSame('shop.example', $results[0]->domain);
+        self::assertTrue($results[0]->snippetOk);
+        // The channel's own URL, path included: the root may belong to another channel.
+        self::assertSame('https://shop.example/de', $results[0]->url);
+        self::assertSame(['https://shop.example/de'], $this->requested);
+    }
+
+    public function testAPageWithoutTheSnippetIsNotProven(): void
+    {
+        // Served, reachable, and the plugin is not on it: another application's hash,
+        // the plugin switched off for the channel, or a theme that dropped the block.
+        $checker = $this->checker(['https://shop.example'], [
+            new MockResponse('<html><script defer src="/s/otherhash.js"></script></html>', ['http_code' => 200]),
+        ]);
+
+        $results = $checker->checkSnippets();
+
+        self::assertFalse($results[0]->snippetOk);
+        self::assertSame(SiteCheckResult::REASON_PAGE_NO_SNIPPET, $results[0]->reason);
+    }
+
+    public function testASecondChannelOnTheSameHostGetsItsTurn(): void
+    {
+        // /de answers with a status, /en carries the snippet: one host, proven once.
+        $checker = $this->checker(['https://shop.example/de', 'https://shop.example/en'], [
+            new MockResponse('', ['http_code' => 503]),
+            new MockResponse('<script src="https://cdn.fastmon.site/s/srchash.js"></script>', ['http_code' => 200]),
+        ]);
+
+        $results = $checker->checkSnippets();
+
+        self::assertCount(1, $results);
+        self::assertTrue($results[0]->snippetOk);
+        self::assertSame('https://shop.example/en', $results[0]->url);
+    }
+
+    public function testAPageThatAnswersWithAStatusOrNotAtAllSaysWhich(): void
+    {
+        $checker = $this->checker(['https://staging.example', 'https://down.example'], [
+            new MockResponse('', ['http_code' => 401]),
+            new MockResponse('', ['error' => 'connection refused']),
+        ]);
+
+        $results = $checker->checkSnippets();
+
+        self::assertSame(SiteCheckResult::REASON_PAGE_STATUS, $results[0]->reason);
+        self::assertSame('401', $results[0]->detail);
+        self::assertSame(SiteCheckResult::REASON_PAGE_UNREACHABLE, $results[1]->reason);
+        self::assertStringContainsString('connection refused', $results[1]->detail);
+    }
+
+    public function testHostsAreLowercasedAndPortsDropped(): void
+    {
+        // A Site is keyed by hostname: fastmon lowercases, and a beacon carries no port.
+        $checker = $this->checker(['https://Shop.Example:8443/de', 'http://shop.example'], [
+            new MockResponse('<script src="/s/srchash.js">', ['http_code' => 200]),
+        ]);
+
+        self::assertSame(['shop.example' => ['https://Shop.Example:8443/de', 'http://shop.example']], $checker->storefrontUrls());
+        self::assertSame('shop.example', $checker->checkSnippets()[0]->domain);
+    }
+
+    public function testAnUnprovisionedShopHasNoPagesToCheck(): void
+    {
+        self::assertSame([], $this->checker(['https://shop.example'], [], provisioned: false)->checkSnippets());
+        self::assertSame([], $this->requested);
     }
 
     public function testAnUnprovisionedShopHasNothingToCheck(): void

@@ -137,9 +137,8 @@ final class FastmonClient
                     'name' => $name,
                     'environment' => $environment,
                     'preset' => $preset,
-                    // Every sales-channel domain provisions itself on first beacon. This
-                    // is the whole reason the plugin never enumerates sales channels.
-                    'site_policy' => 'auto',
+                    // No site_policy: fastmon's default decides how a domain becomes a
+                    // Site, and the plugin has no better answer than the dashboard has.
                     // fastmon ships a Shopware 6 body-class ruleset, so page types are
                     // classified without the plugin sending anything extra - and it keeps
                     // working on pages served from the full page cache.
@@ -166,10 +165,9 @@ final class FastmonClient
     /**
      * The domains fastmon has actually seen this application on.
      *
-     * With `site_policy: auto` these appear on their own, the first time a visitor loads
-     * a page on a domain - so the list is the honest answer to "is it collecting?", in a
-     * way a green checkmark next to a source_hash is not. An empty list on a live shop
-     * means the snippet is not reaching anyone.
+     * This is fastmon's list, not the shop's: a domain shows up here once fastmon knows
+     * it, so the list is the honest answer to "is it collecting?", in a way a green
+     * checkmark next to a source_hash is not.
      *
      * @return list<array{id: string, domain: string, name: string}>
      */
@@ -197,6 +195,44 @@ final class FastmonClient
         }
 
         return $out;
+    }
+
+    /**
+     * Register one domain as a Site of the application.
+     *
+     * fastmon normalises what it gets (lowercase, no scheme, no port, punycode), so the
+     * domain that comes back can differ from the one sent and is what the caller should
+     * remember. A domain the application already has is a `FastmonSiteExistsException`,
+     * which the check treats as "present"; a domain fastmon will not take at all (an IP
+     * address, a name with a space in it) is a plain API error with fastmon's reason.
+     *
+     * @return array{id: string, domain: string, name: string}
+     */
+    public function createApplicationSite(string $baseUrl, string $token, string $applicationId, string $domain): array
+    {
+        $response = $this->request(
+            'POST',
+            $baseUrl,
+            '/applications/' . rawurlencode($applicationId) . '/sites',
+            [
+                'auth_bearer' => $token,
+                'json' => ['domain' => $domain],
+            ]
+        );
+
+        $status = $response->getStatusCode();
+
+        if ($status !== 200 && $status !== 201) {
+            $this->fail($response, 'fastmon site creation failed');
+        }
+
+        $site = $this->decode($response);
+
+        return [
+            'id' => $this->str($site, 'id'),
+            'domain' => $this->str($site, 'domain'),
+            'name' => $this->str($site, 'name'),
+        ];
     }
 
     /**
@@ -446,6 +482,11 @@ final class FastmonClient
             throw new FastmonCredentialExpiredException(
                 'The fastmon connection expired. Please connect again.'
             );
+        }
+
+        // Already there is the outcome the setup check hopes for, not one it reports.
+        if ($code === 'site_already_exists') {
+            throw new FastmonSiteExistsException($message !== '' ? $message : $detail);
         }
 
         $full = $context . ': ' . $detail;
