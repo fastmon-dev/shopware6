@@ -70,25 +70,29 @@ release. Between releases `main` carries the version that was last released, so 
 ever blocked on nobody having bumped after the previous one. CI checks that the new value
 is higher than the base branch and not already tagged.
 
-Then:
+Then start **Release** from the Actions tab on `main` (or `gh workflow run release.yml
+--ref main`). Nobody tags by hand: the workflow makes the tag, from `composer.json`.
 
-```bash
-git tag vX.Y.Z <merge commit>
-git push origin vX.Y.Z
-```
-
-`release.yml` takes it from there: it refuses a tag that disagrees with `composer.json`,
-runs the same gates a pull request runs, builds and validates the zip, creates the GitHub
-Release with it attached, and tells Packagist. Watch the run, then check both ends: the
-zip on the [releases page](https://github.com/fastmon-dev/shopware6/releases) and the
-version on
+`release.yml` refuses a run that does not start from `main` or whose version is already
+tagged, runs the same gates a pull request runs, builds and validates the zip, and then
+commits the administration bundle out of that zip on top of the merge commit and tags
+that commit `vX.Y.Z`. Composer installs the tagged tree, so this is what gives a
+`composer require` the built administration without `main` ever carrying a build
+artefact. The tag therefore sits one commit beside `main`, not on it. Before the tag is
+pushed, the Composer archive of the tag and the zip are compared file by file. Then the
+GitHub Release is created with the zip attached and Packagist is told. Watch the run, then
+check both ends: the zip on the
+[releases page](https://github.com/fastmon-dev/shopware6/releases) and the version on
 [packagist.org](https://packagist.org/packages/fastmon/shopware-collector).
 
-**When the guard refuses the tag**, delete it (`git push origin :refs/tags/vX.Y.Z`), fix
-`composer.json` on `main`, and tag again. **A tag that has been published is never moved
-or reused.** Packagist and the Composer caches keep the tree they saw first, so a
-corrected tag of the same name is a version that is one thing here and another thing
-everywhere else. Release the next patch instead.
+**A run that fails before the tag is pushed** leaves nothing behind: fix the cause on
+`main` and start it again. **A run that fails after the tag is pushed** (the Release or
+Packagist) is finished by hand from that tag, never by a second run: `shopware-cli
+extension zip . --release --git-commit vX.Y.Z` rebuilds the same zip for `gh release
+create vX.Y.Z --verify-tag`. **A tag that has been published is never moved or reused.**
+Packagist and the Composer caches keep the tree they saw first, so a corrected tag of the
+same name is a version that is one thing here and another thing everywhere else. Release
+the next patch instead.
 
-A tag of the shape `vX.Y.Z-rc.N` becomes a GitHub pre-release, and Composer resolves it
+A version of the shape `X.Y.Z-rc.N` becomes a GitHub pre-release, and Composer resolves it
 only for someone who asked for it by constraint.

@@ -1,79 +1,96 @@
 name: Release
 
+# Started by hand, not by a tag push, because the tag is the last thing this workflow
+# makes rather than the first thing it is given. Composer installs the tagged tree, and
+# the administration bundle is built, not committed: a tag on the merge commit would hand
+# every `composer require` a plugin with no panel. So the bundle is built here, committed
+# on top of the merge commit, and that commit is what gets tagged. main never carries a
+# build artefact, and the Composer package carries the same bundle as the store zip.
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# Two runs for one version would race for the same tag. The group is not the one ci.yml
+# uses for itself (workflow name and ref), which a called workflow shares with its caller.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   # Packagist takes the version from the tag, Shopware's plugin lifecycle takes it from
-  # composer.json, so one number has two sources and they can drift. What makes the drift
-  # expensive is that Composer's VCS driver skips a tag disagreeing with the manifest
-  # without saying so: the release is tagged, the workflow is green, and the version
-  # simply never appears on Packagist. The tag is therefore refused, not reconciled - a
-  # tag that has been published cannot be moved afterwards, because Packagist and the
-  # Composer caches keep the tree they saw first.
+  # composer.json. The tag is now derived from composer.json, so the two cannot disagree;
+  # what is left to guard is where the run starts and whether the version is new. A tag
+  # that has been published is never moved or reused, because Packagist and the Composer
+  # caches keep the tree they saw first.
   #
-  # Everything that publishes (zip, GitHub Release, Packagist) follows in #12 and hangs
-  # off this job, so a mismatch leaves nothing behind to clean up.
+  # Everything that publishes (tag, GitHub Release, Packagist) hangs off this job, so a
+  # refusal leaves nothing behind to clean up.
   check-version:
-    name: Tag matches composer.json
+    name: Version from composer.json
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Compare tag and manifest
+      - name: Read and check the version
+        id: version
         run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
-            echo "::error::Tag $GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH[-prerelease], for example v0.2.0 or v0.2.0-rc.1. Delete it and tag again."
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::A release starts from main, this run started from $GITHUB_REF. Start it again with main selected."
             exit 1
           fi
 
-          declared="$(jq -r '.version // ""' composer.json)"
+          version="$(jq -r '.version // ""' composer.json)"
 
-          if [ -z "$declared" ]; then
-            echo "::error::composer.json has no version field. Shopware reads the plugin version from there, and without it Composer guesses one from the checkout."
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::composer.json version '$version' is not MAJOR.MINOR.PATCH[-prerelease], for example 0.2.0 or 0.2.0-rc.1. Set it in a release PR, then start the release again."
             exit 1
           fi
 
-          if [ "${GITHUB_REF_NAME#v}" != "$declared" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match composer.json version $declared. Delete the tag (git push origin :refs/tags/$GITHUB_REF_NAME), set the version on main, tag again."
+          if git ls-remote --exit-code --tags origin "refs/tags/v${version}" >/dev/null; then
+            echo "::error::v${version} is already released. Bump composer.json in a release PR, then start the release again."
             exit 1
           fi
 
-  # The gates a pull request passes, against the tagged commit, by calling ci.yml rather
-  # than repeating its steps - a release must not be held to a weaker standard than a
-  # PR, and a copy drifts. ci.yml ignores tag pushes itself, so it runs once per tag,
-  # from here.
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+  # The gates a pull request passes, against the commit being released, by calling ci.yml
+  # rather than repeating its steps - a release must not be held to a weaker standard than
+  # a PR, and a copy drifts.
   ci:
     name: Quality gates
     needs: check-version
     uses: ./.github/workflows/ci.yml
 
   zip:
-    name: Zip and GitHub Release
+    name: Zip, tag and GitHub Release
     needs: [check-version, ci]
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the Release and attach the zip
+      contents: write # push the tag, create the Release and attach the zip
+    env:
+      VERSION: ${{ needs.check-version.outputs.version }}
+      TAG: ${{ needs.check-version.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # --release builds a changelog from the commits since the last tag
+          fetch-depth: 0 # the bundle commit is pushed as a tag on top of this history
           fetch-tags: true
       - uses: shopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3.0.0
 
       # What .shopware-extension.yml describes: no composer step, assets built, toolchain
       # files left out. The built src/Resources/public/ therefore travels in the zip
-      # although git never sees it.
+      # although main never sees it.
       - name: Build the zip
         run: |
-          version="${GITHUB_REF_NAME#v}"
           shopware-cli extension zip . --release \
-            --git-commit "$GITHUB_REF_NAME" \
-            --filename "FastmonCollector-${version}.zip" \
+            --git-commit "$GITHUB_SHA" \
+            --filename "FastmonCollector-${VERSION}.zip" \
             --output-directory dist
 
       # The artefact is checked, not the working tree: the zip is assembled from a clean
@@ -91,23 +108,21 @@ jobs:
       # fail the step; an error does.
       - name: Validate the artefact
         run: |
-          version="${GITHUB_REF_NAME#v}"
           shopware-cli extension validate --full --check-against highest --exclude phpstan \
-            "dist/FastmonCollector-${version}.zip"
+            "dist/FastmonCollector-${VERSION}.zip"
 
-      # check-version compared the tag against the tree. This compares it against the zip
-      # that merchants actually install, and confirms the administration bundle is in
-      # there: it is gitignored, built during packing, and a plugin that ships without it
-      # installs cleanly and then has no module.
-      - name: The zip says what the tag says
+      # check-version read the version from the tree. This reads it from the zip that
+      # merchants actually install, and confirms the administration bundle is in there: it
+      # is gitignored, built during packing, and a plugin that ships without it installs
+      # cleanly and then has no module.
+      - name: The zip says what composer.json says
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          archive="dist/FastmonCollector-${version}.zip"
+          archive="dist/FastmonCollector-${VERSION}.zip"
 
           packed="$(unzip -p "$archive" 'FastmonCollector/composer.json' | jq -r '.version // ""')"
 
-          if [ "$packed" != "$version" ]; then
-            echo "::error::The zip reports version $packed, the tag says $version."
+          if [ "$packed" != "$VERSION" ]; then
+            echo "::error::The zip reports version $packed, composer.json says $VERSION."
             exit 1
           fi
 
@@ -116,28 +131,47 @@ jobs:
             exit 1
           fi
 
-      # Composer does not get this zip. Packagist hands out GitHub's zipball of the tag,
+      # The bundle is taken out of the zip rather than built a second time: webpack's
+      # module ids depend on the build directory, so two builds of the same source are not
+      # the same bytes, and Composer is meant to get exactly what the store gets. Forced
+      # past .gitignore, which keeps it off main and has no say over this one commit.
+      - name: Commit the bundle and tag it
+        run: |
+          unzip -q "dist/FastmonCollector-${VERSION}.zip" 'FastmonCollector/src/Resources/public/*' -d "$RUNNER_TEMP/zip"
+          rm -rf src/Resources/public
+          cp -R "$RUNNER_TEMP/zip/FastmonCollector/src/Resources/public" src/Resources/public
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --force src/Resources/public
+          git commit --quiet \
+            -m "build: administration bundle for ${TAG}" \
+            -m "Built from ${GITHUB_SHA} on main by the release workflow, so that Composer installs the same administration the store zip carries. This commit exists only under the tag."
+          git tag --annotate "$TAG" --message "$TAG"
+
+      # Composer does not get the zip. Packagist hands out GitHub's zipball of the tag,
       # which is `git archive`, and what it leaves out is decided by export-ignore in
       # .gitattributes, a second list next to the excludes in .shopware-extension.yml. Two
-      # lists drift, so the two packages are compared file by file. The zip may carry what
-      # only packing produces: the built bundle under public/ and checksum.json. Anything
-      # else on one side only is a list that missed a file.
+      # lists drift, so the two packages are compared file by file, bundle included. Only
+      # checksum.json is the zip's own: the store reads it, Composer has no use for it.
       - name: Composer gets what the store gets
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          archive="dist/FastmonCollector-${version}.zip"
-
-          unzip -Z1 "$archive" \
+          unzip -Z1 "dist/FastmonCollector-${VERSION}.zip" \
             | grep -v '/$' \
             | sed 's|^FastmonCollector/||' \
-            | grep -v -e '^src/Resources/public/' -e '^checksum\.json$' \
-            | sort > store.txt
-          git archive "$GITHUB_REF_NAME" | tar -t | grep -v '/$' | sort > composer.txt
+            | grep -v '^checksum\.json$' \
+            | sort > "$RUNNER_TEMP/store.txt"
+          git archive "$TAG" | tar -t | grep -v '/$' | sort > "$RUNNER_TEMP/composer.txt"
 
-          if ! diff store.txt composer.txt; then
+          if ! diff "$RUNNER_TEMP/store.txt" "$RUNNER_TEMP/composer.txt"; then
             echo "::error::The Composer package and the store zip differ (< store only, > Composer only). Bring export-ignore in .gitattributes and build.zip.pack.excludes in .shopware-extension.yml back in line."
             exit 1
           fi
+
+      # The first step that cannot be taken back, so it comes after every check. Only the
+      # tag is pushed: the commit under it is reachable from the tag alone.
+      - name: Push the tag
+        run: git push origin "refs/tags/${TAG}"
 
       # gh is on the runner, so this needs no third-party action to keep pinned. A version
       # with a suffix (v0.2.0-rc.1) becomes a pre-release: GitHub marks it, and Composer
@@ -146,15 +180,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
           prerelease=()
-          case "$version" in
+          case "$VERSION" in
             *-*) prerelease=(--prerelease) ;;
           esac
 
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/FastmonCollector-${version}.zip" \
-            --title "$GITHUB_REF_NAME" \
+          gh release create "$TAG" \
+            "dist/FastmonCollector-${VERSION}.zip" \
+            --verify-tag \
+            --title "$TAG" \
             --generate-notes \
             "${prerelease[@]}"
 
@@ -165,7 +199,10 @@ jobs:
   # run rather than in a webhook log nobody opens.
   packagist:
     name: Packagist
-    needs: zip
+    needs: [check-version, zip]
+    env:
+      TAG: ${{ needs.check-version.outputs.tag }}
+      VERSION: ${{ needs.check-version.outputs.version }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -194,28 +231,26 @@ jobs:
       # version for a package that declares none, which is what most packages do - but
       # this one declares `version` in composer.json, because Shopware's plugin
       # lifecycle reads it from there, and Composer's VCS driver then reports that value
-      # instead. So the tag v0.1.0 is listed as 0.1.0. Both are accepted: check-version
-      # has already proven the two agree, so whichever Packagist reports is the right
-      # one, and the package stops being able to lie about it the day the version field
-      # can go.
+      # instead. So the tag v0.1.0 is listed as 0.1.0. Both are accepted: the tag is made
+      # from that very field, so whichever Packagist reports is the right one, and the
+      # package stops being able to lie about it the day the version field can go.
       - name: Wait until Packagist lists the release
         run: |
           package="$(jq -r .name composer.json)"
-          version="${GITHUB_REF_NAME#v}"
 
           # Not a pipeline: the default shell for a step is `bash -e` without `pipefail`,
           # and `jq --exit-status` answers 0 for the empty input a 404 pipes into it. A
           # package that was never submitted would report itself as published.
           for _ in $(seq 1 20); do
             if curl --silent --fail --output metadata.json "https://repo.packagist.org/p2/${package}.json" \
-              && jq --exit-status --arg package "$package" --arg tag "$GITHUB_REF_NAME" --arg version "$version" \
+              && jq --exit-status --arg package "$package" --arg tag "$TAG" --arg version "$VERSION" \
                 '.packages[$package][] | select(.version == $tag or .version == $version)' metadata.json >/dev/null; then
-              echo "Packagist lists $GITHUB_REF_NAME."
+              echo "Packagist lists $TAG."
               exit 0
             fi
 
             sleep 15
           done
 
-          echo "::error::Packagist does not list $GITHUB_REF_NAME five minutes after the release. Check that $package is submitted at packagist.org and that the crawl did not skip the tag."
+          echo "::error::Packagist does not list $TAG five minutes after the release. Check that $package is submitted at packagist.org and that the crawl did not skip the tag."
           exit 1
