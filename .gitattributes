@@ -1,0 +1,19 @@
+# What Composer installs. Packagist hands out GitHub's zipball of the tag, which is
+# `git archive` and honours export-ignore, so this is the Composer counterpart of
+# build.zip.pack.excludes in .shopware-extension.yml: the same toolchain and the same rules
+# for working on the plugin, left out the same way. The release workflow compares both
+# packages and fails when this list lets through something the store zip does not carry.
+/.devcontainer           export-ignore
+/.github                 export-ignore
+/docs                    export-ignore
+/tests                   export-ignore
+/AGENTS.md               export-ignore
+/CLAUDE.md               export-ignore
+/.gitattributes          export-ignore
+/.gitignore              export-ignore
+/.php-cs-fixer.dist.php  export-ignore
+/.shopware-extension.yml export-ignore
+/phpmd.xml               export-ignore
+/phpstan.neon.dist       export-ignore
+/phpunit.xml.dist        export-ignore
+/renovate.json           export-ignore
