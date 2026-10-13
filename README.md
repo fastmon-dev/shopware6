@@ -114,10 +114,10 @@ review. Approval comes from an admin decision, a partner provisioning the client
 first successful payment. The plugin renders this as a waiting state and keeps the
 credential, because there is nothing for the merchant to fix or retry.
 
-The connection asks for **`org:read`**, **`app:read`**, **`app:write`** and
-**`site:read`**: what the panel needs to name the organisation, list and configure an
-application, and show the domains fastmon has actually seen. The shop produces
-measurements and never queries them, so there is no `analytics:read`. The approver may
+The connection asks for **`org:read`**, **`app:read`**, **`app:write`**, **`site:read`**
+and **`site:write`**: what the panel needs to name the organisation, list and configure an
+application, and to list and register its domains. The shop produces measurements and
+never queries them, so there is no `analytics:read`. The approver may
 narrow that list, and the panel reads back what was actually granted rather than assuming,
 so a connection without `app:write` is flagged before the first write fails on it.
 
@@ -135,6 +135,23 @@ link an existing application or create one. Creating one sets:
 `standard` is the PII-free posture: pseudonymous stitch, fetch/XHR aggregates, query key
 names and error stack frames, but no message text, no query values and no session write.
 There is no plan limit on applications.
+
+### Domains
+
+fastmon keeps data per domain (a *Site* of the application), and under its default site
+policy a domain it has not been told about goes on a suggestion list in the dashboard
+instead of into the data. The shop knows its domains before the first visitor does, so the
+plugin tells fastmon: right after the link, every domain of an active storefront sales
+channel that fastmon does not list yet is registered, and the panel says which ones were.
+Saving a sales channel domain later, or switching a sales channel on, queues the same sync
+through the message queue; *Sync domains* in the panel runs it on demand.
+
+The sync only adds. A domain that left the shop may carry history worth keeping, so
+retiring one stays a decision taken in the dashboard. Domains fastmon will not take (an IP
+address, a hostname with a port is fine, a bare path is not a domain) are listed in the
+panel with fastmon's reason and do not stop the others. The dashboard's suggestion list
+keeps its purpose: hostnames the shop never configured, which is exactly the set worth a
+look by hand.
 
 The panel verifies the credential **and** the linked application when it opens. An
 application deleted in the dashboard, or one whose hashes were rotated, leaves the

@@ -23,8 +23,9 @@ use Psr\Log\LoggerInterface;
  * The Application model replaced that. An application is one embed whose collection
  * config covers every domain it runs on, and the domain a beacon came from is what
  * fastmon sorts it into a Site by. So one application, one snippet, every sales channel
- * and every domain covered. Which domains become Sites is fastmon's call under its
- * default site policy; the plugin does not override it.
+ * and every domain covered. Which of those domains fastmon keeps data for is a Site,
+ * and `SiteSynchroniser` registers them from the sales channels, right after a link
+ * and whenever they change. Nothing here enumerates them.
  *
  * What is left for this class is choosing which application, and remembering the answer.
  */

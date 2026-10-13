@@ -101,7 +101,7 @@ class RenewConnectionTaskTest extends TestCase
         $this->row = [
             'clientId' => 'dyn_1',
             'refreshToken' => 'fmr_live',
-            'scopes' => 'org:read app:read app:write site:read',
+            'scopes' => 'org:read app:read app:write site:read site:write',
             'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() - 60)),
             'accessToken' => 'fmt_old',
         ];
@@ -123,7 +123,7 @@ class RenewConnectionTaskTest extends TestCase
             'access_token' => $access,
             'refresh_token' => $refresh,
             'expires_in' => 900,
-            'scope' => 'org:read app:read app:write site:read',
+            'scope' => 'org:read app:read app:write site:read site:write',
         ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
     }
 

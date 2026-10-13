@@ -55,6 +55,10 @@ class FastmonCollectorService extends ApiService {
         return this.read('/sites');
     }
 
+    syncSites() {
+        return this.write('/sites/sync');
+    }
+
     getCollectionStatus(probeMode = null, domain = '') {
         // `check` names the mode being considered, not a boolean: a probe result only
         // counts for the mode it was taken against.

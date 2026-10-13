@@ -14,6 +14,7 @@ use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStatus;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Provisioning\ApplicationProvisioner;
+use Fastmon\Collector\Provisioning\SiteSynchroniser;
 use Fastmon\Collector\ServerTiming\ServerTimingStatus;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
 use Shopware\Core\PlatformRequest;
@@ -59,6 +60,7 @@ final class AdminApiController extends AbstractController
         private readonly ConnectionService $connection,
         private readonly ConnectionStatus $status,
         private readonly ApplicationProvisioner $provisioner,
+        private readonly SiteSynchroniser $sites,
         private readonly CollectionModeService $collection,
         private readonly ServerTimingStatus $serverTimingStatus,
     ) {
@@ -175,12 +177,17 @@ final class AdminApiController extends AbstractController
     {
         $body = $this->body($request);
 
-        return $this->guard(fn (): array => ['application' => $this->provisioner->create(
-            $body['organizationId'],
-            $body['name'],
-            $body['environment'],
-            $body['preset'],
-        )]);
+        // The link first, the domains second, and the second cannot undo the first: a
+        // sync that fails is a sentence beside the domain list, not a link to redo.
+        return $this->guard(fn (): array => [
+            'application' => $this->provisioner->create(
+                $body['organizationId'],
+                $body['name'],
+                $body['environment'],
+                $body['preset'],
+            ),
+            'sites' => $this->sites->syncAfterLink(),
+        ]);
     }
 
     #[Route(
@@ -193,10 +200,13 @@ final class AdminApiController extends AbstractController
     {
         $body = $this->body($request);
 
-        return $this->guard(fn (): array => ['application' => $this->provisioner->attach(
-            $body['organizationId'],
-            $body['applicationId'],
-        )]);
+        return $this->guard(fn (): array => [
+            'application' => $this->provisioner->attach(
+                $body['organizationId'],
+                $body['applicationId'],
+            ),
+            'sites' => $this->sites->syncAfterLink(),
+        ]);
     }
 
     #[Route(
@@ -210,6 +220,21 @@ final class AdminApiController extends AbstractController
         // The domains fastmon knows for this application, read back rather than taken
         // from the sales channels, so the panel shows what fastmon will collect for.
         return $this->guard(fn (): array => ['sites' => $this->provisioner->sites()]);
+    }
+
+    #[Route(
+        path: '/api/_action/fastmon-collector/sites/sync',
+        name: 'api.action.fastmon_collector.sites.sync',
+        defaults: self::WRITE,
+        methods: [Request::METHOD_POST]
+    )]
+    public function syncSites(): JsonResponse
+    {
+        // What was done, then the list as it stands: one round trip for the button.
+        return $this->guard(fn (): array => [
+            'sync' => $this->sites->sync(),
+            'sites' => $this->provisioner->sites(),
+        ]);
     }
 
     #[Route(

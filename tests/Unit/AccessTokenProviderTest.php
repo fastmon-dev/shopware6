@@ -261,7 +261,7 @@ class AccessTokenProviderTest extends TestCase
             'clientId' => 'dyn_1',
             'redirectUri' => 'https://shop.example.com/admin',
             'refreshToken' => 'fmr_old',
-            'scopes' => 'org:read app:read app:write site:read',
+            'scopes' => 'org:read app:read app:write site:read site:write',
             'accessTokenExpiresAt' => new DateTimeImmutable('@' . (time() + $expiresIn)),
             'accessToken' => $accessToken,
         ];
@@ -285,7 +285,7 @@ class AccessTokenProviderTest extends TestCase
             'access_token' => $access,
             'refresh_token' => $refresh,
             'expires_in' => 900,
-            'scope' => 'org:read app:read app:write site:read',
+            'scope' => 'org:read app:read app:write site:read site:write',
             'organization' => ['id' => 'org-7', 'name' => 'Acme'],
         ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
     }

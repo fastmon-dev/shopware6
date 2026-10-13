@@ -7,6 +7,7 @@ use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonCredentialExpiredException;
 use Fastmon\Collector\Api\FastmonOrganizationNotApprovedException;
 use Fastmon\Collector\Api\FastmonPermissionDeniedException;
+use Fastmon\Collector\Api\FastmonSiteExistsException;
 use Fastmon\Collector\Api\FastmonUnauthorizedException;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -129,7 +130,7 @@ class FastmonClientTest extends TestCase
         );
     }
 
-    public function testCreatesAnApplicationThatProvisionsItsOwnDomains(): void
+    public function testCreatesAnApplicationWithTheShopwareRuleset(): void
     {
         $sent = null;
         $client = new FastmonClient(new MockHttpClient(function (string $method, string $url, array $options) use (&$sent): MockResponse {
@@ -184,6 +185,48 @@ class FastmonClientTest extends TestCase
 
         $this->expectException(FastmonApiException::class);
         $client->organizations(self::BASE, 'fm_token');
+    }
+
+    public function testADomainIsRegisteredAsASiteOfTheApplication(): void
+    {
+        $sent = null;
+        $client = new FastmonClient(new MockHttpClient(static function (string $method, string $url, array $options) use (&$sent): MockResponse {
+            $body = $options['body'] ?? '';
+            $sent = ['method' => $method, 'url' => $url, 'body' => json_decode(\is_string($body) ? $body : '', true)];
+
+            return new MockResponse(json_encode([
+                'id' => 's-1',
+                'domain' => 'shop.example',
+                'name' => 'shop.example',
+            ], \JSON_THROW_ON_ERROR), ['http_code' => 201]);
+        }));
+
+        $site = $client->createApplicationSite(self::BASE, 'fm_token', 'app-1', 'Shop.Example');
+
+        self::assertIsArray($sent);
+        self::assertSame('POST', $sent['method']);
+        self::assertSame(self::BASE . '/v1/applications/app-1/sites', $sent['url']);
+        // Only the domain: the collection config is the application's, and the name
+        // defaults to the domain on fastmon's side.
+        self::assertSame(['domain' => 'Shop.Example'], $sent['body']);
+        // What fastmon normalised it to is what the caller gets back.
+        self::assertSame(['id' => 's-1', 'domain' => 'shop.example', 'name' => 'shop.example'], $site);
+    }
+
+    public function testADomainTheApplicationAlreadyHasIsItsOwnOutcome(): void
+    {
+        // The sync asks for every domain it did not see listed; one that is there under
+        // another spelling must count as present, not as a failed run.
+        $client = $this->client(new MockResponse(json_encode([
+            'error' => [
+                'code' => 'site_already_exists',
+                'message' => "A site for 'shop.example' already exists in this application.",
+                'details' => ['domain' => 'shop.example'],
+            ],
+        ], \JSON_THROW_ON_ERROR), ['http_code' => 409]));
+
+        $this->expectException(FastmonSiteExistsException::class);
+        $client->createApplicationSite(self::BASE, 'fm_token', 'app-1', 'shop.example');
     }
 
     private function client(MockResponse $response): FastmonClient

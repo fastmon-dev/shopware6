@@ -29,6 +29,7 @@ use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * The plugin must not be able to make a storefront request slower, and must not be able
@@ -204,6 +205,7 @@ class StorefrontPathIsIsolatedTest extends TestCase
         $container->register('scheduled_task.repository', EntityRepository::class)->setSynthetic(true);
         $container->register(CacheInvalidator::class, CacheInvalidator::class)->setSynthetic(true);
         $container->register('lock.factory', LockFactory::class)->setSynthetic(true);
+        $container->register(MessageBusInterface::class, MessageBusInterface::class)->setSynthetic(true);
         $container->register('logger', NullLogger::class);
         $container->setAlias(LoggerInterface::class, 'logger');
 

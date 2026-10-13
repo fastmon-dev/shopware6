@@ -94,9 +94,9 @@
                     @error="applyFastmonError"
                 />
 
-                {# Connected and linked. The domains fastmon has actually seen are the
-                   honest answer to "is it collecting?" in a way an id and a checkmark are
-                   not. #}
+                {# Connected and linked. The domains are read back from fastmon rather
+                   than from the sales channels, so the list is what fastmon will
+                   collect for, not what the shop thinks it told fastmon. #}
                 <template v-else>
                     <p class="fastmon-collector-connection__label">
                         {{ $t('fastmon-collector.summary.sites') }}
@@ -114,6 +114,49 @@
 
                     <p v-else class="fastmon-collector-connection__hint">
                         {{ $t('fastmon-collector.summary.noSites') }}
+                    </p>
+
+                    {# What the last sync did, in the order a merchant wants it: what is
+                       new, what fastmon would not take, or that nothing was missing. #}
+                    <mt-banner
+                        v-if="syncResult && syncResult.error"
+                        class="fastmon-collector-connection__banner"
+                        variant="attention"
+                    >
+                        {{ $t('fastmon-collector.summary.syncFailed', { reason: syncResult.error }) }}
+                    </mt-banner>
+
+                    <p v-else-if="syncedDomains.length" class="fastmon-collector-connection__hint">
+                        {{ $t('fastmon-collector.summary.synced', { domains: syncedDomains.join(', ') }) }}
+                    </p>
+
+                    <p v-else-if="nothingToSync" class="fastmon-collector-connection__hint">
+                        {{ $t('fastmon-collector.summary.nothingToSync') }}
+                    </p>
+
+                    <ul v-if="skippedDomains.length" class="fastmon-collector-connection__domains">
+                        <li
+                            v-for="skipped in skippedDomains"
+                            :key="skipped.domain"
+                            class="fastmon-collector-connection__domain"
+                        >
+                            {{ $t('fastmon-collector.summary.skipped', skipped) }}
+                        </li>
+                    </ul>
+
+                    <div class="fastmon-collector-connection__actions">
+                        <mt-button
+                            variant="secondary"
+                            size="small"
+                            :disabled="isBusy"
+                            @click="syncSites"
+                        >
+                            {{ $t('fastmon-collector.summary.sync') }}
+                        </mt-button>
+                    </div>
+
+                    <p class="fastmon-collector-connection__hint">
+                        {{ $t('fastmon-collector.summary.syncHint') }}
                     </p>
 
                     {# Ids belong here and not on the surface: nobody acts on them, and

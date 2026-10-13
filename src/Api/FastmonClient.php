@@ -198,6 +198,44 @@ final class FastmonClient
     }
 
     /**
+     * Register one domain as a Site of the application.
+     *
+     * fastmon normalises what it gets (lowercase, no scheme, no port, punycode), so the
+     * domain that comes back can differ from the one sent and is what the caller should
+     * remember. A domain the application already has is a `FastmonSiteExistsException`,
+     * which the sync treats as "present"; a domain fastmon will not take at all (an IP
+     * address, a name with a space in it) is a plain API error with fastmon's reason.
+     *
+     * @return array{id: string, domain: string, name: string}
+     */
+    public function createApplicationSite(string $baseUrl, string $token, string $applicationId, string $domain): array
+    {
+        $response = $this->request(
+            'POST',
+            $baseUrl,
+            '/applications/' . rawurlencode($applicationId) . '/sites',
+            [
+                'auth_bearer' => $token,
+                'json' => ['domain' => $domain],
+            ]
+        );
+
+        $status = $response->getStatusCode();
+
+        if ($status !== 200 && $status !== 201) {
+            $this->fail($response, 'fastmon site creation failed');
+        }
+
+        $site = $this->decode($response);
+
+        return [
+            'id' => $this->str($site, 'id'),
+            'domain' => $this->str($site, 'domain'),
+            'name' => $this->str($site, 'name'),
+        ];
+    }
+
+    /**
      * Switch where the served bundle posts its beacons.
      *
      * `relative` makes the endpoint a host-less `/c/<hash>`, resolved same-origin against
@@ -444,6 +482,11 @@ final class FastmonClient
             throw new FastmonCredentialExpiredException(
                 'The fastmon connection expired. Please connect again.'
             );
+        }
+
+        // Already there is the outcome the site sync hopes for, not one it reports.
+        if ($code === 'site_already_exists') {
+            throw new FastmonSiteExistsException($message !== '' ? $message : $detail);
         }
 
         $full = $context . ': ' . $detail;

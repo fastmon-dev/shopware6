@@ -126,6 +126,29 @@ final class EndpointChecker
     }
 
     /**
+     * The hostnames behind `storefrontOrigins()`, which is what a fastmon Site is keyed
+     * by: a beacon carries no scheme and no port, so `https://shop.example:8443` and
+     * `http://shop.example` are one Site. Lowercased because fastmon lowercases too and
+     * the sync compares against what fastmon lists.
+     *
+     * @return list<string>
+     */
+    public function storefrontHostnames(): array
+    {
+        $hosts = [];
+
+        foreach ($this->storefrontOrigins() as $origin) {
+            $host = parse_url($origin, \PHP_URL_HOST);
+
+            if (\is_string($host) && $host !== '') {
+                $hosts[strtolower($host)] = true;
+            }
+        }
+
+        return array_keys($hosts);
+    }
+
+    /**
      * Scheme, host and port of a URL, with everything else dropped. Empty when there is no
      * host to speak of, which is what a merchant typing a bare path into the domain field
      * produces. (The headless channel's `default.headless0` would pass this - it is the

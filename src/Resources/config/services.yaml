@@ -18,6 +18,8 @@ services:
             - '../../FastmonCollectorException.php'
             - '../../Resources/'
             - '../../Dto/'
+            # A message is data on the bus, constructed where it is dispatched.
+            - '../../Provisioning/SyncSitesMessage.php'
             - '../../Api/{OAuthMetadata,OAuthTokens,Pkce,ReadsJsonResponses}.php'
             - '../../Api/*Exception.php'
             - '../../Collection/{CollectionMode,CollectionNotReadyException,DomainCheckResult}.php'

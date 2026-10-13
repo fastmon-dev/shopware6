@@ -151,19 +151,21 @@ Component.register('fastmon-collector-connection-provisioning', {
 
         // Both hand the application on rather than only announcing that there is one:
         // it is what the panel needs to switch, and the server has already sent it.
+        // The domain sync that ran right after the link travels with it, so the panel
+        // can say what was registered without a second call.
         createApplication() {
             this.busy(() => this.fastmonCollectorService.createApplication({
                 organizationId: this.organizationId,
                 name: this.applicationName,
                 environment: this.environment,
                 preset: this.preset,
-            }).then((response) => this.$emit('linked', response.application)));
+            }).then((response) => this.$emit('linked', response.application, response.sites)));
         },
 
         attachApplication(applicationId) {
             this.busy(() => this.fastmonCollectorService
                 .attachApplication(this.organizationId, applicationId)
-                .then((response) => this.$emit('linked', response.application)));
+                .then((response) => this.$emit('linked', response.application, response.sites)));
         },
 
         busy(action) {

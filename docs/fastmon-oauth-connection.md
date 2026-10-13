@@ -42,7 +42,7 @@ who approved it leaves. fastmon asks the approver for `org_key:manage` in return
 the same authority as issuing an organization key - correct, because that is what this
 produces.
 
-Scopes asked for: `org:read app:read app:write site:read`. The granted set is read back
+Scopes asked for: `org:read app:read app:write site:read site:write`. The granted set is read back
 from the token response and stored, because the approver may tick fewer and their role cuts
 the list again.
 

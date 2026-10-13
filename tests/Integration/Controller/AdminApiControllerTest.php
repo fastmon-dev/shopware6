@@ -26,6 +26,7 @@ final class AdminApiControllerTest extends TestCase
     private const APPLICATIONS = '/api/_action/fastmon-collector/applications';
     private const ATTACH = '/api/_action/fastmon-collector/applications/attach';
     private const SITES = '/api/_action/fastmon-collector/sites';
+    private const SYNC_SITES = '/api/_action/fastmon-collector/sites/sync';
     private const SECRET = '/api/_action/fastmon-collector/collection/secret';
     private const SERVER_TIMING = '/api/_action/fastmon-collector/server-timing';
 
@@ -52,6 +53,7 @@ final class AdminApiControllerTest extends TestCase
         self::DISCONNECT,
         self::APPLICATIONS,
         self::ATTACH,
+        self::SYNC_SITES,
         self::COLLECTION,
         self::SECRET,
     ];
@@ -152,6 +154,21 @@ final class AdminApiControllerTest extends TestCase
 
         $this->post($browser, self::ATTACH, ['organizationId' => 'org-7', 'applicationId' => 'app-1']);
         $this->assertReconnect($browser, self::ATTACH);
+    }
+
+    public function testSyncingDomainsWithoutALinkIsARefusalNotAFault(): void
+    {
+        // There is nothing to put the domains on. Said as a sentence, not as a reconnect:
+        // the credential may be fine, and the panel only shows the button after a link.
+        $browser = $this->getBrowser(true, [], ['system_config:read', 'system_config:update']);
+
+        $this->post($browser, self::SYNC_SITES, []);
+
+        self::assertSame(Response::HTTP_OK, $browser->getResponse()->getStatusCode());
+        $body = $this->json($browser);
+        self::assertFalse($body['success']);
+        self::assertArrayNotHasKey('reconnect', $body);
+        self::assertNotSame('', $body['error']);
     }
 
     public function testWhatNeedsNoCredentialAnswersWithoutOne(): void
