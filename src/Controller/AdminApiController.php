@@ -207,9 +207,8 @@ final class AdminApiController extends AbstractController
     )]
     public function sites(): JsonResponse
     {
-        // The domains fastmon has actually seen. With site_policy: auto they appear on
-        // their own, so an empty list on a live shop is the clearest signal there is that
-        // the snippet is reaching nobody.
+        // The domains fastmon knows for this application, read back rather than taken
+        // from the sales channels, so the panel shows what fastmon will collect for.
         return $this->guard(fn (): array => ['sites' => $this->provisioner->sites()]);
     }
 

@@ -152,11 +152,10 @@ class FastmonClientTest extends TestCase
         self::assertSame('POST', $sent['method']);
         // Under /v1: production answers 404 on the unprefixed form.
         self::assertSame(self::BASE . '/v1/organizations/org-1/applications', $sent['url']);
-        // The two values that make one application cover every sales channel without
-        // the plugin ever enumerating them.
+        // The Shopware ruleset goes along; the site policy stays fastmon's default.
         $body = $sent['body'];
         self::assertIsArray($body);
-        self::assertSame('auto', $body['site_policy']);
+        self::assertArrayNotHasKey('site_policy', $body);
         self::assertSame('shopware6', $body['pagetype_ruleset']);
 
         // fastmon's wire names become the names the templates use.

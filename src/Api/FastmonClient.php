@@ -137,9 +137,8 @@ final class FastmonClient
                     'name' => $name,
                     'environment' => $environment,
                     'preset' => $preset,
-                    // Every sales-channel domain provisions itself on first beacon. This
-                    // is the whole reason the plugin never enumerates sales channels.
-                    'site_policy' => 'auto',
+                    // No site_policy: fastmon's default decides how a domain becomes a
+                    // Site, and the plugin has no better answer than the dashboard has.
                     // fastmon ships a Shopware 6 body-class ruleset, so page types are
                     // classified without the plugin sending anything extra - and it keeps
                     // working on pages served from the full page cache.
@@ -166,10 +165,9 @@ final class FastmonClient
     /**
      * The domains fastmon has actually seen this application on.
      *
-     * With `site_policy: auto` these appear on their own, the first time a visitor loads
-     * a page on a domain - so the list is the honest answer to "is it collecting?", in a
-     * way a green checkmark next to a source_hash is not. An empty list on a live shop
-     * means the snippet is not reaching anyone.
+     * This is fastmon's list, not the shop's: a domain shows up here once fastmon knows
+     * it, so the list is the honest answer to "is it collecting?", in a way a green
+     * checkmark next to a source_hash is not.
      *
      * @return list<array{id: string, domain: string, name: string}>
      */

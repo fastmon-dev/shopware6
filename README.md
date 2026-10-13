@@ -128,7 +128,6 @@ link an existing application or create one. Creating one sets:
 
 | | |
 |---|---|
-| `site_policy` | `auto`: every new domain becomes a Site on its first beacon |
 | `pagetype_ruleset` | `shopware6`: page types classified from the storefront's body classes |
 | `environment` | your choice; `dev` applications are not billed |
 | `preset` | data scope: `minimal`, `standard` (default) or `full` |

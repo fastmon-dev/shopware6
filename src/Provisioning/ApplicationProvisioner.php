@@ -21,10 +21,10 @@ use Psr\Log\LoggerInterface;
  * meant going back into the wizard, and a channel with two domains had to pick one.
  *
  * The Application model replaced that. An application is one embed whose collection
- * config covers every domain it runs on, and with `site_policy: auto` the domain a
- * beacon came from is turned into a Site on arrival. So one application, one snippet,
- * every sales channel and every domain covered - including the ones added next month,
- * without anyone opening this panel again.
+ * config covers every domain it runs on, and the domain a beacon came from is what
+ * fastmon sorts it into a Site by. So one application, one snippet, every sales channel
+ * and every domain covered. Which domains become Sites is fastmon's call under its
+ * default site policy; the plugin does not override it.
  *
  * What is left for this class is choosing which application, and remembering the answer.
  */
