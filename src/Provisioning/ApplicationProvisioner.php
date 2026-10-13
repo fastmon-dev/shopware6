@@ -24,8 +24,8 @@ use Psr\Log\LoggerInterface;
  * config covers every domain it runs on, and the domain a beacon came from is what
  * fastmon sorts it into a Site by. So one application, one snippet, every sales channel
  * and every domain covered. Which of those domains fastmon keeps data for is a Site,
- * and `SiteSynchroniser` registers them from the sales channels, right after a link
- * and whenever they change. Nothing here enumerates them.
+ * and `SiteRegistrar` registers one as soon as the setup check has seen the snippet on
+ * it. Nothing here enumerates them: a link proves nothing about a page.
  *
  * What is left for this class is choosing which application, and remembering the answer.
  */

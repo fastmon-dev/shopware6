@@ -30,6 +30,32 @@ prove. `DEFAULT` points at fastmon and has nothing to prove.
 Which domains count as a storefront origin, and why three filters are applied to the list,
 is documented at `EndpointChecker::storefrontOrigins()`.
 
+## The page probe, and the Sites it registers
+
+The same check fetches one page per storefront domain, in every mode, and looks for the
+script tag the storefront template renders: `/s/<source_hash>.js`. That path is the one
+thing on the page that nothing but this plugin, linked to this application, can have put
+there. The endpoint probes answer "would the tracker load if asked"; this one answers "is
+it being asked", which is the question a domain nobody added the snippet to fails.
+
+A domain that passes is registered as a Site of the application by `SiteRegistrar`, on
+the spot. fastmon's default site policy would otherwise put a domain it has not been
+told about on a suggestion list in the dashboard, and the merchant would confirm each
+one by hand before any data arrived. Registering at check time, and only then, is the
+rule: a link proves nothing about a page, a sales channel save proves nothing either, and
+fastmon would wait for beacons that cannot come if the plugin registered a domain it has
+not seen the snippet on. The check is the only place that has looked.
+
+The page is the sales channel's own URL, path included, because the root of a host can
+belong to another channel or to nothing at all when every channel lives under a language
+path. A host with several channels is tried until one shows the snippet, and one result
+is reported per hostname, which is what a Site is keyed by.
+
+The page probe and the endpoint probes do not gate each other. A staging domain behind
+basic auth fails the page probe and is simply not registered; it does not block the proxy
+mode on the domains that work, and the proxy mode failing on an origin does not keep that
+origin's page from being registered when it carries the snippet.
+
 ## Why these two probes and no others
 
 The script probe is the strong one and it costs nothing: `/s/<hash>.js` is a plain GET

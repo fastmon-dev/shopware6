@@ -44,8 +44,8 @@ final class ConnectionService
      * - `app:read` and `app:write` list, create and configure the application; the
      *   collection mode and the proxy secret are both writes on it.
      * - `site:read` lists the application's domains, which is what the panel shows and
-     *   what the site sync compares the sales channels against.
-     * - `site:write` registers a storefront domain that is missing from that list.
+     *   what the setup check compares the storefront domains against.
+     * - `site:write` registers a storefront domain the setup check found the snippet on.
      *
      * No `analytics:read`: the shop never queries measurements, it only produces them.
      */

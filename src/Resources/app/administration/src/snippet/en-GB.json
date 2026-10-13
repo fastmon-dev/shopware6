@@ -34,7 +34,7 @@
             "environment": "Environment",
             "preset": "Data scope",
             "create": "Create and link",
-            "autoSites": "One application covers every sales channel. When you link it, the plugin registers the domains of the active storefront sales channels in fastmon. A domain you add later follows as soon as the sales channel is saved.",
+            "autoSites": "One application covers every sales channel. After linking, run the setup check in the Data collection card: every domain the snippet is found on is registered in fastmon.",
             "pendingApproval": "This fastmon organisation is still awaiting approval. fastmon reviews new accounts before they may collect data; applications can be created once it is approved, which also happens automatically on the first successful payment. The connection itself is fine - come back to this page afterwards.",
             "relink": "The linked application no longer exists in fastmon, or its ids changed. The connection itself is fine - pick an application below.",
             "createOnlyTitle": "Create an application",
@@ -45,13 +45,7 @@
             "sourceHash": "source_hash",
             "collectorHash": "collector_hash",
             "sites": "Domains in fastmon",
-            "noSites": "None yet. Linking registers the domains of the active storefront sales channels; if the list stays empty, sync them below.",
-            "sync": "Sync domains",
-            "syncHint": "Registers the domains of the active storefront sales channels that fastmon does not have yet. Nothing is removed: retire a domain in the fastmon dashboard.",
-            "synced": "Registered: {domains}",
-            "nothingToSync": "Every storefront domain is already registered.",
-            "skipped": "{domain} was not registered: {reason}",
-            "syncFailed": "The application is linked, but the domains could not be registered: {reason} Fix that and click \"Sync domains\".",
+            "noSites": "None yet. Run the setup check in the Data collection card: every domain the snippet is found on is registered here.",
             "debug": "Debug information"
         },
         "environment": {
@@ -95,12 +89,26 @@
             "secret": "Generate proxy secret",
             "blocked": "\"{mode}\" cannot be switched on yet: on the domains reported above as not set up, the tracker would load but its data would never arrive. Set the forwarding up there and check again.",
             "allReady": "Every domain answers. \"{mode}\" can be switched on now.",
+            "checkHint": "Fetches a page of every storefront domain and looks for the fastmon snippet; a domain that carries it is registered in fastmon. In the two proxy modes the forwarding is checked as well.",
+            "sites": "Domains in fastmon",
+            "sitesHint": "Nothing is removed here: retire a domain you no longer need in the fastmon dashboard.",
+            "noSitesChecked": "No storefront domain could be checked. Add a domain to an active storefront sales channel, then check again.",
+            "snippetMissing": "snippet not found",
+            "siteRefused": "fastmon did not take this domain: {detail}",
+            "site": {
+                "created": "registered just now",
+                "existing": "registered",
+                "failed": "not registered"
+            },
             "reason": {
                 "script_status": "The tracker script is not being served here: /s/ answers with HTTP {detail} instead of the fastmon bundle. Nothing forwards that path to fastmon yet.",
                 "script_foreign": "Something answers /s/, but it is not this application's fastmon bundle. Most likely another rule catches the path first.",
                 "script_unreachable": "This domain could not be reached from the shop server ({detail}).",
                 "collector_status": "The tracker would load, but its data would go nowhere: /c/ answers with HTTP {detail} instead of reaching fastmon.",
-                "collector_unreachable": "The beacon path /c/ could not be reached from the shop server ({detail})."
+                "collector_unreachable": "The beacon path /c/ could not be reached from the shop server ({detail}).",
+                "page_status": "The page answers with HTTP {detail} instead of a storefront page, so there is nothing the snippet could be in. Make the domain reachable from the shop server, then check again.",
+                "page_unreachable": "This domain could not be reached from the shop server ({detail}).",
+                "page_no_snippet": "The page is served, but the fastmon snippet is not in it. Make sure the plugin is switched on for this sales channel and the theme keeps the head blocks, clear the cache, then check again."
             }
         }
     }

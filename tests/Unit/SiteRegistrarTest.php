@@ -2,15 +2,14 @@
 
 namespace Fastmon\Collector\Tests\Unit;
 
-use Doctrine\DBAL\Connection as DbalConnection;
 use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Api\FastmonOAuthClient;
 use Fastmon\Collector\Api\FastmonPermissionDeniedException;
-use Fastmon\Collector\Collection\EndpointChecker;
+use Fastmon\Collector\Collection\SiteCheckResult;
 use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
-use Fastmon\Collector\Provisioning\SiteSynchroniser;
+use Fastmon\Collector\Provisioning\SiteRegistrar;
 use Fastmon\Collector\Service\ConfigResolver;
 use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
@@ -20,7 +19,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
-final class SiteSynchroniserTest extends TestCase
+final class SiteRegistrarTest extends TestCase
 {
     use StoresConnection;
 
@@ -29,25 +28,26 @@ final class SiteSynchroniserTest extends TestCase
 
     protected function setUp(): void
     {
-        // A pasted key and a linked application: the sync itself is what is under test.
+        // A pasted key and a linked application: the registration itself is under test.
         $this->row = ['manualToken' => 'fmk_live', 'applicationId' => 'app-1'];
     }
 
-    public function testOnlyTheDomainsFastmonDoesNotListAreCreated(): void
+    public function testOnlyProvenDomainsFastmonDoesNotListAreCreated(): void
     {
-        $sync = $this->synchroniser(
-            ['https://shop.example/de', 'https://shop.example/en', 'https://Outlet.Example:8443'],
-            [
-                $this->sites(['shop.example']),
-                $this->site('outlet.example', 201),
-            ]
-        );
+        $results = $this->registrar([
+            $this->sites(['shop.example']),
+            $this->site('outlet.example', 201),
+        ])->register([
+            $this->proven('shop.example'),
+            $this->proven('outlet.example'),
+            $this->unproven('staging.example'),
+        ]);
 
-        $result = $sync->sync();
-
-        self::assertSame(['created' => ['outlet.example'], 'existing' => ['shop.example'], 'skipped' => []], $result);
-        // One list, one create: nothing is asked for the domain fastmon already had, and
-        // the two language channels on one host are one site.
+        self::assertSame(SiteCheckResult::SITE_EXISTING, $results[0]->site);
+        self::assertSame(SiteCheckResult::SITE_CREATED, $results[1]->site);
+        // Not proven, not registered: fastmon would wait for beacons that cannot come.
+        self::assertSame('', $results[2]->site);
+        // One list, one create.
         self::assertCount(2, $this->sent);
         self::assertSame('POST', $this->sent[1]['method']);
         self::assertStringEndsWith('/v1/applications/app-1/sites', $this->sent[1]['url']);
@@ -57,44 +57,41 @@ final class SiteSynchroniserTest extends TestCase
     public function testADomainFastmonHasUnderAnotherNameCountsAsPresent(): void
     {
         // Listed in punycode, configured in unicode: the list misses it, the create
-        // answers 409, and the merchant reads "already there" rather than an error.
-        $sync = $this->synchroniser(['https://shop.example'], [
+        // answers 409, and the merchant reads "registered" rather than an error.
+        $results = $this->registrar([
             $this->sites(['xn--shp-example']),
             $this->error('site_already_exists', 'already there', 409),
-        ]);
+        ])->register([$this->proven('shöp.example')]);
 
-        self::assertSame(['created' => [], 'existing' => ['shop.example'], 'skipped' => []], $sync->sync());
+        self::assertSame(SiteCheckResult::SITE_EXISTING, $results[0]->site);
     }
 
-    public function testADomainFastmonRefusesIsSkippedWithItsReasonAndTheRestGoesOn(): void
+    public function testADomainFastmonRefusesIsFailedWithItsReasonAndTheRestGoesOn(): void
     {
         // The dev host is an IP address and fastmon takes no IP addresses. That is a
-        // line in the panel, not a reason for the real domain to go unregistered.
-        $sync = $this->synchroniser(['http://192.168.0.10', 'https://shop.example'], [
+        // line beside that domain, not a reason for the real one to go unregistered.
+        $results = $this->registrar([
             $this->sites([]),
             $this->error('validation_error', 'Invalid domain format.', 422),
             $this->site('shop.example', 201),
-        ]);
+        ])->register([$this->proven('192.168.0.10'), $this->proven('shop.example')]);
 
-        $result = $sync->sync();
-
-        self::assertSame(['shop.example'], $result['created']);
-        self::assertCount(1, $result['skipped']);
-        self::assertSame('192.168.0.10', $result['skipped'][0]['domain']);
-        self::assertStringContainsString('Invalid domain format.', $result['skipped'][0]['reason']);
+        self::assertSame(SiteCheckResult::SITE_FAILED, $results[0]->site);
+        self::assertStringContainsString('Invalid domain format.', $results[0]->siteDetail);
+        self::assertSame(SiteCheckResult::SITE_CREATED, $results[1]->site);
     }
 
     public function testAMissingPermissionStopsTheRunRatherThanRepeatingForEveryDomain(): void
     {
         // Nothing about the second domain would go differently, and the panel maps this
         // exception to the sentence that names the scope.
-        $sync = $this->synchroniser(['https://a.example', 'https://b.example'], [
+        $registrar = $this->registrar([
             $this->sites([]),
             $this->error('permission_denied', 'Missing permission: site:write.', 403, ['permission' => 'site:write']),
         ]);
 
         try {
-            $sync->sync();
+            $registrar->register([$this->proven('a.example'), $this->proven('b.example')]);
             self::fail('expected a FastmonPermissionDeniedException');
         } catch (FastmonPermissionDeniedException $e) {
             self::assertSame('site:write', $e->permission);
@@ -102,26 +99,31 @@ final class SiteSynchroniserTest extends TestCase
         }
     }
 
+    public function testNothingIsAskedWhenNoDomainWasProven(): void
+    {
+        // An empty MockHttpClient throws on the first request, so this also proves that
+        // not even the list was read.
+        $results = $this->registrar([])->register([$this->unproven('shop.example')]);
+
+        self::assertSame('', $results[0]->site);
+    }
+
     public function testNothingIsAskedWithoutALinkedApplication(): void
     {
         $this->row = ['manualToken' => 'fmk_live'];
 
         $this->expectException(FastmonCollectorException::class);
-        // An empty MockHttpClient throws on the first request, so this also proves that
-        // no call was made.
-        $this->synchroniser(['https://shop.example'], [])->sync();
+        $this->registrar([])->register([$this->proven('shop.example')]);
     }
 
-    public function testAfterALinkARefusalIsAFieldAndNotAFailure(): void
+    private function proven(string $domain): SiteCheckResult
     {
-        // The link already succeeded; failing the response over the domains would make
-        // the merchant link again for something they can fix with one button.
-        $result = $this->synchroniser(['https://shop.example'], [
-            $this->error('permission_denied', 'Missing permission: site:write.', 403, ['permission' => 'site:write']),
-        ])->syncAfterLink();
+        return new SiteCheckResult($domain, 'https://' . $domain, true);
+    }
 
-        self::assertSame([], $result['created']);
-        self::assertSame('Missing permission: site:write.', $result['error'] ?? null);
+    private function unproven(string $domain): SiteCheckResult
+    {
+        return new SiteCheckResult($domain, 'https://' . $domain, false, SiteCheckResult::REASON_PAGE_NO_SNIPPET);
     }
 
     /**
@@ -157,10 +159,9 @@ final class SiteSynchroniserTest extends TestCase
     }
 
     /**
-     * @param list<string> $salesChannelUrls what `sales_channel_domain.url` holds
      * @param list<MockResponse> $api
      */
-    private function synchroniser(array $salesChannelUrls, array $api): SiteSynchroniser
+    private function registrar(array $api): SiteRegistrar
     {
         $http = new MockHttpClient(function (string $method, string $url, array $options) use (&$api): MockResponse {
             $body = $options['body'] ?? '';
@@ -180,10 +181,7 @@ final class SiteSynchroniserTest extends TestCase
         $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
 
-        $database = $this->createMock(DbalConnection::class);
-        $database->method('fetchFirstColumn')->willReturn($salesChannelUrls);
-
-        return new SiteSynchroniser(
+        return new SiteRegistrar(
             new FastmonClient($http),
             new AccessTokenProvider(
                 new FastmonOAuthClient(new MockHttpClient([])),
@@ -194,7 +192,6 @@ final class SiteSynchroniserTest extends TestCase
             ),
             $store,
             $config,
-            new EndpointChecker(new MockHttpClient([]), $store, $database),
             new NullLogger(),
         );
     }

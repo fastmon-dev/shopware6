@@ -52,7 +52,6 @@
 
         <div class="fastmon-collector-collection__actions">
             <mt-button
-                v-if="needsProof"
                 variant="secondary"
                 :disabled="isBusy || isChecking || !canCheck"
                 :is-loading="isChecking"
@@ -71,7 +70,12 @@
             </mt-button>
         </div>
 
-        <ul v-if="checkedThisMode" class="fastmon-collector-collection__list">
+        <p class="fastmon-collector-collection__hint">
+            {{ $t('fastmon-collector.collection.checkHint') }}
+        </p>
+
+        {# The proof for the mode: only the two proxy modes have one. #}
+        <ul v-if="checkedThisMode && needsProof" class="fastmon-collector-collection__list">
             <li
                 v-for="domain in checkedDomains"
                 :key="domain.domain"
@@ -93,12 +97,12 @@
             </li>
         </ul>
 
-        <mt-banner v-if="checkedThisMode && !checkedDomains.length" variant="critical">
+        <mt-banner v-if="checkedThisMode && needsProof && !checkedDomains.length" variant="critical">
             {{ $t('fastmon-collector.collection.nothingChecked') }}
         </mt-banner>
 
         {# Said once, at the end: which mode stays out of reach, and what to do next. #}
-        <mt-banner v-else-if="checkedThisMode && !status.ready" variant="attention">
+        <mt-banner v-else-if="checkedThisMode && needsProof && !status.ready" variant="attention">
             {{ $t('fastmon-collector.collection.blocked', { mode: selectedModeLabel }) }}
             <a
                 class="fastmon-collector-collection__link"
@@ -110,9 +114,44 @@
             </a>
         </mt-banner>
 
-        <mt-banner v-else-if="checkedThisMode" variant="positive">
+        <mt-banner v-else-if="checkedThisMode && needsProof" variant="positive">
             {{ $t('fastmon-collector.collection.allReady', { mode: selectedModeLabel }) }}
         </mt-banner>
+
+        {# What the check found on each storefront domain, and what fastmon has now.
+           A domain that carried the snippet is a Site from here on; one that did not
+           says why, because that is the setup fault worth fixing first. #}
+        <template v-if="checkedThisMode">
+            <p class="fastmon-collector-collection__label">
+                {{ $t('fastmon-collector.collection.sites') }}
+            </p>
+
+            <ul v-if="checkedSites.length" class="fastmon-collector-collection__list">
+                <li
+                    v-for="site in checkedSites"
+                    :key="site.domain"
+                    class="fastmon-collector-collection__result"
+                >
+                    <span class="fastmon-collector-collection__resultHead">
+                        <strong>{{ site.domain }}</strong>
+                        <span :class="siteIsOk(site) ? 'is--ok' : 'is--error'">
+                            {{ siteStateText(site) }}
+                        </span>
+                    </span>
+                    <span v-if="siteDetailText(site)" class="fastmon-collector-collection__meta">
+                        {{ siteDetailText(site) }}
+                    </span>
+                </li>
+            </ul>
+
+            <mt-banner v-else variant="critical">
+                {{ $t('fastmon-collector.collection.noSitesChecked') }}
+            </mt-banner>
+
+            <p class="fastmon-collector-collection__hint">
+                {{ $t('fastmon-collector.collection.sitesHint') }}
+            </p>
+        </template>
 
         <template v-if="needsProof">
             {# Without the secret fastmon cannot trust the visitor IP the proxy forwards,

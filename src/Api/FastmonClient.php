@@ -203,7 +203,7 @@ final class FastmonClient
      * fastmon normalises what it gets (lowercase, no scheme, no port, punycode), so the
      * domain that comes back can differ from the one sent and is what the caller should
      * remember. A domain the application already has is a `FastmonSiteExistsException`,
-     * which the sync treats as "present"; a domain fastmon will not take at all (an IP
+     * which the check treats as "present"; a domain fastmon will not take at all (an IP
      * address, a name with a space in it) is a plain API error with fastmon's reason.
      *
      * @return array{id: string, domain: string, name: string}
@@ -484,7 +484,7 @@ final class FastmonClient
             );
         }
 
-        // Already there is the outcome the site sync hopes for, not one it reports.
+        // Already there is the outcome the setup check hopes for, not one it reports.
         if ($code === 'site_already_exists') {
             throw new FastmonSiteExistsException($message !== '' ? $message : $detail);
         }

@@ -116,49 +116,6 @@
                         {{ $t('fastmon-collector.summary.noSites') }}
                     </p>
 
-                    {# What the last sync did, in the order a merchant wants it: what is
-                       new, what fastmon would not take, or that nothing was missing. #}
-                    <mt-banner
-                        v-if="syncResult && syncResult.error"
-                        class="fastmon-collector-connection__banner"
-                        variant="attention"
-                    >
-                        {{ $t('fastmon-collector.summary.syncFailed', { reason: syncResult.error }) }}
-                    </mt-banner>
-
-                    <p v-else-if="syncedDomains.length" class="fastmon-collector-connection__hint">
-                        {{ $t('fastmon-collector.summary.synced', { domains: syncedDomains.join(', ') }) }}
-                    </p>
-
-                    <p v-else-if="nothingToSync" class="fastmon-collector-connection__hint">
-                        {{ $t('fastmon-collector.summary.nothingToSync') }}
-                    </p>
-
-                    <ul v-if="skippedDomains.length" class="fastmon-collector-connection__domains">
-                        <li
-                            v-for="skipped in skippedDomains"
-                            :key="skipped.domain"
-                            class="fastmon-collector-connection__domain"
-                        >
-                            {{ $t('fastmon-collector.summary.skipped', skipped) }}
-                        </li>
-                    </ul>
-
-                    <div class="fastmon-collector-connection__actions">
-                        <mt-button
-                            variant="secondary"
-                            size="small"
-                            :disabled="isBusy"
-                            @click="syncSites"
-                        >
-                            {{ $t('fastmon-collector.summary.sync') }}
-                        </mt-button>
-                    </div>
-
-                    <p class="fastmon-collector-connection__hint">
-                        {{ $t('fastmon-collector.summary.syncHint') }}
-                    </p>
-
                     {# Ids belong here and not on the surface: nobody acts on them, and
                        support asks for them roughly once a year. #}
                     <details class="fastmon-collector-connection__debug">

@@ -13,6 +13,7 @@ use Fastmon\Collector\Collection\EndpointChecker;
 use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
+use Fastmon\Collector\Provisioning\SiteRegistrar;
 use Fastmon\Collector\Service\ConfigResolver;
 use Fastmon\Collector\Tests\Unit\Fake\StoresConnection;
 use PHPUnit\Framework\TestCase;
@@ -140,7 +141,7 @@ class CollectionModeServiceTest extends TestCase
         self::assertSame('default', $this->storedValue('collectionMode'));
     }
 
-    public function testTheStatusProbesOnlyTheModeItWasAskedAbout(): void
+    public function testTheStatusProbesNothingAndTheCheckProbesTheModeItWasAskedAbout(): void
     {
         // A probe reaches out to real origins, and a result taken against one mode says
         // nothing about another.
@@ -149,11 +150,44 @@ class CollectionModeServiceTest extends TestCase
         $idle = $service->describe();
         self::assertFalse($idle['checked']);
         self::assertSame('', $idle['checkedMode']);
+        self::assertSame([], $this->probed);
 
-        $probed = $service->describe(CollectionMode::RELATIVE);
+        $probed = $service->check(CollectionMode::RELATIVE);
         self::assertTrue($probed['checked']);
         self::assertSame('relative', $probed['checkedMode']);
         self::assertTrue($probed['ready']);
+    }
+
+    public function testTheCheckRegistersEveryDomainItFindsTheSnippetOn(): void
+    {
+        // "Test passed" is the trigger: the page carried the snippet, so the domain is a
+        // Site from here on, without a suggestion list and without another click.
+        $result = $this->service(['https://shop.example' => true])->check(CollectionMode::FASTMON);
+
+        self::assertSame('default', $result['checkedMode']);
+        self::assertTrue($result['ready']);
+        // Nothing to prove for fastmon's own collector, so no endpoint was probed...
+        self::assertSame([], $result['domains']);
+        self::assertSame(['https://shop.example/'], $this->probed);
+        // ...but the page was, and the domain went to fastmon.
+        self::assertCount(1, $result['sites']);
+        self::assertSame('shop.example', $result['sites'][0]['domain']);
+        self::assertTrue($result['sites'][0]['snippetOk']);
+        self::assertSame('created', $result['sites'][0]['site']);
+        self::assertContains('POST /v1/applications/app-1/sites', $this->calls);
+        self::assertSame(['domain' => 'shop.example'], $this->sentBody);
+    }
+
+    public function testTheCheckIsRefusedWithoutALink(): void
+    {
+        // Nothing to look for on the page and nothing to register the domain on.
+        $this->config = [];
+        $service = $this->service(['https://shop.example' => true]);
+        $this->row['applicationId'] = '';
+        $this->config = [];
+
+        $this->expectException(FastmonCollectorException::class);
+        $service->check(CollectionMode::FASTMON);
     }
 
     public function testAModeChangedInFastmonIsAdoptedRatherThanIgnored(): void
@@ -232,6 +266,13 @@ class CollectionModeServiceTest extends TestCase
                     $decoded = json_decode(\is_string($body) ? $body : '{}', true);
                     $this->sentBody = \is_array($decoded) ? $decoded : [];
 
+                    // The application's sites: none yet, and a create answers with one.
+                    if (str_ends_with($path, '/sites')) {
+                        return $method === 'GET'
+                            ? new MockResponse(json_encode(['data' => []], \JSON_THROW_ON_ERROR), ['http_code' => 200])
+                            : new MockResponse(json_encode(['id' => 's-new', 'domain' => $this->sentBody['domain'] ?? '', 'name' => ''], \JSON_THROW_ON_ERROR), ['http_code' => 201]);
+                    }
+
                     return new MockResponse(json_encode([
                         'id' => 'app-1', 'name' => 'Shopware', 'source_hash' => 'srchash',
                         'collector_hash' => 'colhash', 'environment' => 'prod', 'site_count' => 1,
@@ -243,6 +284,12 @@ class CollectionModeServiceTest extends TestCase
 
                 if (str_starts_with($path, '/s/')) {
                     return new MockResponse('var e="/c/colhash";', ['http_code' => 200]);
+                }
+
+                // The storefront page itself, carrying the snippet: what the page probe
+                // looks for before a domain is registered.
+                if (!str_starts_with($path, '/c/')) {
+                    return new MockResponse('<html><script defer src="/s/srchash.js"></script></html>', ['http_code' => 200]);
                 }
 
                 // An origin that is not set up: the script is served, the beacon path is
@@ -259,20 +306,23 @@ class CollectionModeServiceTest extends TestCase
         $store = new ConnectionStore($this->connectionRepository(), $systemConfig);
         $config = new ConfigResolver($systemConfig);
 
+        // A pasted key is the simplest credential to run these against: it needs no
+        // token endpoint, so every response below is one this service asked for.
+        $tokens = new AccessTokenProvider(
+            new FastmonOAuthClient($httpClient),
+            $store,
+            $config,
+            new LockFactory(new InMemoryStore()),
+            new NullLogger(),
+        );
+
         return new CollectionModeService(
             $client,
-            // A pasted key is the simplest credential to run these against: it needs no
-            // token endpoint, so every response below is one this service asked for.
-            new AccessTokenProvider(
-                new FastmonOAuthClient($httpClient),
-                $store,
-                $config,
-                new LockFactory(new InMemoryStore()),
-                new NullLogger(),
-            ),
+            $tokens,
             $store,
             $config,
             new EndpointChecker($httpClient, $store, $database),
+            new SiteRegistrar($client, $tokens, $store, $config, new NullLogger()),
             $systemConfig,
             new NullLogger(),
         );

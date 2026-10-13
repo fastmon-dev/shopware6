@@ -14,7 +14,6 @@ use Fastmon\Collector\Connection\ConnectionService;
 use Fastmon\Collector\Connection\ConnectionStatus;
 use Fastmon\Collector\FastmonCollectorException;
 use Fastmon\Collector\Provisioning\ApplicationProvisioner;
-use Fastmon\Collector\Provisioning\SiteSynchroniser;
 use Fastmon\Collector\ServerTiming\ServerTimingStatus;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
 use Shopware\Core\PlatformRequest;
@@ -60,7 +59,6 @@ final class AdminApiController extends AbstractController
         private readonly ConnectionService $connection,
         private readonly ConnectionStatus $status,
         private readonly ApplicationProvisioner $provisioner,
-        private readonly SiteSynchroniser $sites,
         private readonly CollectionModeService $collection,
         private readonly ServerTimingStatus $serverTimingStatus,
     ) {
@@ -177,17 +175,12 @@ final class AdminApiController extends AbstractController
     {
         $body = $this->body($request);
 
-        // The link first, the domains second, and the second cannot undo the first: a
-        // sync that fails is a sentence beside the domain list, not a link to redo.
-        return $this->guard(fn (): array => [
-            'application' => $this->provisioner->create(
-                $body['organizationId'],
-                $body['name'],
-                $body['environment'],
-                $body['preset'],
-            ),
-            'sites' => $this->sites->syncAfterLink(),
-        ]);
+        return $this->guard(fn (): array => ['application' => $this->provisioner->create(
+            $body['organizationId'],
+            $body['name'],
+            $body['environment'],
+            $body['preset'],
+        )]);
     }
 
     #[Route(
@@ -200,13 +193,10 @@ final class AdminApiController extends AbstractController
     {
         $body = $this->body($request);
 
-        return $this->guard(fn (): array => [
-            'application' => $this->provisioner->attach(
-                $body['organizationId'],
-                $body['applicationId'],
-            ),
-            'sites' => $this->sites->syncAfterLink(),
-        ]);
+        return $this->guard(fn (): array => ['application' => $this->provisioner->attach(
+            $body['organizationId'],
+            $body['applicationId'],
+        )]);
     }
 
     #[Route(
@@ -223,34 +213,35 @@ final class AdminApiController extends AbstractController
     }
 
     #[Route(
-        path: '/api/_action/fastmon-collector/sites/sync',
-        name: 'api.action.fastmon_collector.sites.sync',
-        defaults: self::WRITE,
-        methods: [Request::METHOD_POST]
-    )]
-    public function syncSites(): JsonResponse
-    {
-        // What was done, then the list as it stands: one round trip for the button.
-        return $this->guard(fn (): array => [
-            'sync' => $this->sites->sync(),
-            'sites' => $this->provisioner->sites(),
-        ]);
-    }
-
-    #[Route(
         path: '/api/_action/fastmon-collector/collection',
         name: 'api.action.fastmon_collector.collection',
         defaults: self::READ,
         methods: [Request::METHOD_GET]
     )]
-    public function collectionStatus(Request $request): JsonResponse
+    public function collectionStatus(): JsonResponse
     {
-        // The probe reaches out to real origins, so it runs when the merchant asks and
-        // against the mode they are considering - not the one currently stored.
-        $probe = CollectionMode::tryFrom((string) $request->query->get('check', ''));
-        $domain = (string) $request->query->get('domain', '');
+        return $this->guard(fn (): array => $this->collection->describe());
+    }
 
-        return $this->guard(fn (): array => $this->collection->describe($probe, $domain));
+    #[Route(
+        path: '/api/_action/fastmon-collector/collection/check',
+        name: 'api.action.fastmon_collector.collection.check',
+        defaults: self::WRITE,
+        methods: [Request::METHOD_POST]
+    )]
+    public function checkCollection(Request $request): JsonResponse
+    {
+        // A write, although it stores nothing here: the check registers every domain it
+        // finds the snippet on as a Site in fastmon. It runs when the merchant asks and
+        // against the mode they are considering, not the one currently stored.
+        $body = $this->body($request);
+        $mode = CollectionMode::tryFrom($body['mode']);
+
+        if ($mode === null) {
+            return $this->error('Unknown collection mode.');
+        }
+
+        return $this->guard(fn (): array => $this->collection->check($mode, $body['domain']));
     }
 
     #[Route(

@@ -18,6 +18,11 @@ const MODES = { DEFAULT: 'default', CUSTOM: 'custom', RELATIVE: 'relative' };
  *
  * The plugin never forwards those paths itself. A beacon per pageview through PHP-FPM
  * would put fastmon's latency in front of the shop's worker pool.
+ *
+ * The same check also fetches a page of every storefront domain and looks for the
+ * snippet. A domain that carries it is registered as a Site in fastmon on the spot,
+ * which is why the check button is there in every mode, fastmon's own included: that
+ * probe has nothing to do with where the beacon goes.
  */
 Component.register('fastmon-collector-collection', {
     template,
@@ -84,6 +89,11 @@ Component.register('fastmon-collector-collection', {
             return this.status === null ? [] : (this.status.domains || []);
         },
 
+        /** One per storefront domain: did the page carry the snippet, and is it a Site now. */
+        checkedSites() {
+            return this.status === null ? [] : (this.status.sites || []);
+        },
+
         /** The label of the mode being considered, for the sentence explaining the block. */
         selectedModeLabel() {
             const option = this.modeOptions.find((candidate) => candidate.value === this.selectedMode);
@@ -111,11 +121,8 @@ Component.register('fastmon-collector-collection', {
             return !this.needsProof || (this.checkedThisMode && this.status.ready === true);
         },
 
+        /** Every mode can be checked; custom needs the host to check it against. */
         canCheck() {
-            if (!this.needsProof) {
-                return false;
-            }
-
             return this.selectedMode !== MODES.CUSTOM || this.customDomain.trim() !== '';
         },
     },
@@ -147,18 +154,44 @@ Component.register('fastmon-collector-collection', {
             });
         },
 
-        load(probeMode = null) {
+        /**
+         * The word beside a domain: whether the snippet was found and, if so, whether
+         * fastmon has the domain now.
+         */
+        siteStateText(site) {
+            if (!site.snippetOk) {
+                return this.$t('fastmon-collector.collection.snippetMissing');
+            }
+
+            return site.site ? this.$t(`fastmon-collector.collection.site.${site.site}`) : '';
+        },
+
+        siteIsOk(site) {
+            return site.snippetOk === true && site.site !== 'failed';
+        },
+
+        /** The line under it: why the snippet was not found, or why fastmon said no. */
+        siteDetailText(site) {
+            if (!site.snippetOk) {
+                return this.reasonText(site);
+            }
+
+            if (site.site === 'failed') {
+                return this.$t('fastmon-collector.collection.siteRefused', { detail: site.siteDetail || '' });
+            }
+
+            return '';
+        },
+
+        load() {
             this.isLoading = true;
 
             return this.fastmonCollectorService
-                .getCollectionStatus(probeMode, this.customDomain)
+                .getCollectionStatus()
                 .then((status) => {
                     this.status = status;
-
-                    if (probeMode === null) {
-                        this.selectedMode = status.mode;
-                        this.customDomain = status.customDomain || '';
-                    }
+                    this.selectedMode = status.mode;
+                    this.customDomain = status.customDomain || '';
                 })
                 .catch(this.handleError)
                 .finally(() => {
@@ -180,7 +213,7 @@ Component.register('fastmon-collector-collection', {
             // A result taken against another mode - or another domain - says nothing
             // about this one.
             if (this.status !== null) {
-                this.status = { ...this.status, checked: false, checkedMode: '', domains: [] };
+                this.status = { ...this.status, checked: false, checkedMode: '', domains: [], sites: [] };
             }
         },
 
@@ -188,7 +221,15 @@ Component.register('fastmon-collector-collection', {
             this.isChecking = true;
             this.resetError();
 
-            return this.load(this.selectedMode)
+            // The mode and the domain under consideration stay what the merchant typed:
+            // the response describes the stored setup, and that is not what is being
+            // checked.
+            return this.fastmonCollectorService
+                .checkCollection(this.selectedMode, this.customDomain)
+                .then((status) => {
+                    this.status = status;
+                })
+                .catch(this.handleError)
                 .finally(() => {
                     this.isChecking = false;
                 });

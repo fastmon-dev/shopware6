@@ -99,20 +99,9 @@ final class EndpointChecker
      */
     public function storefrontOrigins(): array
     {
-        // Storefronts only, and only the ones that are switched on. A headless channel
-        // serves no pages, so nothing there could load the tracker.
-        /** @var list<string> $urls */
-        $urls = $this->database->fetchFirstColumn(
-            'SELECT scd.url
-             FROM sales_channel_domain scd
-             INNER JOIN sales_channel sc ON sc.id = scd.sales_channel_id
-             WHERE sc.active = 1 AND sc.type_id = :storefront',
-            ['storefront' => Uuid::fromHexToBytes(Defaults::SALES_CHANNEL_TYPE_STOREFRONT)]
-        );
-
         $origins = [];
 
-        foreach ($urls as $url) {
+        foreach ($this->storefrontDomainUrls() as $url) {
             // Several channels can differ only by path, and two domains on one host are
             // one origin to probe: keyed rather than appended.
             $origin = $this->normaliseOrigin($url);
@@ -126,26 +115,75 @@ final class EndpointChecker
     }
 
     /**
-     * The hostnames behind `storefrontOrigins()`, which is what a fastmon Site is keyed
-     * by: a beacon carries no scheme and no port, so `https://shop.example:8443` and
-     * `http://shop.example` are one Site. Lowercased because fastmon lowercases too and
-     * the sync compares against what fastmon lists.
-     *
      * @return list<string>
      */
-    public function storefrontHostnames(): array
+    private function storefrontDomainUrls(): array
     {
-        $hosts = [];
+        // Storefronts only, and only the ones that are switched on. A headless channel
+        // serves no pages, so nothing there could load the tracker.
+        /** @var list<string> $urls */
+        $urls = $this->database->fetchFirstColumn(
+            'SELECT scd.url
+             FROM sales_channel_domain scd
+             INNER JOIN sales_channel sc ON sc.id = scd.sales_channel_id
+             WHERE sc.active = 1 AND sc.type_id = :storefront',
+            ['storefront' => Uuid::fromHexToBytes(Defaults::SALES_CHANNEL_TYPE_STOREFRONT)]
+        );
 
-        foreach ($this->storefrontOrigins() as $origin) {
-            $host = parse_url($origin, \PHP_URL_HOST);
+        return $urls;
+    }
 
-            if (\is_string($host) && $host !== '') {
-                $hosts[strtolower($host)] = true;
+    /**
+     * Does a page on each storefront domain carry this application's snippet?
+     *
+     * One result per hostname, which is what a fastmon Site is keyed by: a beacon
+     * carries no scheme and no port, so `https://shop.example:8443` and
+     * `http://shop.example` are one Site. The page fetched is the sales channel's own
+     * URL, path included, because the root of a host can belong to another channel or
+     * to nothing at all when every channel lives under a language path. A host with
+     * several channels is tried until one of them shows the snippet.
+     *
+     * Nothing to fetch for a shop that is not linked: there is no hash to look for.
+     *
+     * @return list<SiteCheckResult>
+     */
+    public function checkSnippets(): array
+    {
+        $connection = $this->store->load();
+
+        if (!$connection->isProvisioned()) {
+            return [];
+        }
+
+        $results = [];
+
+        foreach ($this->storefrontUrls() as $host => $urls) {
+            $results[] = $this->checkSnippet($host, $urls, $connection->sourceHash);
+        }
+
+        return $results;
+    }
+
+    /**
+     * The storefront domain URLs, grouped by lowercased hostname. Same rows as
+     * `storefrontOrigins()`, kept whole: the page probe needs the path.
+     *
+     * @return array<string, list<string>>
+     */
+    public function storefrontUrls(): array
+    {
+        $byHost = [];
+
+        foreach ($this->storefrontDomainUrls() as $url) {
+            $origin = $this->normaliseOrigin($url);
+            $host = $origin === '' ? '' : (string) parse_url($origin, \PHP_URL_HOST);
+
+            if ($host !== '') {
+                $byHost[strtolower($host)][] = $url;
             }
         }
 
-        return array_keys($hosts);
+        return $byHost;
     }
 
     /**
@@ -178,6 +216,55 @@ final class EndpointChecker
 
         return isset($parts['port']) ? $origin . ':' . $parts['port'] : $origin;
     }
+    /**
+     * Fetch the channel's pages until one carries the script tag the storefront template
+     * renders for this application. The tag's path is the one thing on the page that
+     * nothing but this plugin, linked to this application, can have put there.
+     *
+     * Looked for in the HTML rather than requested from `/s/`: that probe answers
+     * "would the tracker load if asked", this one answers "is it being asked", which is
+     * the question a domain nobody added the snippet to fails.
+     *
+     * @param list<string> $urls
+     */
+    private function checkSnippet(string $host, array $urls, string $sourceHash): SiteCheckResult
+    {
+        $marker = '/s/' . $sourceHash . '.js';
+        $reason = '';
+        $detail = '';
+        $last = '';
+
+        foreach ($urls as $url) {
+            $last = $url;
+
+            try {
+                $page = $this->httpClient->request('GET', $url, [
+                    'timeout' => self::TIMEOUT_SECONDS,
+                    'headers' => ['Accept' => 'text/html'],
+                ]);
+
+                if ($page->getStatusCode() !== 200) {
+                    $reason = SiteCheckResult::REASON_PAGE_STATUS;
+                    $detail = (string) $page->getStatusCode();
+
+                    continue;
+                }
+
+                if (str_contains($page->getContent(false), $marker)) {
+                    return new SiteCheckResult($host, $url, true);
+                }
+
+                $reason = SiteCheckResult::REASON_PAGE_NO_SNIPPET;
+                $detail = '';
+            } catch (\Throwable $e) {
+                $reason = SiteCheckResult::REASON_PAGE_UNREACHABLE;
+                $detail = $e->getMessage();
+            }
+        }
+
+        return new SiteCheckResult($host, $last, false, $reason, $detail);
+    }
+
     /**
      * Two probes with four outcomes each; the reason codes are the point and are enumerated in DomainCheckResult.
      * @SuppressWarnings("PHPMD.CyclomaticComplexity")

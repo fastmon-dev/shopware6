@@ -6,6 +6,7 @@ use Fastmon\Collector\Api\FastmonClient;
 use Fastmon\Collector\Connection\AccessTokenProvider;
 use Fastmon\Collector\Connection\ConnectionStore;
 use Fastmon\Collector\FastmonCollectorException;
+use Fastmon\Collector\Provisioning\SiteRegistrar;
 use Fastmon\Collector\Service\ConfigResolver;
 use Monolog\Attribute\WithMonologChannel;
 use Psr\Log\LoggerInterface;
@@ -38,20 +39,24 @@ final class CollectionModeService
         private readonly ConnectionStore $store,
         private readonly ConfigResolver $config,
         private readonly EndpointChecker $checker,
+        private readonly SiteRegistrar $sites,
         private readonly SystemConfigService $systemConfigService,
         private readonly LoggerInterface $logger,
     ) {
     }
 
     /**
+     * What is stored and what there is to configure, without reaching out to any origin.
+     *
      * @return array{
      *     mode: string, customDomain: string, provisioned: bool, scriptBaseUrl: string,
      *     storefrontOrigins: list<string>,
      *     domains: list<array{domain: string, scriptOk: bool, collectorOk: bool, ready: bool, reason: string, detail: string}>,
+     *     sites: list<array{domain: string, url: string, snippetOk: bool, reason: string, detail: string, site: string, siteDetail: string}>,
      *     ready: bool, checked: bool, checkedMode: string
      * }
      */
-    public function describe(?CollectionMode $probeMode = null, string $customDomain = ''): array
+    public function describe(): array
     {
         // Before anything is read locally: fastmon owns where the beacon goes. The
         // endpoint is baked into the bundle it serves, so a mode changed in the dashboard
@@ -62,7 +67,7 @@ final class CollectionModeService
         $storefront = $this->config->storefront(null);
         $connection = $this->store->load();
 
-        $base = [
+        return [
             'mode' => $storefront->collectionMode->value,
             'customDomain' => $storefront->customDomain,
             'provisioned' => $connection->isProvisioned(),
@@ -71,22 +76,50 @@ final class CollectionModeService
             // origins they have to configure rather than after a failed check.
             'storefrontOrigins' => $this->checker->storefrontOrigins(),
             'domains' => [],
+            'sites' => [],
             'ready' => false,
             'checked' => false,
             'checkedMode' => '',
         ];
+    }
 
-        if ($probeMode === null) {
-            return $base;
-        }
+    /**
+     * The setup check: prove the mode being considered, and register every domain that
+     * carries the snippet.
+     *
+     * Two probes with two different consequences. The endpoint probe decides whether
+     * `$mode` may be applied, exactly as before, and only runs for a mode that needs
+     * proof. The page probe runs in every mode, because the question it answers (does
+     * this domain serve the snippet?) does not depend on where the beacon goes, and a
+     * domain that passes it becomes a Site right here. The two do not gate each other: a
+     * staging domain behind basic auth fails the page probe without blocking the proxy
+     * mode on the domains that work.
+     *
+     * The probe reaches out to real origins and the registration writes to fastmon, so
+     * this runs when the merchant asks and never on a panel load.
+     *
+     * @return array{
+     *     mode: string, customDomain: string, provisioned: bool, scriptBaseUrl: string,
+     *     storefrontOrigins: list<string>,
+     *     domains: list<array{domain: string, scriptOk: bool, collectorOk: bool, ready: bool, reason: string, detail: string}>,
+     *     sites: list<array{domain: string, url: string, snippetOk: bool, reason: string, detail: string, site: string, siteDetail: string}>,
+     *     ready: bool, checked: bool, checkedMode: string
+     * }
+     */
+    public function check(CollectionMode $mode, string $customDomain = ''): array
+    {
+        $base = $this->describe();
+        $this->requireApplicationId();
 
-        $results = $this->checker->check($probeMode, $customDomain);
+        $results = $this->checker->check($mode, $customDomain);
+        $sites = $this->sites->register($this->checker->checkSnippets());
 
         return [...$base,
             'domains' => array_map(static fn (DomainCheckResult $r): array => $r->toArray(), $results),
-            'ready' => $this->allReady($probeMode, $results),
+            'sites' => array_map(static fn (SiteCheckResult $r): array => $r->toArray(), $sites),
+            'ready' => $this->allReady($mode, $results),
             'checked' => true,
-            'checkedMode' => $probeMode->value,
+            'checkedMode' => $mode->value,
         ];
     }
 

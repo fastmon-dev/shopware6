@@ -36,11 +36,6 @@ Component.register('fastmon-collector-connection', {
             isBusy: false,
             status: null,
             sites: [],
-            /**
-             * What the last domain sync did: `{ created, existing, skipped, error? }`
-             * from the link or from the button, or null when none ran in this view.
-             */
-            syncResult: null,
         };
     },
 
@@ -89,28 +84,6 @@ Component.register('fastmon-collector-connection', {
 
         organizationLabel() {
             return this.status.organizationName || this.status.organizationId;
-        },
-
-        /** The domains the last sync registered, as one line. */
-        syncedDomains() {
-            return this.syncResult && Array.isArray(this.syncResult.created)
-                ? this.syncResult.created
-                : [];
-        },
-
-        /** The domains fastmon refused, each with its reason. */
-        skippedDomains() {
-            return this.syncResult && Array.isArray(this.syncResult.skipped)
-                ? this.syncResult.skipped
-                : [];
-        },
-
-        /** A sync that ran and registered nothing new: every domain was already there. */
-        nothingToSync() {
-            return this.syncResult !== null
-                && !this.syncResult.error
-                && this.syncedDomains.length === 0
-                && this.skippedDomains.length === 0;
         },
     },
 
@@ -185,9 +158,8 @@ Component.register('fastmon-collector-connection', {
          * merchant is waiting for is already in hand, and making the switch wait for a
          * second round trip is what left the form standing after a successful create.
          */
-        onLinked(application, sites = null) {
+        onLinked(application) {
             this.resetError();
-            this.syncResult = sites || null;
 
             if (application && application.sourceHash) {
                 this.status = {
@@ -204,22 +176,7 @@ Component.register('fastmon-collector-connection', {
             return this.load(false);
         },
 
-        /**
-         * Register the storefront domains fastmon does not have yet. The response
-         * carries the list as it stands afterwards, so there is no reload.
-         */
-        syncSites() {
-            this.syncResult = null;
-
-            this.busy(() => this.fastmonCollectorService.syncSites()
-                .then((response) => {
-                    this.syncResult = response.sync || null;
-                    this.sites = response.sites || [];
-                }));
-        },
-
         disconnect() {
-            this.syncResult = null;
             this.busy(() => this.fastmonCollectorService.disconnect()
                 .then(() => this.load(false)));
         },
